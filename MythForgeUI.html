@@ -128,6 +128,10 @@
         .theme-switcher select {
             background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; margin-top: 5px; cursor: pointer; font-size: 14px;
         }
+        .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;}
+        .modal-content{background:var(--bg-color);color:var(--text-color);padding:20px;border-radius:8px;min-width:250px;}
+        .modal-content label{display:block;margin-top:10px;}
+        .modal-actions{text-align:right;margin-top:15px;}
         .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; }
         .top-controls { padding: 10px; border-bottom: 1px solid var(--border-color); background: var(--bg-color); display: flex; gap: 0.5em; align-items: center; }
         .chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; background-color: var(--chat-bg); }
@@ -151,15 +155,6 @@
     <div class="app-container">
         <div class="sidebar">
             <button class="new-chat" id="new-chat-btn">New Chat</button>
-            <div class="theme-switcher">
-                <label for="theme-select">Theme</label>
-                <select id="theme-select">
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                    <option value="night-blue">Night Blue</option>
-                    <option value="sepia">Sepia</option>
-                </select>
-            </div>
             <div class="sidebar-section">
                 <label for="globalPromptSelect">Global Prompt</label>
                 <select id="globalPromptSelect">
@@ -169,6 +164,7 @@
                 <button id="add-prompt-btn">Add Prompt</button>
             </div>
             <div class="history-container" id="history-container"></div>
+            <button id="open-settings-btn" class="new-chat">Settings</button>
             <button id="delete-chat-btn" class="new-chat" style="margin-top:10px;background-color:rgba(220,53,69,0.8);">Delete Chat</button>
         </div>
         <div class="main">
@@ -190,9 +186,30 @@
             </div>
         </div>
     </div>
+
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2>Settings</h2>
+            <label>User Display Name <input id="user-name-input" type="text"></label>
+            <label>Bot Display Name <input id="bot-name-input" type="text"></label>
+            <div class="theme-switcher">
+                <label for="theme-select">Theme</label>
+                <select id="theme-select">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="night-blue">Night Blue</option>
+                    <option value="sepia">Sepia</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button id="settings-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const CONFIG = { apiUrl: 'http://localhost:8000' };
-        const state = { chats: [], currentChatId: '', theme: 'light', isGenerating: false };
+        const state = { chats: [], currentChatId: '', settings:{ userName:'You', botName:'Bot', theme:'light' }, isGenerating: false };
 
         const chatContainer    = document.getElementById('chat-container');
         const userInput        = document.getElementById('user-input');
@@ -207,9 +224,49 @@
         const systemToggle     = document.getElementById('system-toggle');
         const systemContainer  = document.getElementById('system-container');
         const systemPrompt     = document.getElementById('system-prompt');
+        const openSettingsBtn  = document.getElementById('open-settings-btn');
+        const settingsModal    = document.getElementById('settings-modal');
+        const settingsSaveBtn  = document.getElementById('settings-save-btn');
+        const userNameInput    = document.getElementById('user-name-input');
+        const botNameInput     = document.getElementById('bot-name-input');
 
-        function applyTheme(name){ document.body.setAttribute('data-theme', name); state.theme = name; localStorage.setItem('theme', name); }
-        function loadTheme(){ const t = localStorage.getItem('theme'); if(t){themeSelect.value=t; applyTheme(t);} }
+        function applyTheme(name){
+            document.body.setAttribute('data-theme', name);
+            state.settings.theme = name;
+        }
+
+        function loadSettings(){
+            const saved = localStorage.getItem('clientSettings');
+            if(saved){
+                try{ Object.assign(state.settings, JSON.parse(saved)); }catch{}
+            }
+        }
+
+        function saveSettings(){
+            localStorage.setItem('clientSettings', JSON.stringify(state.settings));
+        }
+
+        function loadTheme(){
+            applyTheme(state.settings.theme);
+            themeSelect.value = state.settings.theme;
+        }
+
+        function openSettings(){
+            userNameInput.value = state.settings.userName;
+            botNameInput.value  = state.settings.botName;
+            themeSelect.value   = state.settings.theme;
+            settingsModal.style.display='flex';
+        }
+
+        function closeSettings(){ settingsModal.style.display='none'; }
+
+        function saveSettingsFromUI(){
+            state.settings.userName = userNameInput.value.trim() || 'You';
+            state.settings.botName  = botNameInput.value.trim()  || 'Bot';
+            applyTheme(themeSelect.value);
+            saveSettings();
+            closeSettings();
+        }
 
         function toggleSystem(){ systemContainer.style.display = systemContainer.style.display === 'none' ? 'block':'none'; }
 
@@ -230,13 +287,19 @@
                 const res = await fetch(`${CONFIG.apiUrl}/chats`);
                 const json = await res.json();
                 state.chats = json.chats;
-                if(state.chats.length && !state.currentChatId){ state.currentChatId = state.chats[0]; }
+                const last = localStorage.getItem('lastChatId');
+                if(last && state.chats.includes(last)){
+                    state.currentChatId = last;
+                }else if(state.chats.length && !state.currentChatId){
+                    state.currentChatId = state.chats[0];
+                }
                 renderHistory();
             }catch(e){ console.error('Failed to fetch chats:', e); }
         }
 
         async function loadChat(id){
             state.currentChatId = id;
+            localStorage.setItem('lastChatId', id);
             renderHistory();
             chatContainer.innerHTML='';
             systemPrompt.textContent='';
@@ -254,6 +317,8 @@
                 const json = await res.json();
                 gpSelect.innerHTML = '<option value="">(no global prompt)</option>';
                 json.prompts.forEach(p => { const opt=document.createElement('option'); opt.value=p.name; opt.textContent=p.name; gpSelect.appendChild(opt); });
+                const last = localStorage.getItem('lastGlobalPrompt');
+                if(last && Array.from(gpSelect.options).some(o=>o.value===last)) gpSelect.value = last;
             }catch(e){ console.error('Failed to load prompts:',e); }
         }
 
@@ -284,7 +349,12 @@
         function startNewChat(){
             const name = prompt('Enter new chat name:'); if(name===null) return; const trimmed = name.trim(); if(!trimmed) return alert('Name cannot be empty.');
             if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
-            state.chats.unshift(trimmed); state.currentChatId = trimmed; renderHistory(); chatContainer.innerHTML=''; systemPrompt.textContent='';
+              state.chats.unshift(trimmed);
+              state.currentChatId = trimmed;
+              localStorage.setItem('lastChatId', trimmed);
+              renderHistory();
+              chatContainer.innerHTML = '';
+              systemPrompt.textContent = '';
         }
 
         async function deleteChat(){
@@ -295,7 +365,10 @@
                 if(!res.ok){ if(res.status===404) throw new Error('Chat not found on server.'); else throw new Error('Unknown server error.'); }
                 state.chats = state.chats.filter(c=>c!==state.currentChatId);
                 state.currentChatId = state.chats.length? state.chats[0] : '';
-                renderHistory(); chatContainer.innerHTML=''; systemPrompt.textContent='';
+                localStorage.setItem('lastChatId', state.currentChatId);
+                renderHistory();
+                chatContainer.innerHTML = '';
+                systemPrompt.textContent = '';
             }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
         }
 
@@ -306,7 +379,7 @@
             div.className=`message ${role==='user'?'user-message':'ai-message'}`;
             const avatar=document.createElement('div');
             avatar.className=`avatar ${role==='user'?'user-avatar':'ai-avatar'}`;
-            avatar.textContent = role==='user' ? 'U' : 'A';
+            avatar.textContent = role==='user' ? (state.settings.userName[0]||'U') : (state.settings.botName[0]||'A');
             const contentDiv=document.createElement('div');
             contentDiv.className='message-content';
             contentDiv.innerHTML=content.replace(/\n/g,'<br>');
@@ -317,7 +390,7 @@
 
         function addTyping(){
             const div=document.createElement('div'); div.className='message ai-message'; div.id='typing-indicator';
-            const avatar=document.createElement('div'); avatar.className='avatar ai-avatar'; avatar.textContent='A';
+            const avatar=document.createElement('div'); avatar.className='avatar ai-avatar'; avatar.textContent=(state.settings.botName[0]||'A');
             const cont=document.createElement('div'); cont.className='message-content'; cont.textContent='...';
             div.appendChild(avatar); div.appendChild(cont); chatContainer.appendChild(div); chatContainer.scrollTop=chatContainer.scrollHeight;
         }
@@ -370,6 +443,10 @@
 
         function setupEvents(){
             themeSelect.addEventListener('change', e=>applyTheme(e.target.value));
+            gpSelect.addEventListener('change', ()=>{ localStorage.setItem('lastGlobalPrompt', gpSelect.value); });
+            openSettingsBtn.addEventListener('click', openSettings);
+            settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
+            settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
             sendButton.addEventListener('click', sendMessage);
             userInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
             userInput.addEventListener('input', ()=>{ sendButton.disabled = userInput.value.trim()==='' || state.isGenerating; autoResize(); });
@@ -381,12 +458,14 @@
         }
 
         (async function init(){
+            loadSettings();
             loadTheme();
             setupEvents();
             await fetchChatList();
             if(state.currentChatId) await loadChat(state.currentChatId);
             await refreshGlobalPromptList();
             autoResize();
+            openSettings();
         })();
     </script>
 </body>
