@@ -175,7 +175,7 @@
             <div class="top-controls">
                 <span id="system-toggle" style="cursor:pointer;">⚙️ Last Prompt</span>
             </div>
-            <div id="system-container"><textarea id="system-prompt" rows="3" style="width:100%;"></textarea></div>
+            <div id="system-container"><pre id="system-prompt" style="white-space:pre-wrap; margin:0;"></pre></div>
             <div class="chat-container" id="chat-container"></div>
             <div class="input-area">
                 <div class="input-container">
@@ -239,7 +239,7 @@
             state.currentChatId = id;
             renderHistory();
             chatContainer.innerHTML='';
-            systemPrompt.value='';
+            systemPrompt.textContent='';
             try{
                 const res = await fetch(`${CONFIG.apiUrl}/history/${encodeURIComponent(id)}`);
                 if(!res.ok) return;
@@ -284,7 +284,7 @@
         function startNewChat(){
             const name = prompt('Enter new chat name:'); if(name===null) return; const trimmed = name.trim(); if(!trimmed) return alert('Name cannot be empty.');
             if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
-            state.chats.unshift(trimmed); state.currentChatId = trimmed; renderHistory(); chatContainer.innerHTML=''; systemPrompt.value='';
+            state.chats.unshift(trimmed); state.currentChatId = trimmed; renderHistory(); chatContainer.innerHTML=''; systemPrompt.textContent='';
         }
 
         async function deleteChat(){
@@ -295,7 +295,7 @@
                 if(!res.ok){ if(res.status===404) throw new Error('Chat not found on server.'); else throw new Error('Unknown server error.'); }
                 state.chats = state.chats.filter(c=>c!==state.currentChatId);
                 state.currentChatId = state.chats.length? state.chats[0] : '';
-                renderHistory(); chatContainer.innerHTML=''; systemPrompt.value='';
+                renderHistory(); chatContainer.innerHTML=''; systemPrompt.textContent='';
             }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
         }
 
@@ -352,7 +352,7 @@
                             const chunk = buffer.slice(0, idx); buffer = buffer.slice(idx+1);
                             if(firstLine){
                                 firstLine=false;
-                                try{ const meta=JSON.parse(chunk); systemPrompt.value=meta.prompt||''; }catch{};
+                                try{ const meta=JSON.parse(chunk); systemPrompt.textContent=meta.prompt||''; }catch{};
                             }else{
                                 accumulated += chunk; aiElement.innerHTML = accumulated.replace(/\n/g,'<br>');
                                 chatContainer.scrollTop = chatContainer.scrollHeight;
