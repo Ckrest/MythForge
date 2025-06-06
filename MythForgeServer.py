@@ -38,15 +38,31 @@ MODELS_DIR            = "models"
 CHATS_DIR             = "chats"
 INJECTION_FILE        = "random_injections.txt"
 GLOBAL_PROMPTS_FILE   = "global_prompts.json"
-DEFAULT_MODEL         = "unsloth.Q4_K_M"
 DEFAULT_CTX_SIZE      = 2048
 SUMMARIZE_THRESHOLD   = 12
 SUMMARIZE_BATCH       = 6
 
 # ========== Model Loading ==========
+def discover_model_path():
+    """Return the path to the first model found in ``MODELS_DIR``."""
+    if not os.path.isdir(MODELS_DIR):
+        raise FileNotFoundError(f"Models directory '{MODELS_DIR}' not found")
+
+    entries = [e for e in os.listdir(MODELS_DIR)
+               if os.path.isdir(os.path.join(MODELS_DIR, e))]
+    if not entries:
+        raise FileNotFoundError(f"No models found in '{MODELS_DIR}'")
+
+    first = entries[0]
+    model_path = os.path.join(MODELS_DIR, first, "model.gguf")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"model.gguf not found in '{first}'")
+    return model_path
+
+
 llm = Llama(
-    model_path=f"{MODELS_DIR}/{DEFAULT_MODEL}/model.gguf",
-    n_ctx=DEFAULT_CTX_SIZE
+    model_path=discover_model_path(),
+    n_ctx=DEFAULT_CTX_SIZE,
 )
 
 # ========== Helpers ==========
