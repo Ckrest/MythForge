@@ -44,20 +44,24 @@ SUMMARIZE_BATCH       = 6
 
 # ========== Model Loading ==========
 def discover_model_path():
-    """Return the path to the first model found in ``MODELS_DIR``."""
+    """Return the path to the first ``.gguf`` model file under ``MODELS_DIR``.
+
+    Previously the code assumed models were stored in subdirectories and that
+    each subdirectory contained a file named ``model.gguf``.  Users often place
+    the downloaded model file directly under ``models`` or use a different
+    filename.  This function now walks the directory tree and returns the first
+    file with a ``.gguf`` extension regardless of its directory structure.
+    """
+
     if not os.path.isdir(MODELS_DIR):
         raise FileNotFoundError(f"Models directory '{MODELS_DIR}' not found")
 
-    entries = [e for e in os.listdir(MODELS_DIR)
-               if os.path.isdir(os.path.join(MODELS_DIR, e))]
-    if not entries:
-        raise FileNotFoundError(f"No models found in '{MODELS_DIR}'")
+    for root, _dirs, files in os.walk(MODELS_DIR):
+        for fname in files:
+            if fname.lower().endswith(".gguf"):
+                return os.path.join(root, fname)
 
-    first = entries[0]
-    model_path = os.path.join(MODELS_DIR, first, "model.gguf")
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"model.gguf not found in '{first}'")
-    return model_path
+    raise FileNotFoundError(f"No .gguf model files found under '{MODELS_DIR}'")
 
 
 llm = Llama(
