@@ -259,9 +259,10 @@ def chat(req: ChatRequest):
 def chat_stream(req: ChatRequest):
     """
     Streams tokens as the model generates them.
-    First line = JSON: {"prompt": "..."}\n
-    All subsequent text = token chunks.
-    When generation completes, append to history files.
+    ``build_prompt()`` records the user's message to both history files,
+    so this function only streams the assistant's response and then saves it.
+    The first line sent to the client is a JSON object with the prompt text.
+    All subsequent data are token chunks from the model.
     """
     chat_id       = req.chat_id
     user_message  = req.message
@@ -278,15 +279,9 @@ def chat_stream(req: ChatRequest):
     message_index = len(load_json(full_path))
     prompt = build_prompt(chat_id, user_message, message_index, global_prompt)
 
-    # 2) Immediately append user to full history
-    full_log = load_json(full_path)
-    full_log.append({"role": "user", "content": user_message})
-    save_json(full_path, full_log)
 
-    # 3) Update trimmed context with user
-    context = load_json(trimmed_path)
-    context.append({"type": "raw", "role": "user", "content": user_message})
-    save_json(trimmed_path, context)
+    # build_prompt() already saved the user's message to both history files,
+    # so we can immediately begin streaming the model's response.
 
     def generate_and_stream():
         # First, send a single line of JSON with the prompt:
