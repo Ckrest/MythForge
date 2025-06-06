@@ -260,11 +260,21 @@
 
         function closeSettings(){ settingsModal.style.display='none'; }
 
+        function updateAvatarDisplays(){
+            document.querySelectorAll('.user-avatar').forEach(el=>{
+                el.textContent = (state.settings.userName[0] || 'U');
+            });
+            document.querySelectorAll('.ai-avatar').forEach(el=>{
+                el.textContent = (state.settings.botName[0] || 'A');
+            });
+        }
+
         function saveSettingsFromUI(){
             state.settings.userName = userNameInput.value.trim() || 'You';
             state.settings.botName  = botNameInput.value.trim()  || 'Bot';
             applyTheme(themeSelect.value);
             saveSettings();
+            updateAvatarDisplays();
             closeSettings();
         }
 
@@ -465,7 +475,6 @@
             if(state.currentChatId) await loadChat(state.currentChatId);
             await refreshGlobalPromptList();
             autoResize();
-            openSettings();
         })();
     </script>
 </body>
