@@ -93,8 +93,23 @@ def load_global_prompts():
         with open(GLOBAL_PROMPTS_FILE, "w", encoding="utf-8") as f:
             json.dump([], f)
         return []
+
     with open(GLOBAL_PROMPTS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        print(f"Ignoring malformed global prompts: expected list, got {type(data)}")
+        return []
+
+    sanitized = []
+    for entry in data:
+        if isinstance(entry, dict) and "name" in entry and "content" in entry:
+            sanitized.append({"name": entry["name"], "content": entry["content"]})
+        else:
+            # Ignore invalid entries but log for visibility
+            print(f"Ignoring invalid global prompt entry: {entry}")
+
+    return sanitized
 
 def save_global_prompts(prompts):
     with open(GLOBAL_PROMPTS_FILE, "w", encoding="utf-8") as f:
