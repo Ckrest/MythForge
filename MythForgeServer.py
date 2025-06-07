@@ -6,10 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from typing import Dict, List
 from llama_cpp import Llama
 
 # Import the LM Studio style prompt builder
-from lmstudio_prompter import format_prompt, GENERATION_CONFIG
+from lmstudio_prompter import GENERATION_CONFIG
+from airoboros_prompter import format_airoboros
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -188,7 +190,7 @@ def trim_context(chat_id):
     return history
 
 def build_prompt(chat_id, user_message, message_index, global_prompt_name):
-    """Construct the next prompt using the LM Studio format."""
+    """Construct the next prompt using the Airoboros format."""
 
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     full_path = f"{CHATS_DIR}/{chat_id}_full.json"
@@ -212,19 +214,24 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
 
     # Optional random injection
     injection = get_injection() if message_index % 2 == 0 else ""
-    system_content = system_prompt + (f"\n{injection}" if injection else "")
 
-    # Assemble messages for lmstudio formatting
-    messages = [{"role": "system", "content": system_content}]
+    # Gather summaries and raw history for Airoboros formatting
+    summaries: List[str] = []
+    history: List[Dict[str, str]] = []
     for m in context:
         if m.get("type") == "summary":
-            messages.append({"role": "system", "content": f"SUMMARY: {m['content']}"})
+            summaries.append(f"SUMMARY: {m['content']}")
         else:
             role = "assistant" if m.get("role") == "bot" else m.get("role")
-            messages.append({"role": role, "content": m.get("content", "")})
+            history.append({"role": role, "content": m.get("content", "")})
 
-    input_obj = {"messages": messages, "add_generation_prompt": True}
-    prompt_str = format_prompt(input_obj)
+    prompt_str = format_airoboros(
+        system_prompt,
+        injection,
+        summaries,
+        history,
+        user_message,
+    )
     return prompt_str
 
 # ========== Standard Chat Endpoints ==========
