@@ -27,6 +27,7 @@
             --input-bg: #ffffff;
             --hover-color: rgba(16, 163, 127, 0.1);
             --shadow-color: rgba(16, 163, 127, 0.2);
+            --message-font-size: 16px;
         }
         [data-theme="dark"] {
             --primary: #10a37f;
@@ -143,9 +144,9 @@
         .avatar { width: 30px; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0; }
         .user-avatar { background-color: var(--user-msg-bg); color: var(--user-msg-color); }
         .ai-avatar { background-color: var(--primary); color: white; }
-        .message-content { flex-grow: 1; max-width: 800px; line-height: 1.6; }
+        .message-content { flex-grow: 1; max-width: 800px; line-height: 1.6; font-size: var(--message-font-size); }
         pre { background-color: var(--code-bg); color: var(--code-color); padding: 10px; border-radius: 4px; overflow-x: auto; }
-        textarea { width: 100%; padding: 12px 45px 12px 12px; border: 1px solid var(--border-color); border-radius: 6px; resize: none; min-height: 24px; max-height: 200px; overflow-y: auto; font-family: inherit; font-size: 16px; line-height: 1.4; background-color: var(--input-bg); color: var(--text-color); }
+        textarea { width: 100%; padding: 12px 45px 12px 12px; border: 1px solid var(--border-color); border-radius: 6px; resize: none; min-height: 24px; max-height: 200px; overflow-y: auto; font-family: inherit; font-size: var(--message-font-size); line-height: 1.4; background-color: var(--input-bg); color: var(--text-color); }
         textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--shadow-color); }
         .input-area { border-top: 1px solid var(--border-color); padding: 20px; background-color: var(--bg-color); position: relative; }
         .input-container { display: flex; width: 100%; max-width: 800px; margin: 0 auto; position: relative; }
@@ -234,6 +235,14 @@
                     <option value="sepia">Sepia</option>
                 </select>
             </div>
+            <div class="theme-switcher">
+                <label for="text-size-select">Text Size</label>
+                <select id="text-size-select">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                </select>
+            </div>
             <div class="modal-actions">
                 <button id="settings-save-btn">Save</button>
             </div>
@@ -242,14 +251,15 @@
 
     <script>
         const CONFIG = { apiUrl: window.location.origin };
-        const state = { chats: [], currentChatId: '', settings:{ userName:'You', botName:'Bot', theme:'light' }, isGenerating: false };
+        const state = { chats: [], currentChatId: '', settings:{ userName:'You', botName:'Bot', theme:'light', textSize:'medium' }, isGenerating: false };
 
         const chatContainer    = document.getElementById('chat-container');
         const userInput        = document.getElementById('user-input');
         const sendButton       = document.getElementById('send-button');
         const newChatButton    = document.getElementById('new-chat-btn');
         const historyContainer = document.getElementById('history-container');
-        const themeSelect      = document.getElementById('theme-select');
+       const themeSelect      = document.getElementById('theme-select');
+        const textSizeSelect  = document.getElementById('text-size-select');
         const gpSelect         = document.getElementById('globalPromptSelect');
         const editPromptBtn    = document.getElementById('edit-prompt-btn');
         const addPromptBtn     = document.getElementById('add-prompt-btn');
@@ -269,9 +279,15 @@
         const chatSection      = document.getElementById('chat-section');
         const moreSection      = document.getElementById('more-section');
 
-        function applyTheme(name){
-            document.body.setAttribute('data-theme', name);
-            state.settings.theme = name;
+       function applyTheme(name){
+           document.body.setAttribute('data-theme', name);
+           state.settings.theme = name;
+       }
+
+        function applyTextSize(size){
+            const map = {small:'14px', medium:'16px', large:'18px'};
+            document.body.style.setProperty('--message-font-size', map[size] || '16px');
+            state.settings.textSize = size;
         }
 
         function loadSettings(){
@@ -290,10 +306,16 @@
             themeSelect.value = state.settings.theme;
         }
 
+        function loadTextSize(){
+            applyTextSize(state.settings.textSize);
+            textSizeSelect.value = state.settings.textSize;
+        }
+
         function openSettings(){
             userNameInput.value = state.settings.userName;
             botNameInput.value  = state.settings.botName;
             themeSelect.value   = state.settings.theme;
+            textSizeSelect.value = state.settings.textSize;
             settingsModal.style.display='flex';
         }
 
@@ -312,6 +334,7 @@
             state.settings.userName = userNameInput.value.trim() || 'You';
             state.settings.botName  = botNameInput.value.trim()  || 'Bot';
             applyTheme(themeSelect.value);
+            applyTextSize(textSizeSelect.value);
             saveSettings();
             updateAvatarDisplays();
             closeSettings();
@@ -526,6 +549,7 @@
 
         function setupEvents(){
             themeSelect.addEventListener('change', e=>applyTheme(e.target.value));
+            textSizeSelect.addEventListener('change', e=>applyTextSize(e.target.value));
             gpSelect.addEventListener('change', ()=>{ localStorage.setItem('lastGlobalPrompt', gpSelect.value); });
             openSettingsBtn.addEventListener('click', openSettings);
             settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
@@ -547,6 +571,7 @@
         (async function init(){
             loadSettings();
             loadTheme();
+            loadTextSize();
             setupEvents();
             showChatTab();
             await fetchChatList();
