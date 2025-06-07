@@ -111,17 +111,17 @@
         .sidebar button { cursor: pointer; background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; padding: 8px; font-size: 14px; }
         .sidebar button:hover { background-color: var(--sidebar-btn-hover); }
         .sidebar button.new-chat { padding: 12px; text-align: left; margin-bottom: 20px; display: flex; align-items: center; }
-        .sidebar button#delete-chat-btn { background-color: rgba(220,53,69,0.8); }
         .history-container { flex-grow: 1; overflow-y: auto; }
         .chat-history-item {
-            padding: 10px; margin-bottom: 5px; border-radius: 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; position: relative;
+            padding: 10px; margin-bottom: 5px; border-radius: 4px; cursor: pointer; font-size: 14px; position: relative; display:flex; align-items:center;
         }
+        .chat-name { flex-grow:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .chat-history-item:hover { background-color: var(--sidebar-btn-hover); }
-        .chat-edit-btn {
-            position: absolute; bottom: 2px; left: 2px; background: none; border: none;
-            color: var(--sidebar-text); font-size: 12px; cursor: pointer; display: none;
+        .chat-action-btn {
+            background: none; border: none; color: var(--sidebar-text); font-size: 12px; cursor: pointer; margin-left:4px; display:none;
         }
-        .chat-history-item:hover .chat-edit-btn { display: block; }
+        .chat-history-item.active .chat-action-btn { display:block; }
+        .chat-history-item.active { background-color: var(--sidebar-btn-hover); }
         .theme-switcher { margin-bottom: 12px; display: flex; flex-direction: column; }
         .theme-switcher select {
             background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; margin-top: 5px; cursor: pointer; font-size: 14px;
@@ -195,7 +195,6 @@
                     <button id="add-prompt-btn">Add Prompt</button>
                 </div>
                 <button id="open-settings-btn" class="new-chat">Settings</button>
-                <button id="delete-chat-btn" class="new-chat" style="margin-top:10px;background-color:rgba(220,53,69,0.8);">Delete Chat</button>
                 <button id="system-toggle" class="new-chat" style="display:none;margin-top:10px;">⚙️ Last Prompt</button>
             </div>
         </div>
@@ -273,7 +272,6 @@
         const gpSelect         = document.getElementById('globalPromptSelect');
         const editPromptBtn    = document.getElementById('edit-prompt-btn');
         const addPromptBtn     = document.getElementById('add-prompt-btn');
-        const deleteChatBtn    = document.getElementById('delete-chat-btn');
         const systemToggle     = document.getElementById('system-toggle');
         const systemContainer  = document.getElementById('system-container');
         const systemPrompt     = document.getElementById('system-prompt');
@@ -391,20 +389,30 @@
             state.chats.forEach(id => {
                 const div = document.createElement('div');
                 div.className = 'chat-history-item';
+
                 const nameSpan = document.createElement('span');
+                nameSpan.className = 'chat-name';
                 nameSpan.textContent = id;
-                nameSpan.style.flexGrow = '1';
                 div.appendChild(nameSpan);
 
-                const editBtn = document.createElement('button');
-                editBtn.className = 'chat-edit-btn';
-                editBtn.textContent = '✎';
-                editBtn.title = 'Rename chat';
-                editBtn.onclick = (e)=>{ e.stopPropagation(); renameChat(id); };
-                div.appendChild(editBtn);
+                if(id === state.currentChatId){
+                    div.classList.add('active');
+                    const renameBtn = document.createElement('button');
+                    renameBtn.className = 'chat-action-btn';
+                    renameBtn.textContent = '✎';
+                    renameBtn.title = 'Rename chat';
+                    renameBtn.onclick = (e)=>{ e.stopPropagation(); renameChat(id); };
+                    div.appendChild(renameBtn);
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'chat-action-btn';
+                    deleteBtn.textContent = '✕';
+                    deleteBtn.title = 'Delete chat';
+                    deleteBtn.onclick = (e)=>{ e.stopPropagation(); deleteChat(); };
+                    div.appendChild(deleteBtn);
+                }
 
                 div.onclick = () => loadChat(id);
-                if(id === state.currentChatId) div.style.backgroundColor = 'var(--sidebar-btn-hover)';
                 historyContainer.appendChild(div);
             });
         }
@@ -720,7 +728,6 @@
             userInput.addEventListener('input', ()=>{ const dis = userInput.value.trim()==='' || state.isGenerating; sendButton.disabled = dis; sendOnlyButton.disabled = dis; autoResize(); });
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
-            deleteChatBtn.addEventListener('click', deleteChat);
             editPromptBtn.addEventListener('click', openPromptEditor);
             addPromptBtn.addEventListener('click', addNewPrompt);
             systemToggle.addEventListener('click', toggleSystem);
