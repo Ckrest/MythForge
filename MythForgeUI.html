@@ -190,7 +190,6 @@
             <div id="prompt-section" style="display:none;">
                 <button class="new-chat" id="new-prompt-btn">New Prompt</button>
                 <div class="history-container" id="prompt-list"></div>
-                <button id="edit-prompt-btn" style="margin-top:10px;">Edit Prompt</button>
             </div>
             <div id="more-section" style="display:none;">
                 <button id="open-settings-btn" class="new-chat">Settings</button>
@@ -270,7 +269,6 @@
         const textSizeSelect  = document.getElementById('text-size-select');
         const newPromptBtn     = document.getElementById('new-prompt-btn');
         const promptList       = document.getElementById('prompt-list');
-        const editPromptBtn    = document.getElementById('edit-prompt-btn');
         const systemToggle     = document.getElementById('system-toggle');
         const systemContainer  = document.getElementById('system-container');
         const systemPrompt     = document.getElementById('system-prompt');
@@ -817,7 +815,6 @@
             userInput.addEventListener('input', ()=>{ const dis = userInput.value.trim()==='' || state.isGenerating; sendButton.disabled = dis; sendOnlyButton.disabled = dis; autoResize(); });
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
-            editPromptBtn.addEventListener('click', openPromptEditor);
             newPromptBtn.addEventListener('click', addNewPrompt);
             systemToggle.addEventListener('click', toggleSystem);
             hideTab.addEventListener('click', hideSidebar);
