@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import re
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -224,18 +225,27 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     chosen_content = next((p["content"] for p in all_prompts if p["name"] == global_prompt_name), None)
     system_prompt  = chosen_content if chosen_content else "You are a helpful assistant."
 
+    # Tweak system prompt text per customization rules
+    system_prompt = re.sub(r"(?im)^persona:\s*", "", system_prompt)
+    system_prompt = system_prompt.replace("behavior:", "format:")
+
     # Random injection every other message
     injection = get_injection() if message_index % 2 == 0 else ""
 
     # Build the message list for the LM Studio template
-    system_content = system_prompt + ("\n" + injection if injection else "")
+    system_content = "BEGINCONTEXT\n[SYSTEM] This is law:\n" + system_prompt
+    if injection:
+        system_content += "\n" + injection
     messages = [{"role": "system", "content": system_content}]
 
     for m in context:
         if m.get("type") == "summary":
             messages.append({"role": "system", "content": f"SUMMARY: {m['content']}"})
         else:
-            role = "assistant" if m["role"] == "bot" else m["role"]
+            if m["role"] == "bot":
+                role = global_prompt_name or "assistant"
+            else:
+                role = m["role"]
             messages.append({"role": role, "content": m["content"]})
 
     prompt_str = format_prompt({"messages": messages}, bos_token="<s>")

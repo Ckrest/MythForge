@@ -413,7 +413,10 @@
                 gpSelect.innerHTML = '<option value="">(no global prompt)</option>';
                 json.prompts.forEach(p => { const opt=document.createElement('option'); opt.value=p.name; opt.textContent=p.name; gpSelect.appendChild(opt); });
                 const last = localStorage.getItem('lastGlobalPrompt');
-                if(last && Array.from(gpSelect.options).some(o=>o.value===last)) gpSelect.value = last;
+                if(last && Array.from(gpSelect.options).some(o=>o.value===last)){
+                    gpSelect.value = last;
+                    state.settings.botName = last;
+                }
             }catch(e){ console.error('Failed to load prompts:',e); }
         }
 
@@ -552,7 +555,10 @@
         function setupEvents(){
             themeSelect.addEventListener('change', e=>applyTheme(e.target.value));
             textSizeSelect.addEventListener('change', e=>applyTextSize(e.target.value));
-            gpSelect.addEventListener('change', ()=>{ localStorage.setItem('lastGlobalPrompt', gpSelect.value); });
+            gpSelect.addEventListener('change', ()=>{
+                localStorage.setItem('lastGlobalPrompt', gpSelect.value);
+                state.settings.botName = gpSelect.value || 'Bot';
+            });
             openSettingsBtn.addEventListener('click', openSettings);
             settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
             settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
