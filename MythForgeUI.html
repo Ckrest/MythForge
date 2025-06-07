@@ -136,7 +136,7 @@
         .modal-actions{text-align:right;margin-top:15px;}
         .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; }
         .top-controls { padding: 10px; border-bottom: 1px solid var(--border-color); background: var(--bg-color); display: flex; gap: 0.5em; align-items: center; }
-        .chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; background-color: var(--chat-bg); }
+        .chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; background-color: var(--chat-bg);  -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
         .message { padding: 20px; margin: 0; display: flex; border-bottom: 1px solid var(--border-color); position: relative; }
         .user-message { background-color: var(--bg-color); }
         .ai-message { background-color: var(--chat-bg); }
@@ -947,7 +947,15 @@
             }
         }
 
-        function stopGenerating(){ if(abortController){ abortController.abort(); } }
+        function stopGenerating(){
+            if(abortController){ abortController.abort(); }
+            state.isGenerating=false;
+            stopButton.style.display="none";
+            sendButton.style.display="inline";
+            sendOnlyButton.style.display="inline";
+            sendButton.disabled=false;
+            sendOnlyButton.disabled=userInput.value.trim()==="";
+        }
 
         function setupEvents(){
             themeSelect.addEventListener('change', e=>applyTheme(e.target.value));
