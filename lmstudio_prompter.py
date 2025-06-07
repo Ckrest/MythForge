@@ -72,7 +72,7 @@ LMSTUDIO_TEMPLATE = """
 {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' }}
 {{- '{"name":"' + call.name + '","parameters":' + (call.arguments|tojson) + '}' + '<|eot_id|>' }}
 {%- elif message.role == 'ipython' or 'tool_results' in message.role %}
-{{- '<|start_header_id|>ipython<|end_header_id|>\n\n' + (message.content is iterable ? message.content|tojson : message.content) + '<|eot_id|>' }}
+{{- '<|start_header_id|>ipython<|end_header_id|>\n\n' + (message.content|tojson if message.content is iterable else message.content) + '<|eot_id|>' }}
 {%- endif %}
 {%- endfor %}
 
