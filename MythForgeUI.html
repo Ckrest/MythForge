@@ -207,7 +207,7 @@
     </div>
 
     <script>
-        const CONFIG = { apiUrl: 'http://localhost:8000' };
+        const CONFIG = { apiUrl: window.location.origin };
         const state = { chats: [], currentChatId: '', settings:{ userName:'You', botName:'Bot', theme:'light' }, isGenerating: false };
 
         const chatContainer    = document.getElementById('chat-container');
