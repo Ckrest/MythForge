@@ -33,7 +33,6 @@ def format_airoboros(
     lines = [
         "BEGININPUT",
         "BEGINCONTEXT",
-        "[SYSTEM] This is law:",
         f"{global_prompt}",
         "ENDCONTEXT",
     ]
