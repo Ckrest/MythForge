@@ -50,7 +50,7 @@ def load_model() -> None:
     if not os.path.exists(path):
         raise RuntimeError(f"Model file not found: {path}")
 
-    app.state.model = Llama(path)
+    app.state.model = Llama(path, prompt_template="")
 
 
 @app.post("/chat")
@@ -59,6 +59,7 @@ def chat(req: ChatRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Model not loaded")
     input_obj = req.dict()
     prompt = format_prompt(input_obj)
+    print("DEBUG: raw_prompt =", prompt)
     try:
         result = app.state.model(prompt, **GENERATION_CONFIG)
         text = result["choices"][0]["text"]
