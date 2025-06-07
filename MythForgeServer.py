@@ -1,6 +1,5 @@
 import os
 import json
-import random
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -41,7 +40,6 @@ class PromptItem(BaseModel):
 # ========== Configuration ==========
 MODELS_DIR            = "models"
 CHATS_DIR             = "chats"
-INJECTION_FILE        = "random_injections.txt"
 GLOBAL_PROMPTS_FILE   = "global_prompts.json"
 # Match LM Studio defaults for a 4 GB VRAM setup
 DEFAULT_CTX_SIZE      = 4096
@@ -111,13 +109,6 @@ def load_json(path):
 def save_json(path, data):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-
-def get_injection():
-    if not os.path.exists(INJECTION_FILE):
-        return ""
-    with open(INJECTION_FILE, 'r', encoding='utf-8') as f:
-        lines = [line.strip() for line in f if line.strip()]
-    return random.choice(lines) if lines else ""
 
 def strip_leading_tag(text: str, tag: str) -> str:
     """Remove a leading ``tag:`` from ``text`` if present."""
@@ -249,9 +240,6 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
     assistant_name = global_prompt_name if chosen_content else "assistant"
 
-    # Optional random injection
-    injection = get_injection() if message_index % 6 == 0 else ""
-
     # Gather summaries and raw history for Airoboros formatting
     summaries: List[str] = []
     history: List[Dict[str, str]] = []
@@ -264,7 +252,6 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
 
     prompt_str = format_airoboros(
         system_prompt,
-        injection,
         summaries,
         history,
         user_message,
