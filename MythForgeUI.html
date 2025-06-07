@@ -167,7 +167,7 @@
         .sidebar.hidden { display: none; }
         .sidebar.hidden + .main .input-container { max-width: 100%; }
         .sidebar.hidden + .main .message-content { max-width: none; }
-        #chat-section, #more-section { flex-grow: 1; display: flex; flex-direction: column; }
+        #chat-section, #more-section, #prompt-section { flex-grow: 1; display: flex; flex-direction: column; }
         #more-section { overflow-y: auto; }
         .sidebar-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
         .sidebar-section select { background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; cursor: pointer; font-size: 14px; }
@@ -178,6 +178,7 @@
         <div class="tab-bar">
             <button id="hide-tab" title="Hide">&#8592;</button>
             <button id="chat-tab" title="Chats">&#128172;</button>
+            <button id="prompt-tab" title="Global Chats">&#127760;</button>
             <button id="more-tab" title="More">&#9881;</button>
         </div>
         <div class="sidebar" id="sidebar">
@@ -185,15 +186,13 @@
                 <button class="new-chat" id="new-chat-btn">New Chat</button>
                 <div class="history-container" id="history-container"></div>
             </div>
+            <div id="prompt-section" style="display:none;">
+                <button class="new-chat" id="new-prompt-btn">New Prompt</button>
+                <div class="history-container" id="prompt-container"></div>
+                <button id="rename-prompt-btn" class="new-chat">Rename</button>
+                <button id="delete-prompt-btn" class="new-chat" style="margin-top:10px;background-color:rgba(220,53,69,0.8);">Delete</button>
+            </div>
             <div id="more-section" style="display:none;">
-                <div class="sidebar-section">
-                    <label for="globalPromptSelect">Global Prompt</label>
-                    <select id="globalPromptSelect">
-                        <option value="">(no global prompt)</option>
-                    </select>
-                    <button id="edit-prompt-btn">Edit Prompt</button>
-                    <button id="add-prompt-btn">Add Prompt</button>
-                </div>
                 <button id="open-settings-btn" class="new-chat">Settings</button>
                 <button id="system-toggle" class="new-chat" style="display:none;margin-top:10px;">⚙️ Last Prompt</button>
             </div>
@@ -257,7 +256,7 @@
 
     <script>
         const CONFIG = { apiUrl: window.location.origin };
-        const state = { chats: [], currentChatId: '', settings:{ userName:'You', botName:'Bot', theme:'light', textSize:'medium' }, isGenerating: false };
+        const state = { chats: [], currentChatId: '', prompts: [], currentPrompt:'', settings:{ userName:'You', botName:'Bot', theme:'light', textSize:'medium' }, isGenerating: false };
 
         const chatContainer    = document.getElementById('chat-container');
         const userInput        = document.getElementById('user-input');
@@ -269,9 +268,11 @@
         const historyContainer = document.getElementById('history-container');
        const themeSelect      = document.getElementById('theme-select');
         const textSizeSelect  = document.getElementById('text-size-select');
-        const gpSelect         = document.getElementById('globalPromptSelect');
-        const editPromptBtn    = document.getElementById('edit-prompt-btn');
-        const addPromptBtn     = document.getElementById('add-prompt-btn');
+        const promptContainer  = document.getElementById('prompt-container');
+        const newPromptBtn     = document.getElementById('new-prompt-btn');
+        const renamePromptBtn  = document.getElementById('rename-prompt-btn');
+        const deletePromptBtn  = document.getElementById('delete-prompt-btn');
+        const deleteChatBtn    = document.getElementById('delete-chat-btn');
         const systemToggle     = document.getElementById('system-toggle');
         const systemContainer  = document.getElementById('system-container');
         const systemPrompt     = document.getElementById('system-prompt');
@@ -282,9 +283,11 @@
         const botNameInput     = document.getElementById('bot-name-input');
         const hideTab          = document.getElementById('hide-tab');
         const chatTab          = document.getElementById('chat-tab');
+        const promptTab        = document.getElementById('prompt-tab');
         const moreTab          = document.getElementById('more-tab');
         const sidebar          = document.getElementById('sidebar');
         const chatSection      = document.getElementById('chat-section');
+        const promptSection    = document.getElementById('prompt-section');
         const moreSection      = document.getElementById('more-section');
 
        function applyTheme(name){
@@ -365,22 +368,37 @@
         function showChatTab(){
             sidebar.classList.remove('hidden');
             chatSection.style.display = 'flex';
+            promptSection.style.display = 'none';
             moreSection.style.display = 'none';
             chatTab.classList.add('active');
+            promptTab.classList.remove('active');
             moreTab.classList.remove('active');
         }
 
         function showMoreTab(){
             sidebar.classList.remove('hidden');
             chatSection.style.display = 'none';
+            promptSection.style.display = 'none';
             moreSection.style.display = 'flex';
             chatTab.classList.remove('active');
+            promptTab.classList.remove('active');
             moreTab.classList.add('active');
+        }
+
+        function showPromptTab(){
+            sidebar.classList.remove('hidden');
+            chatSection.style.display = 'none';
+            promptSection.style.display = 'flex';
+            moreSection.style.display = 'none';
+            chatTab.classList.remove('active');
+            promptTab.classList.add('active');
+            moreTab.classList.remove('active');
         }
 
         function hideSidebar(){
             sidebar.classList.add('hidden');
             chatTab.classList.remove('active');
+            promptTab.classList.remove('active');
             moreTab.classList.remove('active');
         }
 
@@ -449,14 +467,27 @@
             sendOnlyButton.disabled = userInput.value.trim()==='' || state.isGenerating;
         }
 
+        function renderPromptList(){
+            promptContainer.innerHTML='';
+            state.prompts.forEach(p=>{
+                const div=document.createElement('div');
+                div.className='chat-history-item';
+                div.textContent=p.name;
+                div.onclick=()=>{ state.currentPrompt=p.name; localStorage.setItem('lastGlobalPrompt',p.name); renderPromptList(); };
+                if(p.name===state.currentPrompt) div.style.backgroundColor='var(--sidebar-btn-hover)';
+                promptContainer.appendChild(div);
+            });
+        }
+
         async function refreshGlobalPromptList(){
             try{
                 const res = await fetch('/prompts');
                 const json = await res.json();
-                gpSelect.innerHTML = '<option value="">(no global prompt)</option>';
-                json.prompts.forEach(p => { const opt=document.createElement('option'); opt.value=p.name; opt.textContent=p.name; gpSelect.appendChild(opt); });
+                state.prompts = json.prompts;
                 const last = localStorage.getItem('lastGlobalPrompt');
-                if(last && Array.from(gpSelect.options).some(o=>o.value===last)) gpSelect.value = last;
+                if(last && state.prompts.some(p=>p.name===last)) state.currentPrompt = last;
+                else if(state.prompts.length && !state.currentPrompt) state.currentPrompt = state.prompts[0].name;
+                renderPromptList();
             }catch(e){ console.error('Failed to load prompts:',e); }
         }
 
@@ -474,10 +505,8 @@
                     const err = await res.json();
                     return alert('Error: ' + err.detail);
                 }
-                // Remember this new prompt as the last used one
                 localStorage.setItem('lastGlobalPrompt', trimmed);
                 await refreshGlobalPromptList();
-                gpSelect.value = trimmed;
                 alert(`Prompt "${trimmed}" created.`);
             }catch(e){
                 console.error('Failed to create prompt:', e);
@@ -485,8 +514,8 @@
             }
         }
 
-        async function openPromptEditor(){
-            const name = gpSelect.value; if(!name) return alert('Select a prompt from the dropdown first.');
+        async function openPromptEditor(name){
+            if(!name) return alert('Select a prompt first.');
             try{
                 const res = await fetch('/prompts'); const json = await res.json();
                 const promptObj = json.prompts.find(p=>p.name===name); if(!promptObj) return alert('Prompt not found.');
@@ -496,6 +525,7 @@
                 await refreshGlobalPromptList(); alert(`Prompt "${name}" updated.`);
             }catch(e){ console.error('Failed to update prompt:',e); alert('Failed to update prompt: '+e.message); }
         }
+
 
        function startNewChat(){
             const name = prompt('Enter new chat name:'); if(name===null) return; const trimmed = name.trim(); if(!trimmed) return alert('Name cannot be empty.');
@@ -656,7 +686,7 @@
                 const response = await fetch('/chat/stream', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: gpSelect.value}),
+                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: state.currentPrompt}),
                     signal: abortController.signal
                 });
                 if(!response.ok) throw new Error(`Server returned ${response.status}`);
@@ -714,7 +744,7 @@
                 await fetch('/message', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: gpSelect.value})
+                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: state.currentPrompt})
                 });
             }catch(err){
                 console.error('Send only failed:', err);
@@ -730,7 +760,6 @@
         function setupEvents(){
             themeSelect.addEventListener('change', e=>applyTheme(e.target.value));
             textSizeSelect.addEventListener('change', e=>applyTextSize(e.target.value));
-            gpSelect.addEventListener('change', ()=>{ localStorage.setItem('lastGlobalPrompt', gpSelect.value); });
             openSettingsBtn.addEventListener('click', openSettings);
             settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
             settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
@@ -746,11 +775,14 @@
             });
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
-            editPromptBtn.addEventListener('click', openPromptEditor);
-            addPromptBtn.addEventListener('click', addNewPrompt);
+            deleteChatBtn.addEventListener('click', deleteChat);
+            newPromptBtn.addEventListener('click', addNewPrompt);
+            renamePromptBtn.addEventListener('click', ()=>openPromptEditor(state.currentPrompt));
+            deletePromptBtn.addEventListener('click', deletePrompt);
             systemToggle.addEventListener('click', toggleSystem);
             hideTab.addEventListener('click', hideSidebar);
             chatTab.addEventListener('click', showChatTab);
+            promptTab.addEventListener('click', showPromptTab);
             moreTab.addEventListener('click', showMoreTab);
         }
 
