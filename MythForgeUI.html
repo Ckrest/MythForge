@@ -167,8 +167,9 @@
         .sidebar.hidden { display: none; }
         .sidebar.hidden + .main .input-container { max-width: 100%; }
         .sidebar.hidden + .main .message-content { max-width: none; }
-        #chat-section, #more-section { flex-grow: 1; display: flex; flex-direction: column; }
+        #chat-section, #more-section, #prompt-section { flex-grow: 1; display: flex; flex-direction: column; }
         #more-section { overflow-y: auto; }
+        #prompt-section { overflow-y: auto; }
         .sidebar-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
         .sidebar-section select { background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; cursor: pointer; font-size: 14px; }
     </style>
@@ -178,6 +179,7 @@
         <div class="tab-bar">
             <button id="hide-tab" title="Hide">&#8592;</button>
             <button id="chat-tab" title="Chats">&#128172;</button>
+            <button id="prompt-tab" title="Global Prompt">&#128221;</button>
             <button id="more-tab" title="More">&#9881;</button>
         </div>
         <div class="sidebar" id="sidebar">
@@ -185,7 +187,7 @@
                 <button class="new-chat" id="new-chat-btn">New Chat</button>
                 <div class="history-container" id="history-container"></div>
             </div>
-            <div id="more-section" style="display:none;">
+            <div id="prompt-section" style="display:none;">
                 <div class="sidebar-section">
                     <label for="globalPromptSelect">Global Prompt</label>
                     <select id="globalPromptSelect">
@@ -194,6 +196,8 @@
                     <button id="edit-prompt-btn">Edit Prompt</button>
                     <button id="add-prompt-btn">Add Prompt</button>
                 </div>
+            </div>
+            <div id="more-section" style="display:none;">
                 <button id="open-settings-btn" class="new-chat">Settings</button>
                 <button id="system-toggle" class="new-chat" style="display:none;margin-top:10px;">⚙️ Last Prompt</button>
             </div>
@@ -282,9 +286,11 @@
         const botNameInput     = document.getElementById('bot-name-input');
         const hideTab          = document.getElementById('hide-tab');
         const chatTab          = document.getElementById('chat-tab');
+        const promptTab        = document.getElementById('prompt-tab');
         const moreTab          = document.getElementById('more-tab');
         const sidebar          = document.getElementById('sidebar');
         const chatSection      = document.getElementById('chat-section');
+        const promptSection    = document.getElementById('prompt-section');
         const moreSection      = document.getElementById('more-section');
 
        function applyTheme(name){
@@ -362,25 +368,40 @@
             systemContainer.style.display = current === 'none' ? 'block' : 'none';
         }
 
-        function showChatTab(){
+       function showChatTab(){
             sidebar.classList.remove('hidden');
             chatSection.style.display = 'flex';
+            promptSection.style.display = 'none';
             moreSection.style.display = 'none';
             chatTab.classList.add('active');
+            promptTab.classList.remove('active');
             moreTab.classList.remove('active');
         }
 
         function showMoreTab(){
             sidebar.classList.remove('hidden');
             chatSection.style.display = 'none';
+            promptSection.style.display = 'none';
             moreSection.style.display = 'flex';
             chatTab.classList.remove('active');
+            promptTab.classList.remove('active');
             moreTab.classList.add('active');
+        }
+
+        function showPromptTab(){
+            sidebar.classList.remove('hidden');
+            chatSection.style.display = 'none';
+            promptSection.style.display = 'flex';
+            moreSection.style.display = 'none';
+            chatTab.classList.remove('active');
+            promptTab.classList.add('active');
+            moreTab.classList.remove('active');
         }
 
         function hideSidebar(){
             sidebar.classList.add('hidden');
             chatTab.classList.remove('active');
+            promptTab.classList.remove('active');
             moreTab.classList.remove('active');
         }
 
@@ -733,6 +754,7 @@
             systemToggle.addEventListener('click', toggleSystem);
             hideTab.addEventListener('click', hideSidebar);
             chatTab.addEventListener('click', showChatTab);
+            promptTab.addEventListener('click', showPromptTab);
             moreTab.addEventListener('click', showMoreTab);
         }
 
