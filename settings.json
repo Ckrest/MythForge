@@ -1,15 +1,14 @@
 {
-  "model_path": "models/BlackSheep-Llama3.2-3B.gguf",
   "n_ctx": 4096,
   "n_batch": 512,
-  "n_threads": null,
+  "n_threads": 4,
   "prompt_template": "",
 
-  "f16_kv": null,
-  "use_mmap": null,
-  "use_mlock": null,
-  "n_gpu_layers": null,
-  "main_memory_kv": null,
+  "f16_kv": false,
+  "use_mmap": true,
+  "use_mlock": true,
+  "n_gpu_layers": 0,
+  "main_memory_kv": true,
 
   "max_tokens": 250,
   "temperature": 0.8,
