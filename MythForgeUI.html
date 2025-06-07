@@ -210,7 +210,7 @@
                     <button id="send-only-button" class="send-button" style="right:40px" title="Send without response" disabled>
                         &#10003;
                     </button>
-                    <button id="send-button" class="send-button" disabled>
+                    <button id="send-button" class="send-button">
                         <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="20" width="20" xmlns="http://www.w3.org/2000/svg">
                             <line x1="22" y1="2" x2="11" y2="13"></line>
                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -730,9 +730,10 @@
         }
         function removeTyping(){ const t=document.getElementById('typing-indicator'); if(t) t.remove(); }
 
-        async function sendMessage(){
+        async function sendMessage(allowEmpty=false){
             const text = userInput.value.trim();
-            if(text==='' || state.isGenerating || !state.currentChatId) return;
+            if(state.isGenerating || !state.currentChatId) return;
+            if(text==='' && !allowEmpty) return;
             userInput.value=''; autoResize();
             sendButton.disabled=true; sendOnlyButton.disabled=true;
             sendButton.style.display='none';
@@ -797,8 +798,8 @@
                 }
             }finally{
                 state.isGenerating=false;
-                sendButton.disabled=userInput.value.trim()==='';
-                sendOnlyButton.disabled=sendButton.disabled;
+                sendButton.disabled=state.isGenerating;
+                sendOnlyButton.disabled=userInput.value.trim()==='' || state.isGenerating;
                 stopButton.style.display='none';
                 sendButton.style.display='inline';
                 sendOnlyButton.style.display='inline';
@@ -821,8 +822,8 @@
             }catch(err){
                 console.error('Send only failed:', err);
             }finally{
-                sendButton.disabled=userInput.value.trim()==='' || state.isGenerating;
-                sendOnlyButton.disabled=sendButton.disabled;
+                sendButton.disabled=state.isGenerating;
+                sendOnlyButton.disabled=userInput.value.trim()==='' || state.isGenerating;
                 userInput.focus();
             }
         }
@@ -836,11 +837,17 @@
             openSettingsBtn.addEventListener('click', openSettings);
             settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
             settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
-            sendButton.addEventListener('click', sendMessage);
+            sendButton.addEventListener('click', () => {
+                if(userInput.value.trim()===''){
+                    if(confirm('Generate with no prompt?')) sendMessage(true);
+                } else {
+                    sendMessage();
+                }
+            });
             sendOnlyButton.addEventListener('click', sendMessageNoGen);
             stopButton.addEventListener('click', stopGenerating);
             userInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
-            userInput.addEventListener('input', ()=>{ const dis = userInput.value.trim()==='' || state.isGenerating; sendButton.disabled = dis; sendOnlyButton.disabled = dis; autoResize(); });
+            userInput.addEventListener('input', ()=>{ const disGen = state.isGenerating; sendButton.disabled = disGen; sendOnlyButton.disabled = userInput.value.trim()==='' || disGen; autoResize(); });
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
             newPromptBtn.addEventListener('click', addNewPrompt);
