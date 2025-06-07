@@ -288,7 +288,7 @@ def trim_context(chat_id):
 
     return history
 
-def build_prompt(chat_id, user_message, message_index, global_prompt_name):
+def build_prompt(chat_id, user_message, global_prompt_name):
     """Construct the next prompt using the Airoboros format."""
 
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
@@ -454,9 +454,8 @@ def chat(req: ChatRequest):
         save_json(full_path, [])
         save_json(trimmed_path, [])
 
-    message_index = len(load_json(full_path))
     prompt, assistant_name = build_prompt(
-        chat_id, user_message, message_index, global_prompt
+        chat_id, user_message, global_prompt
     )
 
     # Generate the assistant response using LM Studio generation settings
@@ -501,9 +500,8 @@ def chat_stream(req: ChatRequest):
         save_json(trimmed_path, [])
 
     # 1) Build prompt
-    message_index = len(load_json(full_path))
     prompt, assistant_name = build_prompt(
-        chat_id, user_message, message_index, global_prompt
+        chat_id, user_message, global_prompt
     )
 
 
@@ -585,9 +583,8 @@ def log_message(req: ChatRequest):
         save_json(full_path, [])
         save_json(trimmed_path, [])
 
-    message_index = len(load_json(full_path))
     # build_prompt appends the user message to history files
-    build_prompt(chat_id, user_message, message_index, global_prompt)
+    build_prompt(chat_id, user_message, global_prompt)
 
     return {"detail": "Message recorded"}
 
