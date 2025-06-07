@@ -109,6 +109,13 @@ def ensure_chat_mapping(sanitized: str, original: str):
         mapping[sanitized] = original
         save_chat_map(mapping)
 
+def strip_leading_tag(text: str, tag: str) -> str:
+    """Remove a leading ``tag:`` from ``text`` if present (case-insensitive)."""
+    if not tag:
+        return text
+    pattern = rf"^\s*{re.escape(tag)}\s*:\s*"
+    return re.sub(pattern, "", text, count=1, flags=re.IGNORECASE)
+
 def get_injection():
     if not os.path.exists(INJECTION_FILE):
         return ""
@@ -328,6 +335,7 @@ def chat(req: ChatRequest):
         stop=GENERATION_CONFIG["stop"],
     )
     response_text = output["choices"][0]["text"].strip()
+    response_text = strip_leading_tag(response_text, global_prompt or "assistant")
 
     # Append bot to full history
     full_log = load_json(full_path)
@@ -387,6 +395,9 @@ def chat_stream(req: ChatRequest):
 
         # Prepare to accumulate the bot’s full response
         text_accumulator = ""
+        prefix = (global_prompt or "assistant") + ":"
+        buffer = ""
+        prefix_checked = False
 
         # Next, stream the model’s token chunks
         for output in llm(
@@ -401,19 +412,38 @@ def chat_stream(req: ChatRequest):
             stop=GENERATION_CONFIG["stop"],
         ):
             chunk = output["choices"][0]["text"]
-            text_accumulator += chunk
-            yield chunk
+            if not prefix_checked:
+                buffer += chunk
+                if len(buffer) >= len(prefix):
+                    temp = buffer.lstrip()
+                    if temp.lower().startswith(prefix.lower()):
+                        temp = temp[len(prefix):]
+                    yield temp
+                    text_accumulator += temp
+                    buffer = ""
+                    prefix_checked = True
+            else:
+                text_accumulator += chunk
+                yield chunk
+
+        if not prefix_checked and buffer:
+            temp = buffer.lstrip()
+            if temp.lower().startswith(prefix.lower()):
+                temp = temp[len(prefix):]
+            yield temp
+            text_accumulator += temp
 
         # Once done, append full bot response to both histories:
 
         # (1) Full history
+        cleaned = strip_leading_tag(text_accumulator, global_prompt or "assistant")
         full_history = load_json(full_path)
-        full_history.append({"role": "bot", "content": text_accumulator})
+        full_history.append({"role": "bot", "content": cleaned})
         save_json(full_path, full_history)
 
         # (2) Trimmed context
         trimmed = load_json(trimmed_path)
-        trimmed.append({"type": "raw", "role": "bot", "content": text_accumulator})
+        trimmed.append({"type": "raw", "role": "bot", "content": cleaned})
         save_json(trimmed_path, trimmed)
 
     return StreamingResponse(
