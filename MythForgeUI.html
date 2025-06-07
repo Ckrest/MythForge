@@ -473,7 +473,8 @@
 
         function scrollToBottom(){
             chatContainer.scrollTop = chatContainer.scrollHeight;
-            window.scrollTo(0, document.body.scrollHeight);
+            const lastMsg = chatContainer.lastElementChild;
+            if(lastMsg) lastMsg.scrollIntoView({block:'end'});
         }
 
         function appendMessageToUI(role, content){
