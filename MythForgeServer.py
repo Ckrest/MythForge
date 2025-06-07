@@ -8,6 +8,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from llama_cpp import Llama
 
+# Import the LM Studio style prompt builder
+from lmstudio_prompter import format_prompt, GENERATION_CONFIG
+
 app = FastAPI(title="Myth Forge Server")
 
 # ========== CORS ==========
@@ -176,36 +179,41 @@ def trim_context(chat_id):
     return history
 
 def build_prompt(chat_id, user_message, message_index, global_prompt_name):
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
-    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
+    """Construct the next prompt using the LM Studio format."""
 
-    # Append user to full history
+    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    full_path = f"{CHATS_DIR}/{chat_id}_full.json"
+
+    # Append user message to full history
     full_log = load_json(full_path)
     full_log.append({"role": "user", "content": user_message})
     save_json(full_path, full_log)
 
-    # Possibly summarize oldest raws
+    # Update trimmed context with possible summarization
     context = trim_context(chat_id)
     context.append({"type": "raw", "role": "user", "content": user_message})
     save_json(trimmed_path, context)
 
-    # Choose system prompt
-    all_prompts    = load_global_prompts()
+    # Determine system prompt
+    all_prompts = load_global_prompts()
     chosen_content = next((p["content"] for p in all_prompts if p["name"] == global_prompt_name), None)
-    system_prompt  = chosen_content if chosen_content else "You are a helpful assistant."
+    system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
 
-    # Random injection every other message
+    # Optional random injection
     injection = get_injection() if message_index % 2 == 0 else ""
+    system_content = system_prompt + (f"\n{injection}" if injection else "")
 
-    # Build the prompt text
-    messages = []
+    # Assemble messages for lmstudio formatting
+    messages = [{"role": "system", "content": system_content}]
     for m in context:
         if m.get("type") == "summary":
-            messages.append(f"SUMMARY: {m['content']}")
+            messages.append({"role": "system", "content": f"SUMMARY: {m['content']}"})
         else:
-            messages.append(f"{m['role']}: {m['content']}")
+            role = "assistant" if m.get("role") == "bot" else m.get("role")
+            messages.append({"role": role, "content": m.get("content", "")})
 
-    prompt_str = f"{system_prompt}\n{injection}\n" + "\n".join(messages)
+    input_obj = {"messages": messages, "add_generation_prompt": True}
+    prompt_str = format_prompt(input_obj)
     return prompt_str
 
 # ========== Standard Chat Endpoints ==========
@@ -254,7 +262,8 @@ def chat(req: ChatRequest):
     message_index = len(load_json(full_path))
     prompt = build_prompt(chat_id, user_message, message_index, global_prompt)
 
-    output = llm(prompt, max_tokens=250)
+    # Generate the assistant response using LM Studio generation settings
+    output = llm(prompt, max_tokens=250, **GENERATION_CONFIG)
     response_text = output["choices"][0]["text"].strip()
 
     # Append bot to full history
@@ -307,7 +316,7 @@ def chat_stream(req: ChatRequest):
         text_accumulator = ""
 
         # Next, stream the model’s token chunks
-        for output in llm(prompt, max_tokens=250, stream=True):
+        for output in llm(prompt, max_tokens=250, stream=True, **GENERATION_CONFIG):
             chunk = output["choices"][0]["text"]
             text_accumulator += chunk
             yield chunk
