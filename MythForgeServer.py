@@ -414,5 +414,27 @@ def chat_stream(req: ChatRequest):
         media_type="text/plain"
     )
 
+# ─── Endpoint: Log Message Without Generating ------------------------------
+@app.post("/message")
+def log_message(req: ChatRequest):
+    """Record a user message without generating a response."""
+
+    chat_id       = req.chat_id
+    user_message  = req.message
+    global_prompt = req.global_prompt or ""
+
+    os.makedirs(CHATS_DIR, exist_ok=True)
+    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
+    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    if not os.path.exists(full_path):
+        save_json(full_path, [])
+        save_json(trimmed_path, [])
+
+    message_index = len(load_json(full_path))
+    # build_prompt appends the user message to history files
+    build_prompt(chat_id, user_message, message_index, global_prompt)
+
+    return {"detail": "Message recorded"}
+
 # ========== Static UI Mount ==========
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
