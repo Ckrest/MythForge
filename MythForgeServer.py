@@ -189,8 +189,10 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     full_log.append({"role": "user", "content": user_message})
     save_json(full_path, full_log)
 
-    # Update trimmed context with possible summarization
-    context = trim_context(chat_id)
+    # Load existing trimmed context and append the new user message.
+    # Summarization is handled separately after the assistant responds so
+    # the full user+assistant exchange can be summarized together.
+    context = load_json(trimmed_path)
     context.append({"type": "raw", "role": "user", "content": user_message})
     save_json(trimmed_path, context)
 
@@ -275,6 +277,8 @@ def chat(req: ChatRequest):
     trimmed = load_json(trimmed_path)
     trimmed.append({"type": "raw", "role": "bot", "content": response_text})
     save_json(trimmed_path, trimmed)
+    # Now that both sides of the exchange are recorded, attempt summarization
+    trim_context(chat_id)
 
     return ChatResponse(response=response_text, prompt_preview=prompt)
 
@@ -333,6 +337,8 @@ def chat_stream(req: ChatRequest):
         trimmed = load_json(trimmed_path)
         trimmed.append({"type": "raw", "role": "bot", "content": text_accumulator})
         save_json(trimmed_path, trimmed)
+        # Attempt summarization now that the exchange is complete
+        trim_context(chat_id)
 
     return StreamingResponse(
         generate_and_stream(),
