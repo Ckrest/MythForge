@@ -780,6 +780,9 @@
                         }
                     }
                     if(gotMeta && buffer){
+                        if(accumulated==='' && buffer.startsWith('\n')){
+                            buffer = buffer.replace(/^\n+/, '');
+                        }
                         accumulated += buffer;
                         aiElement.innerHTML = accumulated.replace(/\n/g,'<br>');
                         chatContainer.scrollTop = chatContainer.scrollHeight;
