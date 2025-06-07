@@ -294,16 +294,15 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     full_path = f"{CHATS_DIR}/{chat_id}_full.json"
 
-    # Append user message to full history
+    # Append user message to history if it is not empty.  When generating with
+    # an empty prompt, we do not want to record a blank user message.
     full_log = load_json(full_path)
-    full_log.append({"role": "user", "content": user_message})
-    save_json(full_path, full_log)
-
-    # Load existing trimmed context and append the new user message.
-    # Summarization is handled separately after the assistant responds so
-    # the full user+assistant exchange can be summarized together.
     context = load_json(trimmed_path)
-    context.append({"type": "raw", "role": "user", "content": user_message})
+    if user_message.strip():
+        full_log.append({"role": "user", "content": user_message})
+        context.append({"type": "raw", "role": "user", "content": user_message})
+    # Ensure history files exist even if no message was appended
+    save_json(full_path, full_log)
     save_json(trimmed_path, context)
 
     # Determine system prompt

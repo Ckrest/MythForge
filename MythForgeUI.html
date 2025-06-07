@@ -739,7 +739,7 @@
             sendButton.style.display='none';
             sendOnlyButton.style.display='none';
             stopButton.style.display='inline';
-            appendMessageToUI('user', text);
+            if(text!=='') appendMessageToUI('user', text);
             addTyping(); state.isGenerating=true;
             abortController = new AbortController();
             try{
