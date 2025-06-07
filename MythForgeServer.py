@@ -229,8 +229,9 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     system_prompt = re.sub(r"(?im)^persona:\s*", "", system_prompt)
     system_prompt = system_prompt.replace("behavior:", "format:")
 
-    # Random injection every other message
-    injection = get_injection() if message_index % 2 == 0 else ""
+    # Random injection every 6 messages
+    injection = get_injection() if message_index % 6 == 0 else ""
+
 
     # Build the message list for the LM Studio template
     system_content = "BEGINCONTEXT\n[SYSTEM] This is law:\n" + system_prompt
