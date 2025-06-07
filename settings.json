@@ -18,5 +18,7 @@
   "repeat_penalty": 1.1,
   "stop": ["<|start_header_id|>", "<|eot_id|>"],
   "stream": false,
-  "echo": false
+  "echo": false,
+  "summarize_threshold": 20,
+  "summarize_batch": 12
 }

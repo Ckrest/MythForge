@@ -46,8 +46,6 @@ SETTINGS_PATH      = "settings.json"
 DEFAULT_CTX_SIZE   = 4096
 DEFAULT_N_BATCH    = 512
 DEFAULT_N_THREADS  = os.cpu_count() or 1
-SUMMARIZE_THRESHOLD = 20
-SUMMARIZE_BATCH     = 12
 
 
 def load_settings(path: str = SETTINGS_PATH) -> Dict[str, object]:
@@ -76,6 +74,8 @@ GENERATION_CONFIG = {
     "stop": SETTINGS.get("stop", ["<|start_header_id|>", "<|eot_id|>"]),
 }
 DEFAULT_MAX_TOKENS = SETTINGS.get("max_tokens", 250)
+SUMMARIZE_THRESHOLD = SETTINGS.get("summarize_threshold", 20)
+SUMMARIZE_BATCH     = SETTINGS.get("summarize_batch", 12)
 
 # ========== Model Loading ==========
 def discover_model_path():
