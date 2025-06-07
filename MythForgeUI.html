@@ -265,6 +265,7 @@
                 <option value="xxxxx-large">5x Large</option>
                 </select>
             </div>
+            <label>Auto Scroll Lines <input id="scroll-lines-input" type="number" min="0" value="0"></label>
             <div class="modal-actions">
                 <button id="settings-save-btn">Save</button>
             </div>
@@ -282,7 +283,8 @@
                 userName: 'You',
                 botName: 'Bot',
                 theme: 'light',
-                textSize: 'medium'
+                textSize: 'medium',
+                autoScrollLines: 0
             },
             serverSettings: {
                 max_tokens: 250,
@@ -315,6 +317,7 @@
         const settingsSaveBtn  = document.getElementById('settings-save-btn');
         const userNameInput    = document.getElementById('user-name-input');
         const botNameInput     = document.getElementById('bot-name-input');
+        const scrollLinesInput = document.getElementById('scroll-lines-input');
         const maxTokensInput   = document.getElementById('max-tokens-input');
         const temperatureInput = document.getElementById('temperature-input');
         const topKInput        = document.getElementById('top-k-input');
@@ -360,6 +363,7 @@
                     if(obj.botName)  state.settings.botName  = obj.botName;
                     if(obj.theme)    state.settings.theme    = obj.theme;
                     if(obj.textSize) state.settings.textSize = obj.textSize;
+                    if(typeof obj.autoScrollLines === 'number') state.settings.autoScrollLines = obj.autoScrollLines;
                 }catch{}
             }
         }
@@ -369,7 +373,8 @@
                 userName: state.settings.userName,
                 botName: state.settings.botName,
                 theme: state.settings.theme,
-                textSize: state.settings.textSize
+                textSize: state.settings.textSize,
+                autoScrollLines: state.settings.autoScrollLines
             };
             localStorage.setItem('clientSettings', JSON.stringify(obj));
         }
@@ -425,6 +430,7 @@
             botNameInput.value  = state.settings.botName;
             themeSelect.value   = state.settings.theme;
             textSizeSelect.value = state.settings.textSize;
+            scrollLinesInput.value = state.settings.autoScrollLines;
             settingsModal.style.display='flex';
         }
 
@@ -444,6 +450,7 @@
             state.settings.botName  = botNameInput.value.trim()  || 'Bot';
             applyTheme(themeSelect.value);
             applyTextSize(textSizeSelect.value);
+            state.settings.autoScrollLines = parseInt(scrollLinesInput.value) || 0;
             saveSettings();
             updateAvatarDisplays();
             closeSettings();
@@ -808,14 +815,14 @@
             ctrl.onclick=(e)=>{ e.stopPropagation(); showMessageMenu(div); };
             div.appendChild(avatar); div.appendChild(contentDiv); div.appendChild(ctrl);
             chatContainer.appendChild(div);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            scrollToBottom();
         }
 
         function addTyping(){
             const div=document.createElement('div'); div.className='message ai-message'; div.id='typing-indicator';
             const avatar=document.createElement('div'); avatar.className='avatar ai-avatar'; avatar.textContent=(state.settings.botName[0]||'A');
             const cont=document.createElement('div'); cont.className='message-content'; cont.textContent='...';
-            div.appendChild(avatar); div.appendChild(cont); chatContainer.appendChild(div); chatContainer.scrollTop=chatContainer.scrollHeight;
+            div.appendChild(avatar); div.appendChild(cont); chatContainer.appendChild(div); scrollToBottom();
         }
         function removeTyping(){ const t=document.getElementById('typing-indicator'); if(t) t.remove(); }
 
@@ -851,6 +858,9 @@
                 let buffer = '';
                 let gotMeta = false;
                 let accumulated = '';
+                let lineCount = 0;
+                let autoscrollStopped = false;
+                const scrollLimit = parseInt(state.settings.autoScrollLines) || 0;
                 while(true){
                     const {value, done} = await reader.read();
                     if(value){
@@ -878,8 +888,17 @@
                             buffer = buffer.replace(/^\n+/, '');
                         }
                         accumulated += buffer;
+                        lineCount = accumulated.split(/\n/).length;
                         aiElement.innerHTML = accumulated.replace(/\n/g,'<br>');
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        if(!autoscrollStopped){
+                            if((scrollLimit>0 && lineCount>=scrollLimit) ||
+                               (chatContainer.scrollHeight - chatContainer.scrollTop > chatContainer.clientHeight + 10)){
+                                autoscrollStopped = true;
+                            }
+                        }
+                        if(!autoscrollStopped){
+                            scrollToBottom();
+                        }
                         buffer = '';
                     }
                     if(done) break;
