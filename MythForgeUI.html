@@ -573,6 +573,7 @@
         async function renameChat(oldId){
             const name = prompt('Enter new chat name:', oldId); if(name===null) return;
             const trimmed = name.trim(); if(!trimmed) return alert('Name cannot be empty.');
+            if(trimmed === oldId) return;
             if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
             try{
                 const res = await fetch(`/chat/${encodeURIComponent(oldId)}`, {
@@ -617,6 +618,7 @@
             const newName = prompt('Enter new prompt name:', oldName);
             if(newName===null) return;
             const trimmed = newName.trim(); if(!trimmed) return alert('Name cannot be empty.');
+            if(trimmed === oldName) return;
             if(state.prompts.includes(trimmed)) return alert('That name\u2019s already taken.');
             try{
                 const res = await fetch(`/prompts/${encodeURIComponent(oldName)}/rename`, {

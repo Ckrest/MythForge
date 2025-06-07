@@ -225,6 +225,8 @@ def rename_prompt(name: str, data: Dict[str, str]):
     prompts = load_global_prompts()
     if not any(p["name"] == name for p in prompts):
         raise HTTPException(status_code=404, detail="Prompt not found")
+    if new_name == name:
+        return {"detail": f"Renamed prompt '{name}' to '{new_name}'"}
     if any(p["name"] == new_name for p in prompts):
         raise HTTPException(status_code=400, detail="Prompt name already exists")
 
@@ -418,6 +420,9 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
     new_id = data.get("new_id", "").strip()
     if not new_id:
         raise HTTPException(status_code=400, detail="New chat id required")
+
+    if new_id == chat_id:
+        return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
     old_full = f"{CHATS_DIR}/{chat_id}_full.json"
     old_trim = f"{CHATS_DIR}/{chat_id}_trimmed.json"
