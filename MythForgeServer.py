@@ -43,6 +43,13 @@ DEFAULT_CTX_SIZE      = 2048
 SUMMARIZE_THRESHOLD   = 12
 SUMMARIZE_BATCH       = 6
 
+INVALID_PATH_CHARS = r'[<>:"/\\|?*]'
+
+def sanitize_chat_id(chat_id: str) -> str:
+    """Return a filesystem-safe version of ``chat_id``."""
+    import re
+    return re.sub(INVALID_PATH_CHARS, "_", chat_id)
+
 # ========== Model Loading ==========
 def discover_model_path():
     """Return the path to the first ``.gguf`` model file under ``MODELS_DIR``.
@@ -161,6 +168,7 @@ def summarize_chunk(chunk):
     return {"type": "summary", "content": output["choices"][0]["text"].strip()}
 
 def trim_context(chat_id):
+    chat_id = sanitize_chat_id(chat_id)
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     history = load_json(trimmed_path)
     raw_msgs = [m for m in history if m.get("type") == "raw"]
@@ -177,6 +185,7 @@ def trim_context(chat_id):
     return history
 
 def build_prompt(chat_id, user_message, message_index, global_prompt_name):
+    chat_id = sanitize_chat_id(chat_id)
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
 
@@ -222,6 +231,7 @@ def list_chats():
 
 @app.get("/history/{chat_id}")
 def get_history(chat_id: str):
+    chat_id = sanitize_chat_id(chat_id)
     path = f"{CHATS_DIR}/{chat_id}_full.json"
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -229,6 +239,7 @@ def get_history(chat_id: str):
 
 @app.delete("/chat/{chat_id}")
 def delete_chat(chat_id: str):
+    chat_id = sanitize_chat_id(chat_id)
     full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     existed = False
@@ -244,7 +255,7 @@ def delete_chat(chat_id: str):
 
 @app.post("/chat")
 def chat(req: ChatRequest):
-    chat_id       = req.chat_id
+    chat_id       = sanitize_chat_id(req.chat_id)
     user_message  = req.message
     global_prompt = req.global_prompt or ""
 
@@ -292,7 +303,7 @@ def chat_stream(req: ChatRequest):
     The first line sent to the client is a JSON object with the prompt text.
     All subsequent data are token chunks from the model.
     """
-    chat_id       = req.chat_id
+    chat_id       = sanitize_chat_id(req.chat_id)
     user_message  = req.message
     global_prompt = req.global_prompt or ""
 
