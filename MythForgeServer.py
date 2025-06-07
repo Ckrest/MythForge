@@ -357,6 +357,36 @@ def delete_chat(chat_id: str):
         raise HTTPException(status_code=404, detail="Chat not found")
     return {"detail": f"Deleted chat '{chat_id}'"}
 
+@app.put("/chat/{chat_id}")
+def rename_chat(chat_id: str, data: Dict[str, str]):
+    """Rename an existing chat ``chat_id`` to ``data['new_id']``.
+
+    Renames the associated history files on disk.  If no history files exist
+    yet for ``chat_id``, a ``404`` is returned.  If files for the new name
+    already exist, a ``400`` is returned.
+    """
+
+    new_id = data.get("new_id", "").strip()
+    if not new_id:
+        raise HTTPException(status_code=400, detail="New chat id required")
+
+    old_full = f"{CHATS_DIR}/{chat_id}_full.json"
+    old_trim = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    if not (os.path.exists(old_full) or os.path.exists(old_trim)):
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    new_full = f"{CHATS_DIR}/{new_id}_full.json"
+    new_trim = f"{CHATS_DIR}/{new_id}_trimmed.json"
+    if os.path.exists(new_full) or os.path.exists(new_trim):
+        raise HTTPException(status_code=400, detail="Chat name already exists")
+
+    if os.path.exists(old_full):
+        os.rename(old_full, new_full)
+    if os.path.exists(old_trim):
+        os.rename(old_trim, new_trim)
+
+    return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
+
 @app.post("/chat")
 def chat(req: ChatRequest):
     chat_id       = req.chat_id
