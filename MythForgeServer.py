@@ -29,6 +29,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     prompt_preview: str
+    chat_id: str
+    sanitized_id: str
 
 class PromptItem(BaseModel):
     name: str
@@ -37,6 +39,7 @@ class PromptItem(BaseModel):
 # ========== Configuration ==========
 MODELS_DIR            = "models"
 CHATS_DIR             = "chats"
+CHAT_MAP_FILE         = os.path.join(CHATS_DIR, "chat_map.json")
 INJECTION_FILE        = "random_injections.txt"
 GLOBAL_PROMPTS_FILE   = "global_prompts.json"
 DEFAULT_CTX_SIZE      = 2048
@@ -87,6 +90,23 @@ def load_json(path):
 def save_json(path, data):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+def load_chat_map():
+    if os.path.exists(CHAT_MAP_FILE):
+        with open(CHAT_MAP_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+def save_chat_map(mapping):
+    os.makedirs(CHATS_DIR, exist_ok=True)
+    with open(CHAT_MAP_FILE, 'w', encoding='utf-8') as f:
+        json.dump(mapping, f, indent=2, ensure_ascii=False)
+
+def ensure_chat_mapping(sanitized: str, original: str):
+    mapping = load_chat_map()
+    if mapping.get(sanitized) != original:
+        mapping[sanitized] = original
+        save_chat_map(mapping)
 
 def get_injection():
     if not os.path.exists(INJECTION_FILE):
@@ -226,8 +246,20 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
 def list_chats():
     os.makedirs(CHATS_DIR, exist_ok=True)
     files = os.listdir(CHATS_DIR)
-    chat_ids = [fname[:-len("_full.json")] for fname in files if fname.endswith("_full.json")]
-    return {"chats": chat_ids}
+    sanitized_ids = [f[:-len("_full.json")] for f in files if f.endswith("_full.json")]
+    mapping = load_chat_map()
+    changed = False
+    chats = []
+    for sid in sanitized_ids:
+        original = mapping.get(sid)
+        if original is None:
+            original = sid
+            mapping[sid] = original
+            changed = True
+        chats.append({"id": original, "sanitized_id": sid})
+    if changed:
+        save_chat_map(mapping)
+    return {"chats": chats}
 
 @app.get("/history/{chat_id}")
 def get_history(chat_id: str):
@@ -239,9 +271,11 @@ def get_history(chat_id: str):
 
 @app.delete("/chat/{chat_id}")
 def delete_chat(chat_id: str):
-    chat_id = sanitize_chat_id(chat_id)
-    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    sanitized = sanitize_chat_id(chat_id)
+    full_path    = f"{CHATS_DIR}/{sanitized}_full.json"
+    trimmed_path = f"{CHATS_DIR}/{sanitized}_trimmed.json"
+    mapping = load_chat_map()
+    original = mapping.pop(sanitized, sanitized)
     existed = False
     if os.path.exists(full_path):
         os.remove(full_path)
@@ -249,25 +283,28 @@ def delete_chat(chat_id: str):
     if os.path.exists(trimmed_path):
         os.remove(trimmed_path)
         existed = True
+    if existed:
+        save_chat_map(mapping)
     if not existed:
         raise HTTPException(status_code=404, detail="Chat not found")
-    return {"detail": f"Deleted chat '{chat_id}'"}
+    return {"detail": "Deleted chat", "chat": {"id": original, "sanitized_id": sanitized}}
 
 @app.post("/chat")
 def chat(req: ChatRequest):
-    chat_id       = sanitize_chat_id(req.chat_id)
+    sanitized_id  = sanitize_chat_id(req.chat_id)
     user_message  = req.message
     global_prompt = req.global_prompt or ""
+    ensure_chat_mapping(sanitized_id, req.chat_id)
 
     os.makedirs(CHATS_DIR, exist_ok=True)
-    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    full_path    = f"{CHATS_DIR}/{sanitized_id}_full.json"
+    trimmed_path = f"{CHATS_DIR}/{sanitized_id}_trimmed.json"
     if not os.path.exists(full_path):
         save_json(full_path, [])
         save_json(trimmed_path, [])
 
     message_index = len(load_json(full_path))
-    prompt = build_prompt(chat_id, user_message, message_index, global_prompt)
+    prompt = build_prompt(sanitized_id, user_message, message_index, global_prompt)
 
     output = llm(
         prompt,
@@ -291,7 +328,12 @@ def chat(req: ChatRequest):
     trimmed.append({"type": "raw", "role": "bot", "content": response_text})
     save_json(trimmed_path, trimmed)
 
-    return ChatResponse(response=response_text, prompt_preview=prompt)
+    return ChatResponse(
+        response=response_text,
+        prompt_preview=prompt,
+        chat_id=req.chat_id,
+        sanitized_id=sanitized_id,
+    )
 
 # ─── Streaming Chat Endpoint with Prompt JSON Prefix ────────────────────────
 @app.post("/chat/stream")
@@ -303,20 +345,21 @@ def chat_stream(req: ChatRequest):
     The first line sent to the client is a JSON object with the prompt text.
     All subsequent data are token chunks from the model.
     """
-    chat_id       = sanitize_chat_id(req.chat_id)
+    sanitized_id  = sanitize_chat_id(req.chat_id)
     user_message  = req.message
     global_prompt = req.global_prompt or ""
+    ensure_chat_mapping(sanitized_id, req.chat_id)
 
     os.makedirs(CHATS_DIR, exist_ok=True)
-    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    full_path    = f"{CHATS_DIR}/{sanitized_id}_full.json"
+    trimmed_path = f"{CHATS_DIR}/{sanitized_id}_trimmed.json"
     if not os.path.exists(full_path):
         save_json(full_path, [])
         save_json(trimmed_path, [])
 
     # 1) Build prompt
     message_index = len(load_json(full_path))
-    prompt = build_prompt(chat_id, user_message, message_index, global_prompt)
+    prompt = build_prompt(sanitized_id, user_message, message_index, global_prompt)
 
 
     # build_prompt() already saved the user's message to both history files,
@@ -324,7 +367,11 @@ def chat_stream(req: ChatRequest):
 
     def generate_and_stream():
         # First, send a single line of JSON with the prompt:
-        meta = json.dumps({"prompt": prompt}, ensure_ascii=False)
+        meta = json.dumps({
+            "prompt": prompt,
+            "chat_id": req.chat_id,
+            "sanitized_id": sanitized_id,
+        }, ensure_ascii=False)
         yield meta + "\n"
 
         # Prepare to accumulate the bot’s full response
