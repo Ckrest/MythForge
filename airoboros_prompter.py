@@ -36,9 +36,12 @@ def format_airoboros(
         "BEGINCONTEXT",
         "[SYSTEM] This is law:",
         f"{global_prompt}",
-        f"format: {random_injection}",
-        "ENDCONTEXT",
     ]
+
+    if random_injection:
+        lines.append(f"format: {random_injection}")
+
+    lines.append("ENDCONTEXT")
 
     if summaries:
         lines.append(summaries[-1])
