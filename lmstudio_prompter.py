@@ -20,6 +20,7 @@ GENERATION_CONFIG = {
     "top_p": 0.95,
     "min_p": 0.05,
     "repeat_penalty": 1.1,
+    "n_batch": 512,
     "stop": ["<|start_header_id|>", "<|eot_id|>"],
 }
 

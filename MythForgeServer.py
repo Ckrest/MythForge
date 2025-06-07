@@ -43,7 +43,10 @@ MODELS_DIR            = "models"
 CHATS_DIR             = "chats"
 INJECTION_FILE        = "random_injections.txt"
 GLOBAL_PROMPTS_FILE   = "global_prompts.json"
-DEFAULT_CTX_SIZE      = 2048
+# Match LM Studio defaults for a 4 GB VRAM setup
+DEFAULT_CTX_SIZE      = 4096
+DEFAULT_N_BATCH       = 512
+DEFAULT_N_THREADS     = os.cpu_count() or 1
 SUMMARIZE_THRESHOLD   = 20
 SUMMARIZE_BATCH       = 12
 
@@ -72,6 +75,9 @@ def discover_model_path():
 llm = Llama(
     model_path=discover_model_path(),
     n_ctx=DEFAULT_CTX_SIZE,
+    n_batch=DEFAULT_N_BATCH,
+    n_threads=DEFAULT_N_THREADS,
+    prompt_template="",
 )
 
 # ========== Helpers ==========
