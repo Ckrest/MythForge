@@ -514,6 +514,7 @@ def chat_stream(req: ChatRequest):
     def generate_and_stream():
         # First, send a single line of JSON with the prompt:
         meta = json.dumps({"prompt": prompt}, ensure_ascii=False)
+        # Send one line of JSON metadata followed by raw token text
         yield meta + "\n"
 
         text_accumulator = ""
@@ -531,7 +532,7 @@ def chat_stream(req: ChatRequest):
             chunk = output["choices"][0]["text"]
             if prefix_trimmed:
                 text_accumulator += chunk
-                yield chunk + "\n"
+                yield chunk
                 continue
 
             pending += chunk
@@ -540,12 +541,12 @@ def chat_stream(req: ChatRequest):
                 if len(check) > len(prefix):
                     trimmed = strip_leading_tag(check, assistant_name)
                     text_accumulator += trimmed
-                    yield trimmed + "\n"
+                    yield trimmed
                     prefix_trimmed = True
                     pending = ""
             else:
                 text_accumulator += pending
-                yield pending + "\n"
+                yield pending
                 prefix_trimmed = True
                 pending = ""
 
