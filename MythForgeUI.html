@@ -754,28 +754,38 @@
                 const aiElement = chatContainer.lastChild.querySelector('.message-content');
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
-                let buffer=''; let done=false; let firstLine=true; let accumulated='';
-                while(!done){
-                    const {value, done:doneReading} = await reader.read();
-                    done = doneReading;
+                let buffer = '';
+                let gotMeta = false;
+                let accumulated = '';
+                while(true){
+                    const {value, done} = await reader.read();
                     if(value){
-                        buffer += decoder.decode(value, {stream:true});
-                        while(buffer.includes('\n')){
-                            const idx = buffer.indexOf('\n');
-                            const chunk = buffer.slice(0, idx); buffer = buffer.slice(idx+1);
-                            if(firstLine){
-                                firstLine=false;
-                                try{
-                                    const meta=JSON.parse(chunk);
-                                    systemPrompt.textContent = meta.prompt || '';
-                                    systemToggle.style.display = meta.prompt ? 'block' : 'none';
-                                }catch{}
-                            }else{
-                                accumulated += chunk; aiElement.innerHTML = accumulated.replace(/\n/g,'<br>');
-                                chatContainer.scrollTop = chatContainer.scrollHeight;
-                            }
+                        buffer += decoder.decode(value, {stream: !done});
+                    }
+                    if(!gotMeta){
+                        const idx = buffer.indexOf('\n');
+                        if(idx !== -1){
+                            const metaStr = buffer.slice(0, idx);
+                            buffer = buffer.slice(idx + 1);
+                            try{
+                                const meta = JSON.parse(metaStr);
+                                systemPrompt.textContent = meta.prompt || '';
+                                systemToggle.style.display = meta.prompt ? 'block' : 'none';
+                            }catch{}
+                            gotMeta = true;
+                        }else if(done){
+                            break;
+                        }else{
+                            continue;
                         }
                     }
+                    if(gotMeta && buffer){
+                        accumulated += buffer;
+                        aiElement.innerHTML = accumulated.replace(/\n/g,'<br>');
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        buffer = '';
+                    }
+                    if(done) break;
                 }
             }catch(err){
                 if(err.name!=='AbortError'){
