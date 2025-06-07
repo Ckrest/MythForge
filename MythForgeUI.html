@@ -749,8 +749,6 @@
 
         function scrollToBottom(){
             chatContainer.scrollTop = chatContainer.scrollHeight;
-            const lastMsg = chatContainer.lastElementChild;
-            if(lastMsg) lastMsg.scrollIntoView({block:'end'});
         }
 
         let activeMenu = null;
@@ -859,8 +857,18 @@
                 let gotMeta = false;
                 let accumulated = '';
                 let lineCount = 0;
-                let autoscrollStopped = false;
+                let limitReached = false;
+                let manualStop = false;
                 const scrollLimit = parseInt(state.settings.autoScrollLines) || 0;
+                const handleScroll = () => {
+                    const atBottom = chatContainer.scrollHeight - chatContainer.scrollTop <= chatContainer.clientHeight + 10;
+                    if(!atBottom){
+                        manualStop = true;
+                    }else if(!limitReached){
+                        manualStop = false;
+                    }
+                };
+                chatContainer.addEventListener('scroll', handleScroll);
                 while(true){
                     const {value, done} = await reader.read();
                     if(value){
@@ -891,13 +899,10 @@
                         accumulated += buffer;
                         lineCount = accumulated.split(/\n/).length;
                         aiElement.innerHTML = accumulated.replace(/\n/g,'<br>');
-                        if(!autoscrollStopped){
-                            if((scrollLimit>0 && lineCount>=scrollLimit) ||
-                               (chatContainer.scrollHeight - chatContainer.scrollTop > chatContainer.clientHeight + 10)){
-                                autoscrollStopped = true;
-                            }
+                        if(!limitReached && scrollLimit>0 && lineCount>=scrollLimit){
+                            limitReached = true;
                         }
-                        if(!autoscrollStopped){
+                        if(!manualStop && !limitReached){
                             scrollToBottom();
                         }
                         buffer = '';
@@ -910,6 +915,7 @@
                     removeTyping(); appendMessageToUI('assistant','[Error generating response]');
                 }
             }finally{
+                chatContainer.removeEventListener('scroll', handleScroll);
                 state.isGenerating=false;
                 sendButton.disabled=state.isGenerating;
                 sendOnlyButton.disabled=userInput.value.trim()==='' || state.isGenerating;
