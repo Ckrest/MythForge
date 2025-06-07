@@ -274,6 +274,54 @@ def get_history(chat_id: str):
         raise HTTPException(status_code=404, detail="Chat not found")
     return load_json(path)
 
+@app.put("/history/{chat_id}/{index}")
+def edit_message(chat_id: str, index: int, data: Dict[str, str]):
+    """Update the content of a message at ``index`` in ``chat_id``."""
+    full_path = f"{CHATS_DIR}/{chat_id}_full.json"
+    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Chat not found")
+    full = load_json(full_path)
+    if index < 0 or index >= len(full):
+        raise HTTPException(status_code=400, detail="Invalid index")
+    full[index]["content"] = data.get("content", "")
+    save_json(full_path, full)
+
+    trimmed = load_json(trimmed_path)
+    raw_idx = 0
+    for i, m in enumerate(trimmed):
+        if m.get("type") == "raw":
+            if raw_idx == index:
+                trimmed[i]["content"] = data.get("content", "")
+                break
+            raw_idx += 1
+    save_json(trimmed_path, trimmed)
+    return {"detail": "Updated"}
+
+@app.delete("/history/{chat_id}/{index}")
+def delete_message(chat_id: str, index: int):
+    """Remove the message at ``index`` from ``chat_id``."""
+    full_path = f"{CHATS_DIR}/{chat_id}_full.json"
+    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Chat not found")
+    full = load_json(full_path)
+    if index < 0 or index >= len(full):
+        raise HTTPException(status_code=400, detail="Invalid index")
+    full.pop(index)
+    save_json(full_path, full)
+
+    trimmed = load_json(trimmed_path)
+    raw_idx = 0
+    for i, m in enumerate(trimmed):
+        if m.get("type") == "raw":
+            if raw_idx == index:
+                trimmed.pop(i)
+                break
+            raw_idx += 1
+    save_json(trimmed_path, trimmed)
+    return {"detail": "Deleted"}
+
 @app.delete("/chat/{chat_id}")
 def delete_chat(chat_id: str):
     full_path    = f"{CHATS_DIR}/{chat_id}_full.json"

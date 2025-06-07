@@ -242,7 +242,7 @@
 
     <script>
         const CONFIG = { apiUrl: window.location.origin };
-        const state = { chats: [], currentChatId: '', settings:{ userName:'You', botName:'Bot', theme:'light', textSize:'medium' }, isGenerating: false };
+        const state = { chats: [], currentChatId: '', settings:{ userName:'You', botName:'Bot', theme:'light', textSize:'medium' }, isGenerating: false, nextIndex: 0 };
 
         const chatContainer    = document.getElementById('chat-container');
         const userInput        = document.getElementById('user-input');
@@ -405,7 +405,8 @@
                 const res = await fetch(`/history/${encodeURIComponent(id)}`);
                 if(!res.ok) return;
                 const msgs = await res.json();
-                msgs.forEach(m => appendMessageToUI(m.role==='bot'?'assistant':m.role, m.content));
+                state.nextIndex = 0;
+                msgs.forEach((m,i) => appendMessageToUI(m.role==='bot'?'assistant':m.role, m.content, i));
             }catch(e){ console.error('Failed to load history:',e); }
         }
 
@@ -467,6 +468,7 @@
               chatContainer.innerHTML = '';
               systemPrompt.textContent = '';
               systemToggle.style.display = 'none';
+              state.nextIndex = 0;
         }
 
         async function deleteChat(){
@@ -482,6 +484,7 @@
                 chatContainer.innerHTML = '';
                 systemPrompt.textContent = '';
                 systemToggle.style.display = 'none';
+                state.nextIndex = 0;
                 showChatTab();
             }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
         }
@@ -494,9 +497,13 @@
             if(lastMsg) lastMsg.scrollIntoView({block:'end'});
         }
 
-        function appendMessageToUI(role, content){
+        function appendMessageToUI(role, content, idx){
+            if(idx===undefined) idx = state.nextIndex++;
+            else state.nextIndex = Math.max(state.nextIndex, idx+1);
             const div=document.createElement('div');
             div.className=`message ${role==='user'?'user-message':'ai-message'}`;
+            div.dataset.index = idx;
+            div.dataset.role = role;
             const avatar=document.createElement('div');
             avatar.className=`avatar ${role==='user'?'user-avatar':'ai-avatar'}`;
             avatar.textContent = role==='user' ? (state.settings.userName[0]||'U') : (state.settings.botName[0]||'A');
@@ -504,6 +511,7 @@
             contentDiv.className='message-content';
             contentDiv.innerHTML=content.replace(/\n/g,'<br>');
             div.appendChild(avatar); div.appendChild(contentDiv);
+            div.addEventListener('click', handleMessageEdit);
             chatContainer.appendChild(div);
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
@@ -516,11 +524,35 @@
         }
         function removeTyping(){ const t=document.getElementById('typing-indicator'); if(t) t.remove(); }
 
+        async function handleMessageEdit(){
+            if(!state.currentChatId) return;
+            const idx = parseInt(this.dataset.index,10);
+            const current = this.querySelector('.message-content').innerText.replace(/\n/g,'\n');
+            let updated = prompt('Edit message. Leave empty to delete.', current);
+            if(updated===null) return;
+            updated = updated.replace(/\r/g,'');
+            if(updated.trim()===''){
+                if(!confirm('Delete this message?')) return;
+                try{
+                    const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${idx}`, {method:'DELETE'});
+                    if(!res.ok) throw new Error('Server error');
+                    await loadChat(state.currentChatId);
+                }catch(e){ alert('Failed to delete message'); }
+            }else{
+                try{
+                    const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${idx}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({content: updated})});
+                    if(!res.ok) throw new Error('Server error');
+                    await loadChat(state.currentChatId);
+                }catch(e){ alert('Failed to update message'); }
+            }
+        }
+
         async function sendMessage(){
             const text = userInput.value.trim();
             if(text==='' || state.isGenerating || !state.currentChatId) return;
             userInput.value=''; autoResize(); sendButton.disabled=true;
-            appendMessageToUI('user', text);
+            const userIdx = state.nextIndex;
+            appendMessageToUI('user', text, userIdx);
             addTyping(); state.isGenerating=true;
             try{
                 const response = await fetch('/chat/stream', {
@@ -530,7 +562,7 @@
                 });
                 if(!response.ok) throw new Error(`Server returned ${response.status}`);
                 removeTyping();
-                appendMessageToUI('assistant','');
+                appendMessageToUI('assistant','', userIdx+1);
                 const aiElement = chatContainer.lastChild.querySelector('.message-content');
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
@@ -559,7 +591,7 @@
                 }
             }catch(err){
                 console.error('Streaming fetch failed:', err);
-                removeTyping(); appendMessageToUI('assistant','[Error generating response]');
+                removeTyping(); appendMessageToUI('assistant','[Error generating response]', userIdx+1);
             }finally{
                 state.isGenerating=false; sendButton.disabled=userInput.value.trim()===''; userInput.focus();
             }
