@@ -37,28 +37,45 @@ class PromptItem(BaseModel):
     content: str
 
 # ========== Configuration ==========
-MODELS_DIR            = "models"
-CHATS_DIR             = "chats"
-GLOBAL_PROMPTS_DIR    = "Global_prompts"
+MODELS_DIR         = "models"
+CHATS_DIR          = "chats"
+GLOBAL_PROMPTS_DIR = "Global_prompts"
+SETTINGS_PATH      = "settings.json"
+
 # Match LM Studio defaults for a 4 GB VRAM setup
-DEFAULT_CTX_SIZE      = 4096
-DEFAULT_N_BATCH       = 512
-DEFAULT_N_THREADS     = os.cpu_count() or 1
-SUMMARIZE_THRESHOLD   = 20
-SUMMARIZE_BATCH       = 12
+DEFAULT_CTX_SIZE   = 4096
+DEFAULT_N_BATCH    = 512
+DEFAULT_N_THREADS  = os.cpu_count() or 1
+SUMMARIZE_THRESHOLD = 20
+SUMMARIZE_BATCH     = 12
+
+
+def load_settings(path: str = SETTINGS_PATH) -> Dict[str, object]:
+    """Load the application settings from ``path`` if it exists."""
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except Exception as e:
+                print(f"Failed to load settings '{path}': {e}")
+    return {}
+
+
+SETTINGS = load_settings()
 
 # Generation settings matching LM Studio's defaults
 GENERATION_CONFIG = {
-    "temperature": 0.8,
-    "top_k": 40,
-    "top_p": 0.95,
-    "min_p": 0.05,
-    "repeat_penalty": 1.1,
+    "temperature": SETTINGS.get("temperature", 0.8),
+    "top_k": SETTINGS.get("top_k", 40),
+    "top_p": SETTINGS.get("top_p", 0.95),
+    "min_p": SETTINGS.get("min_p", 0.05),
+    "repeat_penalty": SETTINGS.get("repeat_penalty", 1.1),
     # ``n_batch`` is set when ``Llama`` is instantiated. Passing it to
     # ``Llama.__call__`` can break older ``llama_cpp`` versions, so it is
     # intentionally omitted here.
-    "stop": ["<|start_header_id|>", "<|eot_id|>"],
+    "stop": SETTINGS.get("stop", ["<|start_header_id|>", "<|eot_id|>"]),
 }
+DEFAULT_MAX_TOKENS = SETTINGS.get("max_tokens", 250)
 
 # ========== Model Loading ==========
 def discover_model_path():
@@ -82,13 +99,19 @@ def discover_model_path():
     raise FileNotFoundError(f"No .gguf model files found under '{MODELS_DIR}'")
 
 
-llm = Llama(
-    model_path=discover_model_path(),
-    n_ctx=DEFAULT_CTX_SIZE,
-    n_batch=DEFAULT_N_BATCH,
-    n_threads=DEFAULT_N_THREADS,
-    prompt_template="",
-)
+_model_config = {
+    "model_path": SETTINGS.get("model_path") or discover_model_path(),
+    "n_ctx": SETTINGS.get("n_ctx", DEFAULT_CTX_SIZE),
+    "n_batch": SETTINGS.get("n_batch", DEFAULT_N_BATCH),
+    "n_threads": SETTINGS.get("n_threads") or DEFAULT_N_THREADS,
+    "prompt_template": SETTINGS.get("prompt_template", ""),
+}
+
+for key in ("f16_kv", "use_mmap", "use_mlock", "n_gpu_layers", "main_memory_kv"):
+    if key in SETTINGS and SETTINGS[key] is not None:
+        _model_config[key] = SETTINGS[key]
+
+llm = Llama(**_model_config)
 
 # Determine which keyword arguments ``llm.__call__`` accepts.  Older versions
 # of ``llama_cpp`` do not support certain generation parameters (e.g.
@@ -433,7 +456,7 @@ def chat(req: ChatRequest):
 
     # Generate the assistant response using LM Studio generation settings
     print("DEBUG raw_prompt:", prompt)
-    output = call_llm(prompt, max_tokens=250, **GENERATION_CONFIG)
+    output = call_llm(prompt, max_tokens=DEFAULT_MAX_TOKENS, **GENERATION_CONFIG)
     response_text = output["choices"][0]["text"].strip()
     response_text = strip_leading_tag(response_text, assistant_name)
 
@@ -495,7 +518,7 @@ def chat_stream(req: ChatRequest):
         print("DEBUG raw_prompt:", prompt)
         for output in call_llm(
             prompt,
-            max_tokens=250,
+            max_tokens=DEFAULT_MAX_TOKENS,
             stream=True,
             **GENERATION_CONFIG,
         ):
