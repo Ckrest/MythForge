@@ -225,10 +225,10 @@ def rename_prompt(name: str, data: Dict[str, str]):
     prompts = load_global_prompts()
     if not any(p["name"] == name for p in prompts):
         raise HTTPException(status_code=404, detail="Prompt not found")
-    if new_name == name:
-        return {"detail": f"Renamed prompt '{name}' to '{new_name}'"}
-    if any(p["name"] == new_name for p in prompts):
+    if any(p["name"] == new_name and p["name"] != name for p in prompts):
         raise HTTPException(status_code=400, detail="Prompt name already exists")
+
+    same_name = new_name == name
 
     old_path = _prompt_path(name)
     new_path = _prompt_path(new_name)
@@ -237,8 +237,9 @@ def rename_prompt(name: str, data: Dict[str, str]):
     with open(old_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     data["name"] = new_name
-    os.rename(old_path, new_path)
-    with open(new_path, "w", encoding="utf-8") as f:
+    if not same_name:
+        os.rename(old_path, new_path)
+    with open(new_path if not same_name else old_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     return {"detail": f"Renamed prompt '{name}' to '{new_name}'"}
 
