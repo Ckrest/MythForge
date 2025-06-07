@@ -224,8 +224,8 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     chosen_content = next((p["content"] for p in all_prompts if p["name"] == global_prompt_name), None)
     system_prompt  = chosen_content if chosen_content else "You are a helpful assistant."
 
-    # Random injection every other message
-    injection = get_injection() if message_index % 2 == 0 else ""
+    # Random injection every sixth message
+    injection = get_injection() if message_index % 6 == 0 else ""
 
     # Build the message list for the LM Studio template
     system_content = system_prompt + ("\n" + injection if injection else "")
