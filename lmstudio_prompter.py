@@ -20,7 +20,9 @@ GENERATION_CONFIG = {
     "top_p": 0.95,
     "min_p": 0.05,
     "repeat_penalty": 1.1,
-    "n_batch": 512,
+    # ``n_batch`` is configured when ``Llama`` is instantiated.  Passing it to
+    # ``Llama.__call__`` causes errors with older ``llama_cpp`` versions, so it
+    # is intentionally omitted here.
     "stop": ["<|start_header_id|>", "<|eot_id|>"],
 }
 
