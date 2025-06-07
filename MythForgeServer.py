@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from llama_cpp import Llama
-from lmstudio_prompter import render_prompt, GENERATION_CONFIG
+from lmstudio_prompter import format_prompt, GENERATION_CONFIG
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -238,7 +238,7 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
             role = "assistant" if m["role"] == "bot" else m["role"]
             messages.append({"role": role, "content": m["content"]})
 
-    prompt_str = render_prompt(messages, bos_token="<s>")
+    prompt_str = format_prompt({"messages": messages}, bos_token="<s>")
     return prompt_str
 
 # ========== Standard Chat Endpoints ==========
