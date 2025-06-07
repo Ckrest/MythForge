@@ -117,6 +117,10 @@ def format_prompt(
             prompt_parts.append("<|start_header_id|>user<|end_header_id|>\n\n")
             prompt_parts.append(message.get("content", "").strip())
             prompt_parts.append("<|eot_id|>")
+        elif role == "system":
+            prompt_parts.append("<|start_header_id|>system<|end_header_id|>\n\n")
+            prompt_parts.append(message.get("content", "").strip())
+            prompt_parts.append("<|eot_id|>")
         elif message.get("tool_calls"):
             call = message["tool_calls"][0]["function"]
             prompt_parts.append("<|start_header_id|>assistant<|end_header_id|>\n\n")
