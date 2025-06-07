@@ -23,7 +23,6 @@ def _strip_junk(text: str) -> str:
 
 def format_airoboros(
     global_prompt: str,
-    random_injection: str,
     summaries: Optional[List[str]],
     history: List[Dict[str, str]],
     instruction: str,
@@ -36,7 +35,6 @@ def format_airoboros(
         "BEGINCONTEXT",
         "[SYSTEM] This is law:",
         f"{global_prompt}",
-        f"format: {random_injection}",
         "ENDCONTEXT",
     ]
 
@@ -72,7 +70,6 @@ def main() -> None:
 
     result = format_airoboros(
         data.get("global_prompt", ""),
-        data.get("random_injection", ""),
         data.get("summaries"),
         data.get("history", []),
         data.get("instruction", ""),
