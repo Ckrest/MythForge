@@ -165,16 +165,25 @@ def summarize_chunk(chunk):
 def trim_context(chat_id):
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     history = load_json(trimmed_path)
-    raw_msgs = [m for m in history if m.get("type") == "raw"]
-    summaries = [m for m in history if m.get("type") == "summary"]
 
-    if len(raw_msgs) >= SUMMARIZE_THRESHOLD:
-        oldest_batch = raw_msgs[:SUMMARIZE_BATCH]
+    # Collect indices of raw messages so we know where to insert summaries
+    raw_indices = [i for i, m in enumerate(history) if m.get("type") == "raw"]
+
+    if len(raw_indices) >= SUMMARIZE_THRESHOLD:
+        # Grab the earliest batch of raw messages to summarize
+        batch_indices = raw_indices[:SUMMARIZE_BATCH]
+        oldest_batch = [history[i] for i in batch_indices]
+
         summary = summarize_chunk(oldest_batch)
-        raw_msgs = raw_msgs[SUMMARIZE_BATCH:]
-        new_history = summaries + [summary] + raw_msgs
-        save_json(trimmed_path, new_history)
-        return new_history
+
+        # Remove the raw messages we just summarized
+        for i in reversed(batch_indices):
+            history.pop(i)
+
+        # Insert the summary at the position of the first removed message
+        history.insert(batch_indices[0], summary)
+
+        save_json(trimmed_path, history)
 
     return history
 
