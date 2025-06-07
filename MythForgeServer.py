@@ -37,9 +37,12 @@ class PromptItem(BaseModel):
     content: str
 
 # ========== Configuration ==========
-MODELS_DIR            = "models"
-CHATS_DIR             = "chats"
-GLOBAL_PROMPTS_DIR    = "Global_prompts"
+# Resolve data directories relative to this file's location so the server
+# continues to work when executed from a different working directory.
+BASE_DIR              = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR            = os.path.join(BASE_DIR, "models")
+CHATS_DIR             = os.path.join(BASE_DIR, "chats")
+GLOBAL_PROMPTS_DIR    = os.path.join(BASE_DIR, "Global_prompts")
 # Match LM Studio defaults for a 4 GB VRAM setup
 DEFAULT_CTX_SIZE      = 4096
 DEFAULT_N_BATCH       = 512
