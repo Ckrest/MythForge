@@ -482,6 +482,7 @@
                 chatContainer.innerHTML = '';
                 systemPrompt.textContent = '';
                 systemToggle.style.display = 'none';
+                showChatTab();
             }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
         }
 
