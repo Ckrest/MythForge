@@ -319,7 +319,8 @@ def chat_stream(req: ChatRequest):
         for output in llm(prompt, max_tokens=250, stream=True, **GENERATION_CONFIG):
             chunk = output["choices"][0]["text"]
             text_accumulator += chunk
-            yield chunk
+            # Each chunk is newline-delimited so the frontend can parse
+            yield chunk + "\n"
 
         # Once done, append full bot response to both histories:
 
