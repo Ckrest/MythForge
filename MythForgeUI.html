@@ -188,14 +188,9 @@
                 <div class="history-container" id="history-container"></div>
             </div>
             <div id="prompt-section" style="display:none;">
-                <div class="sidebar-section">
-                    <label for="globalPromptSelect">Global Prompt</label>
-                    <select id="globalPromptSelect">
-                        <option value="">(no global prompt)</option>
-                    </select>
-                    <button id="edit-prompt-btn">Edit Prompt</button>
-                    <button id="add-prompt-btn">Add Prompt</button>
-                </div>
+                <button class="new-chat" id="new-prompt-btn">New Prompt</button>
+                <div class="history-container" id="prompt-list"></div>
+                <button id="edit-prompt-btn" style="margin-top:10px;">Edit Prompt</button>
             </div>
             <div id="more-section" style="display:none;">
                 <button id="open-settings-btn" class="new-chat">Settings</button>
@@ -261,7 +256,7 @@
 
     <script>
         const CONFIG = { apiUrl: window.location.origin };
-        const state = { chats: [], currentChatId: '', settings:{ userName:'You', botName:'Bot', theme:'light', textSize:'medium' }, isGenerating: false };
+        const state = { chats: [], currentChatId: '', prompts: [], currentPrompt:'', settings:{ userName:'You', botName:'Bot', theme:'light', textSize:'medium' }, isGenerating: false };
 
         const chatContainer    = document.getElementById('chat-container');
         const userInput        = document.getElementById('user-input');
@@ -273,9 +268,9 @@
         const historyContainer = document.getElementById('history-container');
        const themeSelect      = document.getElementById('theme-select');
         const textSizeSelect  = document.getElementById('text-size-select');
-        const gpSelect         = document.getElementById('globalPromptSelect');
+        const newPromptBtn     = document.getElementById('new-prompt-btn');
+        const promptList       = document.getElementById('prompt-list');
         const editPromptBtn    = document.getElementById('edit-prompt-btn');
-        const addPromptBtn     = document.getElementById('add-prompt-btn');
         const systemToggle     = document.getElementById('system-toggle');
         const systemContainer  = document.getElementById('system-container');
         const systemPrompt     = document.getElementById('system-prompt');
@@ -468,14 +463,42 @@
             }catch(e){ console.error('Failed to load history:',e); }
         }
 
+        function renderPromptList(){
+            promptList.innerHTML='';
+            state.prompts.forEach(name=>{
+                const div=document.createElement('div');
+                div.className='chat-history-item';
+                const span=document.createElement('span');
+                span.className='chat-name';
+                span.textContent=name;
+                div.appendChild(span);
+                if(name===state.currentPrompt){
+                    div.classList.add('active');
+                    const ren=document.createElement('button');
+                    ren.className='chat-action-btn';
+                    ren.textContent='✎';
+                    ren.title='Rename prompt';
+                    ren.onclick=(e)=>{e.stopPropagation(); renamePrompt(name);};
+                    const del=document.createElement('button');
+                    del.className='chat-action-btn';
+                    del.textContent='✕';
+                    del.title='Delete prompt';
+                    del.onclick=(e)=>{e.stopPropagation(); deletePrompt(name);};
+                    div.appendChild(ren); div.appendChild(del);
+                }
+                div.onclick=()=>selectPrompt(name);
+                promptList.appendChild(div);
+            });
+        }
+
         async function refreshGlobalPromptList(){
             try{
                 const res = await fetch('/prompts');
                 const json = await res.json();
-                gpSelect.innerHTML = '<option value="">(no global prompt)</option>';
-                json.prompts.forEach(p => { const opt=document.createElement('option'); opt.value=p.name; opt.textContent=p.name; gpSelect.appendChild(opt); });
+                state.prompts = json.prompts.map(p=>p.name);
                 const last = localStorage.getItem('lastGlobalPrompt');
-                if(last && Array.from(gpSelect.options).some(o=>o.value===last)) gpSelect.value = last;
+                if(last && state.prompts.includes(last)) state.currentPrompt = last;
+                renderPromptList();
             }catch(e){ console.error('Failed to load prompts:',e); }
         }
 
@@ -496,7 +519,8 @@
                 // Remember this new prompt as the last used one
                 localStorage.setItem('lastGlobalPrompt', trimmed);
                 await refreshGlobalPromptList();
-                gpSelect.value = trimmed;
+                state.currentPrompt = trimmed;
+                renderPromptList();
                 alert(`Prompt "${trimmed}" created.`);
             }catch(e){
                 console.error('Failed to create prompt:', e);
@@ -504,15 +528,16 @@
             }
         }
 
-        async function openPromptEditor(){
-            const name = gpSelect.value; if(!name) return alert('Select a prompt from the dropdown first.');
+        async function openPromptEditor(name=state.currentPrompt){
+            if(!name) return alert('Select a prompt first.');
             try{
                 const res = await fetch('/prompts'); const json = await res.json();
                 const promptObj = json.prompts.find(p=>p.name===name); if(!promptObj) return alert('Prompt not found.');
                 const newContent = prompt(`Edit content for "${name}":`, promptObj.content); if(newContent===null) return; const contTrim = newContent.trim(); if(!contTrim) return alert('Prompt content cannot be empty.');
                 const updateRes = await fetch(`/prompts/${encodeURIComponent(name)}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, content: contTrim})});
                 if(!updateRes.ok){ const err=await updateRes.json(); return alert('Error: '+err.detail); }
-                await refreshGlobalPromptList(); alert(`Prompt "${name}" updated.`);
+                await refreshGlobalPromptList();
+                alert(`Prompt "${name}" updated.`);
             }catch(e){ console.error('Failed to update prompt:',e); alert('Failed to update prompt: '+e.message); }
         }
 
@@ -566,6 +591,46 @@
                 }
                 renderHistory();
             }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); }
+        }
+
+        function selectPrompt(name){
+            state.currentPrompt = name;
+            localStorage.setItem('lastGlobalPrompt', name);
+            renderPromptList();
+        }
+
+        async function deletePrompt(name){
+            if(!confirm('Delete this prompt?')) return;
+            try{
+                const res = await fetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
+                if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                state.prompts = state.prompts.filter(p=>p!==name);
+                if(state.currentPrompt===name){
+                    state.currentPrompt = state.prompts.length? state.prompts[0]:'';
+                    localStorage.setItem('lastGlobalPrompt', state.currentPrompt);
+                }
+                renderPromptList();
+            }catch(e){ alert('Failed to delete prompt: '+e.message); }
+        }
+
+        async function renamePrompt(oldName){
+            const newName = prompt('Enter new prompt name:', oldName);
+            if(newName===null) return;
+            const trimmed = newName.trim(); if(!trimmed) return alert('Name cannot be empty.');
+            if(state.prompts.includes(trimmed)) return alert('That name\u2019s already taken.');
+            try{
+                const res = await fetch(`/prompts/${encodeURIComponent(oldName)}/rename`, {
+                    method:'PUT',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({new_name: trimmed})
+                });
+                if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                state.prompts = state.prompts.map(p=>p===oldName? trimmed:p);
+                state.currentPrompt = trimmed;
+                localStorage.setItem('lastGlobalPrompt', trimmed);
+                renderPromptList();
+                await openPromptEditor(trimmed);
+            }catch(e){ alert('Failed to rename prompt: '+e.message); }
         }
 
         function autoResize(){ userInput.style.height='auto'; userInput.style.height=Math.min(userInput.scrollHeight,200)+'px'; }
@@ -664,7 +729,7 @@
                 const response = await fetch('/chat/stream', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: gpSelect.value}),
+                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: state.currentPrompt}),
                     signal: abortController.signal
                 });
                 if(!response.ok) throw new Error(`Server returned ${response.status}`);
@@ -722,7 +787,7 @@
                 await fetch('/message', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: gpSelect.value})
+                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: state.currentPrompt})
                 });
             }catch(err){
                 console.error('Send only failed:', err);
@@ -738,7 +803,7 @@
         function setupEvents(){
             themeSelect.addEventListener('change', e=>applyTheme(e.target.value));
             textSizeSelect.addEventListener('change', e=>applyTextSize(e.target.value));
-            gpSelect.addEventListener('change', ()=>{ localStorage.setItem('lastGlobalPrompt', gpSelect.value); });
+            // prompt selection handled in render
             openSettingsBtn.addEventListener('click', openSettings);
             settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
             settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
@@ -750,7 +815,7 @@
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
             editPromptBtn.addEventListener('click', openPromptEditor);
-            addPromptBtn.addEventListener('click', addNewPrompt);
+            newPromptBtn.addEventListener('click', addNewPrompt);
             systemToggle.addEventListener('click', toggleSystem);
             hideTab.addEventListener('click', hideSidebar);
             chatTab.addEventListener('click', showChatTab);

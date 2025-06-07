@@ -192,6 +192,31 @@ def update_prompt(name: str, item: PromptItem):
     save_global_prompt({"name": name, "content": item.content})
     return {"detail": "Updated", "prompt": {"name": name, "content": item.content}}
 
+
+@app.put("/prompts/{name}/rename")
+def rename_prompt(name: str, data: Dict[str, str]):
+    """Rename a prompt ``name`` to ``data['new_name']``."""
+    new_name = data.get("new_name", "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="New name required")
+    prompts = load_global_prompts()
+    if not any(p["name"] == name for p in prompts):
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    if any(p["name"] == new_name for p in prompts):
+        raise HTTPException(status_code=400, detail="Prompt name already exists")
+
+    old_path = _prompt_path(name)
+    new_path = _prompt_path(new_name)
+    if not os.path.exists(old_path):
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    with open(old_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    data["name"] = new_name
+    os.rename(old_path, new_path)
+    with open(new_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    return {"detail": f"Renamed prompt '{name}' to '{new_name}'"}
+
 @app.delete("/prompts/{name}")
 def delete_prompt(name: str):
     prompts = load_global_prompts()
