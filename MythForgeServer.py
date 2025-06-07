@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from llama_cpp import Llama
+from lmstudio_prompter import render_prompt, GENERATION_CONFIG
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -41,6 +42,13 @@ GLOBAL_PROMPTS_FILE   = "global_prompts.json"
 DEFAULT_CTX_SIZE      = 2048
 SUMMARIZE_THRESHOLD   = 12
 SUMMARIZE_BATCH       = 6
+
+INVALID_PATH_CHARS = r'[<>:"/\\|?*]'
+
+def sanitize_chat_id(chat_id: str) -> str:
+    """Return a filesystem-safe version of ``chat_id``."""
+    import re
+    return re.sub(INVALID_PATH_CHARS, "_", chat_id)
 
 # ========== Model Loading ==========
 def discover_model_path():
@@ -160,6 +168,7 @@ def summarize_chunk(chunk):
     return {"type": "summary", "content": output["choices"][0]["text"].strip()}
 
 def trim_context(chat_id):
+    chat_id = sanitize_chat_id(chat_id)
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     history = load_json(trimmed_path)
     raw_msgs = [m for m in history if m.get("type") == "raw"]
@@ -176,6 +185,7 @@ def trim_context(chat_id):
     return history
 
 def build_prompt(chat_id, user_message, message_index, global_prompt_name):
+    chat_id = sanitize_chat_id(chat_id)
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
 
@@ -197,15 +207,18 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     # Random injection every other message
     injection = get_injection() if message_index % 2 == 0 else ""
 
-    # Build the prompt text
-    messages = []
+    # Build the message list for the LM Studio template
+    system_content = system_prompt + ("\n" + injection if injection else "")
+    messages = [{"role": "system", "content": system_content}]
+
     for m in context:
         if m.get("type") == "summary":
-            messages.append(f"SUMMARY: {m['content']}")
+            messages.append({"role": "system", "content": f"SUMMARY: {m['content']}"})
         else:
-            messages.append(f"{m['role']}: {m['content']}")
+            role = "assistant" if m["role"] == "bot" else m["role"]
+            messages.append({"role": role, "content": m["content"]})
 
-    prompt_str = f"{system_prompt}\n{injection}\n" + "\n".join(messages)
+    prompt_str = render_prompt(messages)
     return prompt_str
 
 # ========== Standard Chat Endpoints ==========
@@ -218,6 +231,7 @@ def list_chats():
 
 @app.get("/history/{chat_id}")
 def get_history(chat_id: str):
+    chat_id = sanitize_chat_id(chat_id)
     path = f"{CHATS_DIR}/{chat_id}_full.json"
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -225,6 +239,7 @@ def get_history(chat_id: str):
 
 @app.delete("/chat/{chat_id}")
 def delete_chat(chat_id: str):
+    chat_id = sanitize_chat_id(chat_id)
     full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     existed = False
@@ -240,7 +255,7 @@ def delete_chat(chat_id: str):
 
 @app.post("/chat")
 def chat(req: ChatRequest):
-    chat_id       = req.chat_id
+    chat_id       = sanitize_chat_id(req.chat_id)
     user_message  = req.message
     global_prompt = req.global_prompt or ""
 
@@ -254,7 +269,16 @@ def chat(req: ChatRequest):
     message_index = len(load_json(full_path))
     prompt = build_prompt(chat_id, user_message, message_index, global_prompt)
 
-    output = llm(prompt, max_tokens=250)
+    output = llm(
+        prompt,
+        max_tokens=250,
+        temperature=GENERATION_CONFIG["temperature"],
+        top_k=GENERATION_CONFIG["top_k"],
+        top_p=GENERATION_CONFIG["top_p"],
+        min_p=GENERATION_CONFIG["min_p"],
+        repeat_penalty=GENERATION_CONFIG["repeat_penalty"],
+        stop=GENERATION_CONFIG["stop"],
+    )
     response_text = output["choices"][0]["text"].strip()
 
     # Append bot to full history
@@ -279,7 +303,7 @@ def chat_stream(req: ChatRequest):
     The first line sent to the client is a JSON object with the prompt text.
     All subsequent data are token chunks from the model.
     """
-    chat_id       = req.chat_id
+    chat_id       = sanitize_chat_id(req.chat_id)
     user_message  = req.message
     global_prompt = req.global_prompt or ""
 
@@ -307,7 +331,17 @@ def chat_stream(req: ChatRequest):
         text_accumulator = ""
 
         # Next, stream the model’s token chunks
-        for output in llm(prompt, max_tokens=250, stream=True):
+        for output in llm(
+            prompt,
+            max_tokens=250,
+            stream=True,
+            temperature=GENERATION_CONFIG["temperature"],
+            top_k=GENERATION_CONFIG["top_k"],
+            top_p=GENERATION_CONFIG["top_p"],
+            min_p=GENERATION_CONFIG["min_p"],
+            repeat_penalty=GENERATION_CONFIG["repeat_penalty"],
+            stop=GENERATION_CONFIG["stop"],
+        ):
             chunk = output["choices"][0]["text"]
             text_accumulator += chunk
             yield chunk
