@@ -39,7 +39,7 @@ class PromptItem(BaseModel):
 # ========== Configuration ==========
 MODELS_DIR            = "models"
 CHATS_DIR             = "chats"
-GLOBAL_PROMPTS_FILE   = "global_prompts.json"
+GLOBAL_PROMPTS_DIR    = "Global_prompts"
 # Match LM Studio defaults for a 4 GB VRAM setup
 DEFAULT_CTX_SIZE      = 4096
 DEFAULT_N_BATCH       = 512
@@ -131,32 +131,44 @@ def strip_leading_tag(text: str, tag: str) -> str:
     return text
 
 # ─── Global Prompts CRUD ─────────────────────────────────────────────────
+def _prompt_path(name: str) -> str:
+    """Return the filesystem path for a prompt ``name``."""
+    safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
+    return os.path.join(GLOBAL_PROMPTS_DIR, f"{safe}.json")
+
+
 def load_global_prompts():
-    if not os.path.exists(GLOBAL_PROMPTS_FILE):
-        with open(GLOBAL_PROMPTS_FILE, "w", encoding="utf-8") as f:
-            json.dump([], f)
-        return []
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    prompts = []
+    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
+        if not fname.lower().endswith(".json"):
+            continue
+        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Failed to load prompt '{fname}': {e}")
+            continue
 
-    with open(GLOBAL_PROMPTS_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    if not isinstance(data, list):
-        print(f"Ignoring malformed global prompts: expected list, got {type(data)}")
-        return []
-
-    sanitized = []
-    for entry in data:
-        if isinstance(entry, dict) and "name" in entry and "content" in entry:
-            sanitized.append({"name": entry["name"], "content": entry["content"]})
+        if isinstance(data, dict) and "name" in data and "content" in data:
+            prompts.append({"name": data["name"], "content": data["content"]})
         else:
-            # Ignore invalid entries but log for visibility
-            print(f"Ignoring invalid global prompt entry: {entry}")
+            print(f"Ignoring invalid global prompt file: {fname}")
+    return prompts
 
-    return sanitized
 
-def save_global_prompts(prompts):
-    with open(GLOBAL_PROMPTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(prompts, f, indent=2, ensure_ascii=False)
+def save_global_prompt(prompt: Dict[str, str]):
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    path = _prompt_path(prompt["name"])
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"name": prompt["name"], "content": prompt["content"]}, f, indent=2, ensure_ascii=False)
+
+
+def delete_global_prompt(name: str):
+    path = _prompt_path(name)
+    if os.path.exists(path):
+        os.remove(path)
 
 @app.get("/prompts")
 def list_prompts():
@@ -167,29 +179,25 @@ def create_prompt(item: PromptItem):
     prompts = load_global_prompts()
     if any(p["name"] == item.name for p in prompts):
         raise HTTPException(status_code=400, detail="Prompt name already exists")
-    prompts.append({"name": item.name, "content": item.content})
-    save_global_prompts(prompts)
+    save_global_prompt({"name": item.name, "content": item.content})
     return {"detail": "Created", "prompt": {"name": item.name, "content": item.content}}
 
 @app.put("/prompts/{name}")
 def update_prompt(name: str, item: PromptItem):
+    if item.name != name:
+        raise HTTPException(status_code=400, detail="Cannot rename prompt; delete & recreate instead")
     prompts = load_global_prompts()
-    for p in prompts:
-        if p["name"] == name:
-            if item.name != name:
-                raise HTTPException(status_code=400, detail="Cannot rename prompt; delete & recreate instead")
-            p["content"] = item.content
-            save_global_prompts(prompts)
-            return {"detail": "Updated", "prompt": p}
-    raise HTTPException(status_code=404, detail="Prompt not found")
+    if not any(p["name"] == name for p in prompts):
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    save_global_prompt({"name": name, "content": item.content})
+    return {"detail": "Updated", "prompt": {"name": name, "content": item.content}}
 
 @app.delete("/prompts/{name}")
 def delete_prompt(name: str):
     prompts = load_global_prompts()
-    filtered = [p for p in prompts if p["name"] != name]
-    if len(filtered) == len(prompts):
+    if not any(p["name"] == name for p in prompts):
         raise HTTPException(status_code=404, detail="Prompt not found")
-    save_global_prompts(filtered)
+    delete_global_prompt(name)
     return {"detail": f"Deleted prompt '{name}'"}
 
 # ========== Summarization & Trimming ==========
