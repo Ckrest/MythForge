@@ -27,6 +27,12 @@ class ChatRequest(BaseModel):
     chat_id: str
     message: str
     global_prompt: str = ""
+    max_tokens: int | None = None
+    temperature: float | None = None
+    top_k: int | None = None
+    top_p: float | None = None
+    min_p: float | None = None
+    repeat_penalty: float | None = None
 
 class ChatResponse(BaseModel):
     response: str
@@ -461,9 +467,21 @@ def chat(req: ChatRequest):
         chat_id, user_message, global_prompt
     )
 
-    # Generate the assistant response using LM Studio generation settings
+    config = GENERATION_CONFIG.copy()
+    if req.temperature is not None:
+        config["temperature"] = req.temperature
+    if req.top_k is not None:
+        config["top_k"] = req.top_k
+    if req.top_p is not None:
+        config["top_p"] = req.top_p
+    if req.min_p is not None:
+        config["min_p"] = req.min_p
+    if req.repeat_penalty is not None:
+        config["repeat_penalty"] = req.repeat_penalty
+    max_tokens = req.max_tokens if req.max_tokens is not None else DEFAULT_MAX_TOKENS
+
     print("DEBUG raw_prompt:", prompt)
-    output = call_llm(prompt, max_tokens=DEFAULT_MAX_TOKENS, **GENERATION_CONFIG)
+    output = call_llm(prompt, max_tokens=max_tokens, **config)
     response_text = output["choices"][0]["text"].strip()
     response_text = strip_leading_tag(response_text, assistant_name)
 
@@ -523,11 +541,24 @@ def chat_stream(req: ChatRequest):
         prefix = f"{assistant_name}:"
 
         print("DEBUG raw_prompt:", prompt)
+        config = GENERATION_CONFIG.copy()
+        if req.temperature is not None:
+            config["temperature"] = req.temperature
+        if req.top_k is not None:
+            config["top_k"] = req.top_k
+        if req.top_p is not None:
+            config["top_p"] = req.top_p
+        if req.min_p is not None:
+            config["min_p"] = req.min_p
+        if req.repeat_penalty is not None:
+            config["repeat_penalty"] = req.repeat_penalty
+        max_tokens = req.max_tokens if req.max_tokens is not None else DEFAULT_MAX_TOKENS
+
         for output in call_llm(
             prompt,
-            max_tokens=DEFAULT_MAX_TOKENS,
+            max_tokens=max_tokens,
             stream=True,
-            **GENERATION_CONFIG,
+            **config,
         ):
             chunk = output["choices"][0]["text"]
             if prefix_trimmed:
