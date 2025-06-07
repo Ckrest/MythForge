@@ -463,6 +463,8 @@
                 const msgs = await res.json();
                 msgs.forEach(m => appendMessageToUI(m.role==='bot'?'assistant':m.role, m.content));
             }catch(e){ console.error('Failed to load history:',e); }
+            sendButton.disabled = state.isGenerating;
+            sendOnlyButton.disabled = userInput.value.trim()==='' || state.isGenerating;
         }
 
         function renderPromptList(){
@@ -524,19 +526,8 @@
             }catch(e){ console.error('Failed to update prompt:',e); alert('Failed to update prompt: '+e.message); }
         }
 
-        async function deletePrompt(){
-            const name = state.currentPrompt;
-            if(!name) return alert('Nothing to delete.');
-            if(!confirm(`Delete prompt "${name}"?`)) return;
-            try{
-                const res = await fetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
-                if(!res.ok){ const err=await res.json(); throw new Error(err.detail||'Server error'); }
-                state.currentPrompt='';
-                await refreshGlobalPromptList();
-            }catch(e){ alert('Failed to delete: '+e.message); }
-        }
 
-        function startNewChat(){
+       function startNewChat(){
             const name = prompt('Enter new chat name:'); if(name===null) return; const trimmed = name.trim(); if(!trimmed) return alert('Name cannot be empty.');
             if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
               state.chats.unshift(trimmed);
@@ -546,7 +537,9 @@
               chatContainer.innerHTML = '';
               systemPrompt.textContent = '';
               systemToggle.style.display = 'none';
-        }
+              sendButton.disabled = state.isGenerating;
+              sendOnlyButton.disabled = userInput.value.trim()==='' || state.isGenerating;
+       }
 
         async function deleteChat(){
             if(!state.currentChatId) return alert('Nothing to delete.');
@@ -562,6 +555,8 @@
                 systemPrompt.textContent = '';
                 systemToggle.style.display = 'none';
                 showChatTab();
+                sendButton.disabled = state.isGenerating;
+                sendOnlyButton.disabled = userInput.value.trim()==='' || state.isGenerating || !state.currentChatId;
             }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
         }
 
@@ -585,6 +580,8 @@
                     localStorage.setItem('lastChatId', trimmed);
                 }
                 renderHistory();
+                sendButton.disabled = state.isGenerating;
+                sendOnlyButton.disabled = userInput.value.trim()==='' || state.isGenerating || !state.currentChatId;
             }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); }
         }
 
@@ -669,9 +666,14 @@
         }
         function removeTyping(){ const t=document.getElementById('typing-indicator'); if(t) t.remove(); }
 
-        async function sendMessage(){
-            const text = userInput.value.trim();
-            if(text==='' || state.isGenerating || !state.currentChatId) return;
+        async function sendMessage(forceEmpty=false){
+            let text = userInput.value.trim();
+            if(text==='' && !forceEmpty){
+                if(state.isGenerating || !state.currentChatId) return;
+                if(!confirm('No input provided. Generate a response?')) return;
+                text = '';
+            }
+            if(state.isGenerating || !state.currentChatId) return;
             userInput.value=''; autoResize();
             sendButton.disabled=true; sendOnlyButton.disabled=true;
             sendButton.style.display='none';
@@ -723,8 +725,8 @@
                 }
             }finally{
                 state.isGenerating=false;
-                sendButton.disabled=userInput.value.trim()==='';
-                sendOnlyButton.disabled=sendButton.disabled;
+                sendButton.disabled=state.isGenerating;
+                sendOnlyButton.disabled=userInput.value.trim()==='' || state.isGenerating;
                 stopButton.style.display='none';
                 sendButton.style.display='inline';
                 sendOnlyButton.style.display='inline';
@@ -747,8 +749,8 @@
             }catch(err){
                 console.error('Send only failed:', err);
             }finally{
-                sendButton.disabled=userInput.value.trim()==='' || state.isGenerating;
-                sendOnlyButton.disabled=sendButton.disabled;
+                sendButton.disabled=state.isGenerating;
+                sendOnlyButton.disabled=userInput.value.trim()==='' || state.isGenerating;
                 userInput.focus();
             }
         }
@@ -765,7 +767,12 @@
             sendOnlyButton.addEventListener('click', sendMessageNoGen);
             stopButton.addEventListener('click', stopGenerating);
             userInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
-            userInput.addEventListener('input', ()=>{ const dis = userInput.value.trim()==='' || state.isGenerating; sendButton.disabled = dis; sendOnlyButton.disabled = dis; autoResize(); });
+            userInput.addEventListener('input', ()=>{
+                const genDis = state.isGenerating;
+                sendButton.disabled = genDis;
+                sendOnlyButton.disabled = userInput.value.trim()==='' || genDis;
+                autoResize();
+            });
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
             deleteChatBtn.addEventListener('click', deleteChat);
