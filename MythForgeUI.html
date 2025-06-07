@@ -340,7 +340,10 @@
             closeSettings();
         }
 
-        function toggleSystem(){ systemContainer.style.display = systemContainer.style.display === 'none' ? 'block':'none'; }
+        function toggleSystem(){
+            const current = getComputedStyle(systemContainer).display;
+            systemContainer.style.display = current === 'none' ? 'block' : 'none';
+        }
 
         function showChatTab(){
             sidebar.classList.remove('hidden');
