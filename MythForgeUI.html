@@ -107,20 +107,10 @@
             display: flex;
             flex-direction: column;
         }
-        .sidebar button { cursor: pointer; }
-        .sidebar button.new-chat {
-            background-color: var(--sidebar-btn-bg);
-            color: var(--sidebar-text);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-            padding: 12px;
-            text-align: left;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            font-size: 14px;
-        }
-        .sidebar button.new-chat:hover { background-color: var(--sidebar-btn-hover); }
+        .sidebar button { cursor: pointer; background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; padding: 8px; font-size: 14px; }
+        .sidebar button:hover { background-color: var(--sidebar-btn-hover); }
+        .sidebar button.new-chat { padding: 12px; text-align: left; margin-bottom: 20px; display: flex; align-items: center; }
+        .sidebar button#delete-chat-btn { background-color: rgba(220,53,69,0.8); }
         .history-container { flex-grow: 1; overflow-y: auto; }
         .chat-history-item {
             padding: 10px; margin-bottom: 5px; border-radius: 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px;
@@ -136,7 +126,7 @@
         .modal-actions{text-align:right;margin-top:15px;}
         .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; }
         .top-controls { padding: 10px; border-bottom: 1px solid var(--border-color); background: var(--bg-color); display: flex; gap: 0.5em; align-items: center; }
-        .chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; background-color: var(--chat-bg); }
+        .chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; background-color: var(--chat-bg); }
         .message { padding: 20px; margin: 0; display: flex; border-bottom: 1px solid var(--border-color); }
         .user-message { background-color: var(--bg-color); }
         .ai-message { background-color: var(--chat-bg); }
@@ -161,19 +151,15 @@
             align-items: center;
             padding-top: 8px;
         }
-        .tab-bar button {
-            background: none;
-            border: none;
-            color: inherit;
-            cursor: pointer;
-            font-size: 20px;
-            width: 100%;
-            padding: 10px 0;
-        }
+        .tab-bar button { background-color: var(--sidebar-btn-bg); border: 1px solid rgba(255,255,255,0.2); color: var(--sidebar-text); cursor: pointer; font-size: 20px; width: 100%; padding: 10px 0; margin-bottom: 6px; border-radius: 4px; }
         .tab-bar button.active { background-color: var(--sidebar-btn-hover); }
         .sidebar.hidden { display: none; }
+        .sidebar.hidden + .main .input-container { max-width: 100%; }
+        .sidebar.hidden + .main .message-content { max-width: none; }
         #chat-section, #more-section { flex-grow: 1; display: flex; flex-direction: column; }
         #more-section { overflow-y: auto; }
+        .sidebar-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        .sidebar-section select { background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; cursor: pointer; font-size: 14px; }
     </style>
 </head>
 <body>
