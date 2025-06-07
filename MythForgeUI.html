@@ -617,9 +617,10 @@
         async function renamePrompt(oldName){
             const newName = prompt('Enter new prompt name:', oldName);
             if(newName===null) return;
-            const trimmed = newName.trim(); if(!trimmed) return alert('Name cannot be empty.');
-            if(trimmed === oldName) return;
-            if(state.prompts.includes(trimmed)) return alert('That name\u2019s already taken.');
+            const trimmed = newName.trim();
+            if(!trimmed) return alert('Name cannot be empty.');
+            if(trimmed !== oldName && state.prompts.includes(trimmed))
+                return alert('That name\u2019s already taken.');
             try{
                 const res = await fetch(`/prompts/${encodeURIComponent(oldName)}/rename`, {
                     method:'PUT',
