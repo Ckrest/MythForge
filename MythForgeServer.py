@@ -8,8 +8,7 @@ from pydantic import BaseModel
 from typing import Dict, List
 from llama_cpp import Llama
 
-# Import the LM Studio style prompt builder
-from lmstudio_prompter import GENERATION_CONFIG
+# Prompt formatting utilities
 from airoboros_prompter import format_airoboros
 
 app = FastAPI(title="Myth Forge Server")
@@ -47,6 +46,19 @@ DEFAULT_N_BATCH       = 512
 DEFAULT_N_THREADS     = os.cpu_count() or 1
 SUMMARIZE_THRESHOLD   = 20
 SUMMARIZE_BATCH       = 12
+
+# Generation settings matching LM Studio's defaults
+GENERATION_CONFIG = {
+    "temperature": 0.8,
+    "top_k": 40,
+    "top_p": 0.95,
+    "min_p": 0.05,
+    "repeat_penalty": 1.1,
+    # ``n_batch`` is set when ``Llama`` is instantiated. Passing it to
+    # ``Llama.__call__`` can break older ``llama_cpp`` versions, so it is
+    # intentionally omitted here.
+    "stop": ["<|start_header_id|>", "<|eot_id|>"],
+}
 
 # ========== Model Loading ==========
 def discover_model_path():
