@@ -208,6 +208,7 @@ def summarize_chunk(chunk):
         f"BEGININSTRUCTION\nSummarize the above conversation in 2-3 sentences.\nENDINSTRUCTION"
     )
     # Use ``call_llm`` to ensure only supported kwargs are passed to the model
+    print("DEBUG raw_prompt:", prompt)
     output = call_llm(prompt, max_tokens=150)
     return {"type": "summary", "content": output["choices"][0]["text"].strip()}
 
@@ -406,6 +407,7 @@ def chat(req: ChatRequest):
     )
 
     # Generate the assistant response using LM Studio generation settings
+    print("DEBUG raw_prompt:", prompt)
     output = call_llm(prompt, max_tokens=250, **GENERATION_CONFIG)
     response_text = output["choices"][0]["text"].strip()
     response_text = strip_leading_tag(response_text, assistant_name)
@@ -465,6 +467,7 @@ def chat_stream(req: ChatRequest):
         prefix_trimmed = False
         prefix = f"{assistant_name}:"
 
+        print("DEBUG raw_prompt:", prompt)
         for output in call_llm(
             prompt,
             max_tokens=250,
