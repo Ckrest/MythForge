@@ -211,9 +211,10 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     all_prompts = load_global_prompts()
     chosen_content = next((p["content"] for p in all_prompts if p["name"] == global_prompt_name), None)
     system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
+    assistant_name = global_prompt_name if chosen_content else "assistant"
 
     # Optional random injection
-    injection = get_injection() if message_index % 2 == 0 else ""
+    injection = get_injection() if message_index % 6 == 0 else ""
 
     # Gather summaries and raw history for Airoboros formatting
     summaries: List[str] = []
@@ -222,7 +223,7 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
         if m.get("type") == "summary":
             summaries.append(f"SUMMARY: {m['content']}")
         else:
-            role = "assistant" if m.get("role") == "bot" else m.get("role")
+            role = assistant_name if m.get("role") == "bot" else m.get("role")
             history.append({"role": role, "content": m.get("content", "")})
 
     prompt_str = format_airoboros(
@@ -231,6 +232,7 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
         summaries,
         history,
         user_message,
+        assistant_name,
     )
     return prompt_str
 

@@ -27,14 +27,16 @@ def format_airoboros(
     summaries: Optional[List[str]],
     history: List[Dict[str, str]],
     instruction: str,
+    assistant_name: str = "assistant",
 ) -> str:
     """Return the conversation formatted for Airoboros."""
 
     lines = [
         "BEGININPUT",
         "BEGINCONTEXT",
-        f"persona: {global_prompt}",
-        f"behavior: {random_injection}",
+        "[SYSTEM] This is law:",
+        f"{global_prompt}",
+        f"format: {random_injection}",
         "ENDCONTEXT",
     ]
 
@@ -43,6 +45,8 @@ def format_airoboros(
 
     for msg in history:
         role = msg.get("role", "user")
+        if role == "assistant":
+            role = assistant_name
         content = _strip_junk(msg.get("content", ""))
         lines.append(f"{role}: {content}")
 
@@ -72,6 +76,7 @@ def main() -> None:
         data.get("summaries"),
         data.get("history", []),
         data.get("instruction", ""),
+        data.get("assistant_name", "assistant"),
     )
 
     print(result)
