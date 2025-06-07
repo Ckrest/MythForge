@@ -39,7 +39,7 @@ class PromptItem(BaseModel):
 # ========== Configuration ==========
 MODELS_DIR         = "models"
 CHATS_DIR          = "chats"
-GLOBAL_PROMPTS_DIR = "Global_prompts"
+GLOBAL_PROMPTS_DIR = "global_prompts"
 SETTINGS_PATH      = "settings.json"
 
 # Match LM Studio defaults for a 4 GB VRAM setup
