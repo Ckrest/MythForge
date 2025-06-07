@@ -138,7 +138,10 @@ def call_llm(prompt: str, **kwargs):
 def load_json(path):
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            try:
+                return json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"Failed to parse JSON from '{path}': {e}")
     return []
 
 def save_json(path, data):
