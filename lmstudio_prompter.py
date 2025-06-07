@@ -1,5 +1,10 @@
 from jinja2 import Template
 
+
+def raise_exception(msg):
+    """Helper used inside the Jinja template to raise runtime errors."""
+    raise RuntimeError(msg)
+
 LMSTUDIO_TEMPLATE = """
 {{- bos_token }}
 {%- if custom_tools is defined %}
@@ -92,6 +97,13 @@ GENERATION_CONFIG = {
 
 
 def render_prompt(messages, bos_token=""):
-    template = Template(LMSTUDIO_TEMPLATE)
-    return template.render(messages=messages, bos_token=bos_token, add_generation_prompt=True)
+    template = Template(
+        LMSTUDIO_TEMPLATE,
+        globals={"raise_exception": raise_exception},
+    )
+    return template.render(
+        messages=messages,
+        bos_token=bos_token,
+        add_generation_prompt=True,
+    )
 
