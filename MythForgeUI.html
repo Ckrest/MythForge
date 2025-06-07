@@ -404,30 +404,41 @@
                 const div = document.createElement('div');
                 div.className = 'chat-history-item';
 
+                if(id === state.currentChatId) div.classList.add('active');
+
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'chat-name';
                 nameSpan.textContent = id;
                 div.appendChild(nameSpan);
 
-                if(id === state.currentChatId){
-                    div.classList.add('active');
-                    const renameBtn = document.createElement('button');
-                    renameBtn.className = 'chat-action-btn';
-                    renameBtn.textContent = '✎';
-                    renameBtn.title = 'Rename chat';
-                    renameBtn.onclick = (e)=>{ e.stopPropagation(); renameChat(id); };
-                    div.appendChild(renameBtn);
+                const renameBtn = document.createElement('button');
+                renameBtn.className = 'chat-action-btn';
+                renameBtn.textContent = '✎';
+                renameBtn.title = 'Rename chat';
+                renameBtn.onclick = (e)=>{ e.stopPropagation(); renameChat(id); };
+                div.appendChild(renameBtn);
 
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.className = 'chat-action-btn';
-                    deleteBtn.textContent = '✕';
-                    deleteBtn.title = 'Delete chat';
-                    deleteBtn.onclick = (e)=>{ e.stopPropagation(); deleteChat(); };
-                    div.appendChild(deleteBtn);
-                }
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'chat-action-btn';
+                deleteBtn.textContent = '✕';
+                deleteBtn.title = 'Delete chat';
+                deleteBtn.onclick = (e)=>{ e.stopPropagation(); deleteChat(); };
+                div.appendChild(deleteBtn);
 
                 div.onclick = () => loadChat(id);
                 historyContainer.appendChild(div);
+            });
+        }
+
+        function updateActiveChat(){
+            const items = historyContainer.querySelectorAll('.chat-history-item');
+            items.forEach(div=>{
+                const name = div.querySelector('.chat-name').textContent;
+                if(name === state.currentChatId){
+                    div.classList.add('active');
+                }else{
+                    div.classList.remove('active');
+                }
             });
         }
 
@@ -449,7 +460,7 @@
         async function loadChat(id){
             state.currentChatId = id;
             localStorage.setItem('lastChatId', id);
-            renderHistory();
+            updateActiveChat();
             chatContainer.innerHTML='';
             systemPrompt.textContent='';
             systemToggle.style.display='none';
