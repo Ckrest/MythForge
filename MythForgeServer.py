@@ -318,7 +318,7 @@ def build_prompt(chat_id, user_message, global_prompt_name):
     all_prompts = load_global_prompts()
     chosen_content = next((p["content"] for p in all_prompts if p["name"] == global_prompt_name), None)
     system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
-    assistant_name = global_prompt_name if chosen_content else "assistant"
+    assistant_name = "assistant"
 
     # Gather summaries and raw history for Airoboros formatting
     summaries: List[str] = []
