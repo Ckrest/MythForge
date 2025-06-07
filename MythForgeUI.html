@@ -133,13 +133,18 @@
         .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; }
         .top-controls { padding: 10px; border-bottom: 1px solid var(--border-color); background: var(--bg-color); display: flex; gap: 0.5em; align-items: center; }
         .chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; background-color: var(--chat-bg); }
-        .message { padding: 20px; margin: 0; display: flex; border-bottom: 1px solid var(--border-color); }
+        .message { padding: 20px; margin: 0; display: flex; border-bottom: 1px solid var(--border-color); position: relative; }
         .user-message { background-color: var(--bg-color); }
         .ai-message { background-color: var(--chat-bg); }
         .avatar { width: 30px; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0; }
         .user-avatar { background-color: var(--user-msg-bg); color: var(--user-msg-color); }
         .ai-avatar { background-color: var(--primary); color: white; }
         .message-content { flex-grow: 1; max-width: 800px; line-height: 1.6; font-size: var(--message-font-size); }
+        .message-control-btn { position: absolute; bottom: 4px; right: 4px; background: none; border: none; cursor: pointer; color: var(--text-color); display: none; }
+        .message:hover .message-control-btn { display: block; }
+        .message-menu { position: absolute; bottom: 28px; right: 4px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; flex-direction: column; z-index: 100; }
+        .message-menu button { background: none; border: none; padding: 6px 12px; cursor: pointer; font-size: 14px; text-align: left; color: var(--text-color); }
+        .message-menu button:hover { background-color: var(--hover-color); }
         pre { background-color: var(--code-bg); color: var(--code-color); padding: 10px; border-radius: 4px; overflow-x: auto; }
         textarea { width: 100%; padding: 12px 110px 12px 12px; border: 1px solid var(--border-color); border-radius: 6px; resize: none; min-height: 24px; max-height: 200px; overflow-y: auto; font-family: inherit; font-size: var(--message-font-size); line-height: 1.4; background-color: var(--input-bg); color: var(--text-color); }
         textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--shadow-color); }
@@ -542,16 +547,67 @@
             if(lastMsg) lastMsg.scrollIntoView({block:'end'});
         }
 
+        let activeMenu = null;
+
+        function closeMessageMenu(){ if(activeMenu){ activeMenu.remove(); activeMenu=null; } }
+
+        async function editMessage(index, current){
+            const text = prompt('Edit message:', current);
+            if(text===null) return;
+            try{
+                const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {
+                    method:'PUT',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({content:text})
+                });
+                if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                await loadChat(state.currentChatId);
+            }catch(e){ alert('Failed to edit: '+e.message); }
+        }
+
+        async function deleteMessage(index){
+            if(!confirm('Delete this message?')) return;
+            try{
+                const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {method:'DELETE'});
+                if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                await loadChat(state.currentChatId);
+            }catch(e){ alert('Failed to delete: '+e.message); }
+        }
+
+        function showMessageMenu(div){
+            closeMessageMenu();
+            const idx = Number(div.dataset.index);
+            const current = div.querySelector('.message-content').innerText;
+            const menu = document.createElement('div');
+            menu.className='message-menu';
+            const editBtn=document.createElement('button');
+            editBtn.textContent='Edit';
+            editBtn.onclick=(e)=>{ e.stopPropagation(); closeMessageMenu(); editMessage(idx,current); };
+            const delBtn=document.createElement('button');
+            delBtn.textContent='Delete';
+            delBtn.onclick=(e)=>{ e.stopPropagation(); closeMessageMenu(); deleteMessage(idx); };
+            menu.appendChild(editBtn); menu.appendChild(delBtn);
+            div.appendChild(menu);
+            activeMenu = menu;
+            setTimeout(()=>document.addEventListener('click', closeMessageMenu, {once:true}),0);
+        }
+
         function appendMessageToUI(role, content){
             const div=document.createElement('div');
             div.className=`message ${role==='user'?'user-message':'ai-message'}`;
+            div.dataset.index = chatContainer.children.length;
             const avatar=document.createElement('div');
             avatar.className=`avatar ${role==='user'?'user-avatar':'ai-avatar'}`;
             avatar.textContent = role==='user' ? (state.settings.userName[0]||'U') : (state.settings.botName[0]||'A');
             const contentDiv=document.createElement('div');
             contentDiv.className='message-content';
             contentDiv.innerHTML=content.replace(/\n/g,'<br>');
-            div.appendChild(avatar); div.appendChild(contentDiv);
+            const ctrl=document.createElement('button');
+            ctrl.className='message-control-btn';
+            ctrl.innerHTML='&#8942;';
+            ctrl.title='Options';
+            ctrl.onclick=(e)=>{ e.stopPropagation(); showMessageMenu(div); };
+            div.appendChild(avatar); div.appendChild(contentDiv); div.appendChild(ctrl);
             chatContainer.appendChild(div);
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
