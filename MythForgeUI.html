@@ -895,6 +895,7 @@
                         if(accumulated==='' && buffer.startsWith('\n')){
                             buffer = buffer.replace(/^\n+/, '');
                         }
+                        lineCount += (buffer.match(/\n/g) || []).length;
                         accumulated += buffer;
                         lineCount = accumulated.split(/\n/).length;
                         aiElement.innerHTML = accumulated.replace(/\n/g,'<br>');
