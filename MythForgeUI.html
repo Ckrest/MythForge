@@ -248,9 +248,15 @@
                     <option value="xx-large">2x Large</option>
                     <option value="xxx-large">3x Large</option>
                     <option value="xxxx-large">4x Large</option>
-                    <option value="xxxxx-large">5x Large</option>
+                <option value="xxxxx-large">5x Large</option>
                 </select>
             </div>
+            <label>Max Tokens <input id="max-tokens-input" type="number" min="1"></label>
+            <label>Temperature <input id="temperature-input" type="number" step="0.01"></label>
+            <label>Top K <input id="top-k-input" type="number" min="0"></label>
+            <label>Top P <input id="top-p-input" type="number" step="0.01" min="0" max="1"></label>
+            <label>Min P <input id="min-p-input" type="number" step="0.01" min="0" max="1"></label>
+            <label>Repeat Penalty <input id="repeat-penalty-input" type="number" step="0.01" min="0"></label>
             <div class="modal-actions">
                 <button id="settings-save-btn">Save</button>
             </div>
@@ -259,7 +265,25 @@
 
     <script>
         const CONFIG = { apiUrl: window.location.origin };
-        const state = { chats: [], currentChatId: '', prompts: [], currentPrompt:'', settings:{ userName:'You', botName:'Bot', theme:'light', textSize:'medium' }, isGenerating: false };
+        const state = {
+            chats: [],
+            currentChatId: '',
+            prompts: [],
+            currentPrompt: '',
+            settings: {
+                userName: 'You',
+                botName: 'Bot',
+                theme: 'light',
+                textSize: 'medium',
+                maxTokens: 250,
+                temperature: 0.8,
+                topK: 40,
+                topP: 0.95,
+                minP: 0.05,
+                repeatPenalty: 1.1
+            },
+            isGenerating: false
+        };
 
         const chatContainer    = document.getElementById('chat-container');
         const userInput        = document.getElementById('user-input');
@@ -281,6 +305,12 @@
         const settingsSaveBtn  = document.getElementById('settings-save-btn');
         const userNameInput    = document.getElementById('user-name-input');
         const botNameInput     = document.getElementById('bot-name-input');
+        const maxTokensInput   = document.getElementById('max-tokens-input');
+        const temperatureInput = document.getElementById('temperature-input');
+        const topKInput        = document.getElementById('top-k-input');
+        const topPInput        = document.getElementById('top-p-input');
+        const minPInput        = document.getElementById('min-p-input');
+        const repeatPenaltyInput = document.getElementById('repeat-penalty-input');
         const hideTab          = document.getElementById('hide-tab');
         const chatTab          = document.getElementById('chat-tab');
         const promptTab        = document.getElementById('prompt-tab');
@@ -331,11 +361,17 @@
             textSizeSelect.value = state.settings.textSize;
         }
 
-        function openSettings(){
+       function openSettings(){
             userNameInput.value = state.settings.userName;
             botNameInput.value  = state.settings.botName;
             themeSelect.value   = state.settings.theme;
             textSizeSelect.value = state.settings.textSize;
+            maxTokensInput.value = state.settings.maxTokens;
+            temperatureInput.value = state.settings.temperature;
+            topKInput.value = state.settings.topK;
+            topPInput.value = state.settings.topP;
+            minPInput.value = state.settings.minP;
+            repeatPenaltyInput.value = state.settings.repeatPenalty;
             settingsModal.style.display='flex';
         }
 
@@ -350,11 +386,17 @@
             });
         }
 
-        function saveSettingsFromUI(){
+       function saveSettingsFromUI(){
             state.settings.userName = userNameInput.value.trim() || 'You';
             state.settings.botName  = botNameInput.value.trim()  || 'Bot';
             applyTheme(themeSelect.value);
             applyTextSize(textSizeSelect.value);
+            state.settings.maxTokens = parseInt(maxTokensInput.value) || 1;
+            state.settings.temperature = parseFloat(temperatureInput.value) || 0;
+            state.settings.topK = parseInt(topKInput.value) || 0;
+            state.settings.topP = parseFloat(topPInput.value) || 0;
+            state.settings.minP = parseFloat(minPInput.value) || 0;
+            state.settings.repeatPenalty = parseFloat(repeatPenaltyInput.value) || 0;
             saveSettings();
             updateAvatarDisplays();
             closeSettings();
@@ -746,7 +788,17 @@
                 const response = await fetch('/chat/stream', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: state.currentPrompt}),
+                    body: JSON.stringify({
+                        chat_id: state.currentChatId,
+                        message: text,
+                        global_prompt: state.currentPrompt,
+                        max_tokens: state.settings.maxTokens,
+                        temperature: state.settings.temperature,
+                        top_k: state.settings.topK,
+                        top_p: state.settings.topP,
+                        min_p: state.settings.minP,
+                        repeat_penalty: state.settings.repeatPenalty
+                    }),
                     signal: abortController.signal
                 });
                 if(!response.ok) throw new Error(`Server returned ${response.status}`);
