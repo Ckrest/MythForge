@@ -218,7 +218,7 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
             role = "assistant" if m["role"] == "bot" else m["role"]
             messages.append({"role": role, "content": m["content"]})
 
-    prompt_str = render_prompt(messages)
+    prompt_str = render_prompt(messages, bos_token="<s>")
     return prompt_str
 
 # ========== Standard Chat Endpoints ==========
