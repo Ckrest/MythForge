@@ -366,12 +366,12 @@
 
         function renderHistory(){
             historyContainer.innerHTML = '';
-            state.chats.forEach(id => {
+            state.chats.forEach(chat => {
                 const div = document.createElement('div');
                 div.className = 'chat-history-item';
-                div.textContent = id;
-                div.onclick = () => loadChat(id);
-                if(id === state.currentChatId) div.style.backgroundColor = 'var(--sidebar-btn-hover)';
+                div.textContent = chat.id;
+                div.onclick = () => loadChat(chat.sanitized_id);
+                if(chat.sanitized_id === state.currentChatId) div.style.backgroundColor = 'var(--sidebar-btn-hover)';
                 historyContainer.appendChild(div);
             });
         }
@@ -382,10 +382,10 @@
                 const json = await res.json();
                 state.chats = json.chats;
                 const last = localStorage.getItem('lastChatId');
-                if(last && state.chats.includes(last)){
+                if(last && state.chats.some(c => c.sanitized_id === last)){
                     state.currentChatId = last;
                 }else if(state.chats.length && !state.currentChatId){
-                    state.currentChatId = state.chats[0];
+                    state.currentChatId = state.chats[0].sanitized_id;
                 }
                 renderHistory();
             }catch(e){ console.error('Failed to fetch chats:', e); }
@@ -443,14 +443,15 @@
 
         function startNewChat(){
             const name = prompt('Enter new chat name:'); if(name===null) return; const trimmed = name.trim(); if(!trimmed) return alert('Name cannot be empty.');
-            if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
-              state.chats.unshift(trimmed);
-              state.currentChatId = trimmed;
-              localStorage.setItem('lastChatId', trimmed);
-              renderHistory();
-              chatContainer.innerHTML = '';
-              systemPrompt.textContent = '';
-              systemToggle.style.display = 'none';
+            if(state.chats.some(c=>c.id===trimmed)) return alert('That name\u2019s already taken.');
+            const sanitized = trimmed.replace(/[<>:"/\\|?*]/g, '_');
+            state.chats.unshift({id: trimmed, sanitized_id: sanitized});
+            state.currentChatId = sanitized;
+            localStorage.setItem('lastChatId', sanitized);
+            renderHistory();
+            chatContainer.innerHTML = '';
+            systemPrompt.textContent = '';
+            systemToggle.style.display = 'none';
         }
 
         async function deleteChat(){
@@ -459,8 +460,8 @@
             try{
                 const res = await fetch(`/chat/${encodeURIComponent(state.currentChatId)}`, {method:'DELETE'});
                 if(!res.ok){ if(res.status===404) throw new Error('Chat not found on server.'); else throw new Error('Unknown server error.'); }
-                state.chats = state.chats.filter(c=>c!==state.currentChatId);
-                state.currentChatId = state.chats.length? state.chats[0] : '';
+                state.chats = state.chats.filter(c=>c.sanitized_id!==state.currentChatId);
+                state.currentChatId = state.chats.length? state.chats[0].sanitized_id : '';
                 localStorage.setItem('lastChatId', state.currentChatId);
                 renderHistory();
                 chatContainer.innerHTML = '';
