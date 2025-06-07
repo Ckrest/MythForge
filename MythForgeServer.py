@@ -42,8 +42,8 @@ CHATS_DIR             = "chats"
 INJECTION_FILE        = "random_injections.txt"
 GLOBAL_PROMPTS_FILE   = "global_prompts.json"
 DEFAULT_CTX_SIZE      = 2048
-SUMMARIZE_THRESHOLD   = 12
-SUMMARIZE_BATCH       = 6
+SUMMARIZE_THRESHOLD   = 20
+SUMMARIZE_BATCH       = 12
 
 # ========== Model Loading ==========
 def discover_model_path():
