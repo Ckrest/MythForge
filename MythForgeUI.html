@@ -227,6 +227,11 @@
                     <option value="small">Small</option>
                     <option value="medium">Medium</option>
                     <option value="large">Large</option>
+                    <option value="x-large">Extra Large</option>
+                    <option value="xx-large">2x Large</option>
+                    <option value="xxx-large">3x Large</option>
+                    <option value="xxxx-large">4x Large</option>
+                    <option value="xxxxx-large">5x Large</option>
                 </select>
             </div>
             <div class="modal-actions">
@@ -271,7 +276,16 @@
        }
 
         function applyTextSize(size){
-            const map = {small:'14px', medium:'16px', large:'18px'};
+            const map = {
+                small:'14px',
+                medium:'16px',
+                large:'18px',
+                'x-large':'20px',
+                'xx-large':'22px',
+                'xxx-large':'24px',
+                'xxxx-large':'26px',
+                'xxxxx-large':'28px'
+            };
             document.body.style.setProperty('--message-font-size', map[size] || '16px');
             state.settings.textSize = size;
         }
