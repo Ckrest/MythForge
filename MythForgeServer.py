@@ -80,6 +80,27 @@ llm = Llama(
     prompt_template="",
 )
 
+# Determine which keyword arguments ``llm.__call__`` accepts.  Older versions
+# of ``llama_cpp`` do not support certain generation parameters (e.g.
+# ``n_batch``).  We inspect the call signature once so we can filter unsupported
+# keys when generating text.
+try:
+    import inspect
+
+    _CALL_KWARGS = set(inspect.signature(llm.__call__).parameters)
+except Exception:  # pragma: no cover - signature introspection may fail
+    _CALL_KWARGS = set()
+
+
+def call_llm(prompt: str, **kwargs):
+    """Call the ``llm`` object with only the supported keyword arguments."""
+
+    if _CALL_KWARGS:
+        filtered = {k: v for k, v in kwargs.items() if k in _CALL_KWARGS}
+    else:  # Fallback if inspection failed
+        filtered = kwargs
+    return llm(prompt, **filtered)
+
 # ========== Helpers ==========
 def load_json(path):
     if os.path.exists(path):
@@ -175,7 +196,8 @@ def summarize_chunk(chunk):
         f"BEGININPUT\n{text}\nENDINPUT\n"
         f"BEGININSTRUCTION\nSummarize the above conversation in 2-3 sentences.\nENDINSTRUCTION"
     )
-    output = llm(prompt, max_tokens=150)
+    # Use ``call_llm`` to ensure only supported kwargs are passed to the model
+    output = call_llm(prompt, max_tokens=150)
     return {"type": "summary", "content": output["choices"][0]["text"].strip()}
 
 def trim_context(chat_id):
@@ -299,7 +321,7 @@ def chat(req: ChatRequest):
     )
 
     # Generate the assistant response using LM Studio generation settings
-    output = llm(prompt, max_tokens=250, **GENERATION_CONFIG)
+    output = call_llm(prompt, max_tokens=250, **GENERATION_CONFIG)
     response_text = output["choices"][0]["text"].strip()
     response_text = strip_leading_tag(response_text, assistant_name)
 
@@ -358,7 +380,12 @@ def chat_stream(req: ChatRequest):
         prefix_trimmed = False
         prefix = f"{assistant_name}:"
 
-        for output in llm(prompt, max_tokens=250, stream=True, **GENERATION_CONFIG):
+        for output in call_llm(
+            prompt,
+            max_tokens=250,
+            stream=True,
+            **GENERATION_CONFIG,
+        ):
             chunk = output["choices"][0]["text"]
             if prefix_trimmed:
                 text_accumulator += chunk
