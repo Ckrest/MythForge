@@ -176,6 +176,8 @@
         #prompt-section { overflow-y: auto; }
         .sidebar-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
         .sidebar-section select { background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; cursor: pointer; font-size: 14px; }
+        .sidebar-section label { display:flex; flex-direction:column; font-size:14px; }
+        .sidebar-section input { background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius:4px; padding:6px 8px; margin-top:4px; font-size:14px; }
     </style>
 </head>
 <body>
@@ -196,7 +198,16 @@
                 <div class="history-container" id="prompt-list"></div>
             </div>
             <div id="more-section" style="display:none;">
-                <button id="open-settings-btn" class="new-chat">Settings</button>
+                <button id="open-settings-btn" class="new-chat">Local Settings</button>
+                <div class="sidebar-section" id="generation-settings">
+                    <label>Max Tokens <input id="max-tokens-input" type="number" min="1"></label>
+                    <label>Temperature <input id="temperature-input" type="number" step="0.01"></label>
+                    <label>Top K <input id="top-k-input" type="number" min="0"></label>
+                    <label>Top P <input id="top-p-input" type="number" step="0.01" min="0" max="1"></label>
+                    <label>Min P <input id="min-p-input" type="number" step="0.01" min="0" max="1"></label>
+                    <label>Repeat Penalty <input id="repeat-penalty-input" type="number" step="0.01" min="0"></label>
+                    <button id="server-settings-save-btn">Save</button>
+                </div>
                 <button id="system-toggle" class="new-chat" style="display:none;margin-top:10px;">⚙️ Last Prompt</button>
             </div>
         </div>
@@ -274,13 +285,15 @@
                 userName: 'You',
                 botName: 'Bot',
                 theme: 'light',
-                textSize: 'medium',
-                maxTokens: 250,
+                textSize: 'medium'
+            },
+            serverSettings: {
+                max_tokens: 250,
                 temperature: 0.8,
-                topK: 40,
-                topP: 0.95,
-                minP: 0.05,
-                repeatPenalty: 1.1
+                top_k: 40,
+                top_p: 0.95,
+                min_p: 0.05,
+                repeat_penalty: 1.1
             },
             isGenerating: false
         };
@@ -311,6 +324,7 @@
         const topPInput        = document.getElementById('top-p-input');
         const minPInput        = document.getElementById('min-p-input');
         const repeatPenaltyInput = document.getElementById('repeat-penalty-input');
+        const serverSettingsSaveBtn = document.getElementById('server-settings-save-btn');
         const hideTab          = document.getElementById('hide-tab');
         const chatTab          = document.getElementById('chat-tab');
         const promptTab        = document.getElementById('prompt-tab');
@@ -343,12 +357,24 @@
         function loadSettings(){
             const saved = localStorage.getItem('clientSettings');
             if(saved){
-                try{ Object.assign(state.settings, JSON.parse(saved)); }catch{}
+                try{
+                    const obj = JSON.parse(saved);
+                    if(obj.userName) state.settings.userName = obj.userName;
+                    if(obj.botName)  state.settings.botName  = obj.botName;
+                    if(obj.theme)    state.settings.theme    = obj.theme;
+                    if(obj.textSize) state.settings.textSize = obj.textSize;
+                }catch{}
             }
         }
 
         function saveSettings(){
-            localStorage.setItem('clientSettings', JSON.stringify(state.settings));
+            const obj = {
+                userName: state.settings.userName,
+                botName: state.settings.botName,
+                theme: state.settings.theme,
+                textSize: state.settings.textSize
+            };
+            localStorage.setItem('clientSettings', JSON.stringify(obj));
         }
 
         function loadTheme(){
@@ -359,6 +385,42 @@
         function loadTextSize(){
             applyTextSize(state.settings.textSize);
             textSizeSelect.value = state.settings.textSize;
+        }
+
+        async function loadServerSettings(){
+            try{
+                const res = await fetch('/settings');
+                if(!res.ok) return;
+                const data = await res.json();
+                state.serverSettings = data;
+                maxTokensInput.value     = data.max_tokens ?? '';
+                temperatureInput.value   = data.temperature ?? '';
+                topKInput.value          = data.top_k ?? '';
+                topPInput.value          = data.top_p ?? '';
+                minPInput.value          = data.min_p ?? '';
+                repeatPenaltyInput.value = data.repeat_penalty ?? '';
+            }catch(e){ console.error('Failed to load server settings:', e); }
+        }
+
+        async function saveServerSettings(){
+            const payload = {
+                max_tokens: parseInt(maxTokensInput.value) || 1,
+                temperature: parseFloat(temperatureInput.value) || 0,
+                top_k: parseInt(topKInput.value) || 0,
+                top_p: parseFloat(topPInput.value) || 0,
+                min_p: parseFloat(minPInput.value) || 0,
+                repeat_penalty: parseFloat(repeatPenaltyInput.value) || 0
+            };
+            try{
+                const res = await fetch('/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+                if(!res.ok){
+                    const err = await res.json();
+                    alert('Error: ' + (err.detail || res.status));
+                    return;
+                }
+                state.serverSettings = {...state.serverSettings, ...payload};
+                alert('Settings saved');
+            }catch(e){ console.error('Failed to save server settings:', e); }
         }
 
        function openSettings(){
@@ -791,13 +853,7 @@
                     body: JSON.stringify({
                         chat_id: state.currentChatId,
                         message: text,
-                        global_prompt: state.currentPrompt,
-                        max_tokens: state.settings.maxTokens,
-                        temperature: state.settings.temperature,
-                        top_k: state.settings.topK,
-                        top_p: state.settings.topP,
-                        min_p: state.settings.minP,
-                        repeat_penalty: state.settings.repeatPenalty
+                        global_prompt: state.currentPrompt
                     }),
                     signal: abortController.signal
                 });
@@ -888,6 +944,7 @@
             // prompt selection handled in render
             openSettingsBtn.addEventListener('click', openSettings);
             settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
+            serverSettingsSaveBtn.addEventListener('click', saveServerSettings);
             settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
             sendButton.addEventListener('click', () => {
                 if(userInput.value.trim()===''){
@@ -919,6 +976,7 @@
             await fetchChatList();
             if(state.currentChatId) await loadChat(state.currentChatId);
             await refreshGlobalPromptList();
+            await loadServerSettings();
             autoResize();
         })();
     </script>

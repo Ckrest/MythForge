@@ -622,5 +622,22 @@ def log_message(req: ChatRequest):
 
     return {"detail": "Message recorded"}
 
+# ========== Settings Endpoints ==========
+@app.get("/settings")
+def get_settings():
+    return SETTINGS
+
+@app.put("/settings")
+def update_settings(data: Dict[str, object]):
+    """Update settings and persist them to ``settings.json``."""
+    SETTINGS.update(data)
+    save_json(SETTINGS_PATH, SETTINGS)
+    for key in ("temperature", "top_k", "top_p", "min_p", "repeat_penalty", "stop"):
+        if key in SETTINGS:
+            GENERATION_CONFIG[key] = SETTINGS[key]
+    global DEFAULT_MAX_TOKENS
+    DEFAULT_MAX_TOKENS = SETTINGS.get("max_tokens", DEFAULT_MAX_TOKENS)
+    return {"detail": "Updated", "settings": SETTINGS}
+
 # ========== Static UI Mount ==========
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
