@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from llama_cpp import Llama
+from lmstudio_prompter import render_prompt, GENERATION_CONFIG
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -197,15 +198,18 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
     # Random injection every other message
     injection = get_injection() if message_index % 2 == 0 else ""
 
-    # Build the prompt text
-    messages = []
+    # Build the message list for the LM Studio template
+    system_content = system_prompt + ("\n" + injection if injection else "")
+    messages = [{"role": "system", "content": system_content}]
+
     for m in context:
         if m.get("type") == "summary":
-            messages.append(f"SUMMARY: {m['content']}")
+            messages.append({"role": "system", "content": f"SUMMARY: {m['content']}"})
         else:
-            messages.append(f"{m['role']}: {m['content']}")
+            role = "assistant" if m["role"] == "bot" else m["role"]
+            messages.append({"role": role, "content": m["content"]})
 
-    prompt_str = f"{system_prompt}\n{injection}\n" + "\n".join(messages)
+    prompt_str = render_prompt(messages)
     return prompt_str
 
 # ========== Standard Chat Endpoints ==========
@@ -254,7 +258,16 @@ def chat(req: ChatRequest):
     message_index = len(load_json(full_path))
     prompt = build_prompt(chat_id, user_message, message_index, global_prompt)
 
-    output = llm(prompt, max_tokens=250)
+    output = llm(
+        prompt,
+        max_tokens=250,
+        temperature=GENERATION_CONFIG["temperature"],
+        top_k=GENERATION_CONFIG["top_k"],
+        top_p=GENERATION_CONFIG["top_p"],
+        min_p=GENERATION_CONFIG["min_p"],
+        repeat_penalty=GENERATION_CONFIG["repeat_penalty"],
+        stop=GENERATION_CONFIG["stop"],
+    )
     response_text = output["choices"][0]["text"].strip()
 
     # Append bot to full history
@@ -307,7 +320,17 @@ def chat_stream(req: ChatRequest):
         text_accumulator = ""
 
         # Next, stream the model’s token chunks
-        for output in llm(prompt, max_tokens=250, stream=True):
+        for output in llm(
+            prompt,
+            max_tokens=250,
+            stream=True,
+            temperature=GENERATION_CONFIG["temperature"],
+            top_k=GENERATION_CONFIG["top_k"],
+            top_p=GENERATION_CONFIG["top_p"],
+            min_p=GENERATION_CONFIG["min_p"],
+            repeat_penalty=GENERATION_CONFIG["repeat_penalty"],
+            stop=GENERATION_CONFIG["stop"],
+        ):
             chunk = output["choices"][0]["text"]
             text_accumulator += chunk
             yield chunk
