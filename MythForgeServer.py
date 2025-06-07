@@ -92,6 +92,14 @@ def get_injection():
         lines = [line.strip() for line in f if line.strip()]
     return random.choice(lines) if lines else ""
 
+def strip_leading_tag(text: str, tag: str) -> str:
+    """Remove a leading ``tag:`` from ``text`` if present."""
+    text = text.lstrip()
+    prefix = f"{tag}:"
+    if text.lower().startswith(prefix.lower()):
+        return text[len(prefix):].lstrip()
+    return text
+
 # ─── Global Prompts CRUD ─────────────────────────────────────────────────
 def load_global_prompts():
     if not os.path.exists(GLOBAL_PROMPTS_FILE):
@@ -234,7 +242,7 @@ def build_prompt(chat_id, user_message, message_index, global_prompt_name):
         user_message,
         assistant_name,
     )
-    return prompt_str
+    return prompt_str, assistant_name
 
 # ========== Standard Chat Endpoints ==========
 @app.get("/chats")
@@ -280,11 +288,14 @@ def chat(req: ChatRequest):
         save_json(trimmed_path, [])
 
     message_index = len(load_json(full_path))
-    prompt = build_prompt(chat_id, user_message, message_index, global_prompt)
+    prompt, assistant_name = build_prompt(
+        chat_id, user_message, message_index, global_prompt
+    )
 
     # Generate the assistant response using LM Studio generation settings
     output = llm(prompt, max_tokens=250, **GENERATION_CONFIG)
     response_text = output["choices"][0]["text"].strip()
+    response_text = strip_leading_tag(response_text, assistant_name)
 
     # Append bot to full history
     full_log = load_json(full_path)
@@ -323,7 +334,9 @@ def chat_stream(req: ChatRequest):
 
     # 1) Build prompt
     message_index = len(load_json(full_path))
-    prompt = build_prompt(chat_id, user_message, message_index, global_prompt)
+    prompt, assistant_name = build_prompt(
+        chat_id, user_message, message_index, global_prompt
+    )
 
 
     # build_prompt() already saved the user's message to both history files,
@@ -334,17 +347,35 @@ def chat_stream(req: ChatRequest):
         meta = json.dumps({"prompt": prompt}, ensure_ascii=False)
         yield meta + "\n"
 
-        # Prepare to accumulate the bot’s full response
         text_accumulator = ""
+        pending = ""
+        prefix_trimmed = False
+        prefix = f"{assistant_name}:"
 
-        # Next, stream the model’s token chunks
         for output in llm(prompt, max_tokens=250, stream=True, **GENERATION_CONFIG):
             chunk = output["choices"][0]["text"]
-            text_accumulator += chunk
-            # Each chunk is newline-delimited so the frontend can parse
-            yield chunk + "\n"
+            if prefix_trimmed:
+                text_accumulator += chunk
+                yield chunk + "\n"
+                continue
+
+            pending += chunk
+            check = pending.lstrip()
+            if check.lower().startswith(prefix.lower()):
+                if len(check) > len(prefix):
+                    trimmed = strip_leading_tag(check, assistant_name)
+                    text_accumulator += trimmed
+                    yield trimmed + "\n"
+                    prefix_trimmed = True
+                    pending = ""
+            else:
+                text_accumulator += pending
+                yield pending + "\n"
+                prefix_trimmed = True
+                pending = ""
 
         # Once done, append full bot response to both histories:
+        text_accumulator = strip_leading_tag(text_accumulator, assistant_name)
 
         # (1) Full history
         full_history = load_json(full_path)
