@@ -272,7 +272,6 @@
         const newPromptBtn     = document.getElementById('new-prompt-btn');
         const renamePromptBtn  = document.getElementById('rename-prompt-btn');
         const deletePromptBtn  = document.getElementById('delete-prompt-btn');
-        const deleteChatBtn    = document.getElementById('delete-chat-btn');
         const systemToggle     = document.getElementById('system-toggle');
         const systemContainer  = document.getElementById('system-container');
         const systemPrompt     = document.getElementById('system-prompt');
@@ -775,7 +774,6 @@
             });
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
-            deleteChatBtn.addEventListener('click', deleteChat);
             newPromptBtn.addEventListener('click', addNewPrompt);
             renamePromptBtn.addEventListener('click', ()=>openPromptEditor(state.currentPrompt));
             deletePromptBtn.addEventListener('click', deletePrompt);
