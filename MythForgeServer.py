@@ -462,8 +462,6 @@ def build_prompt(chat_id, user_message, global_prompt_name):
 
     # Incorporate character state and goals if available
     state = load_state(chat_id)
-    check_and_generate_goals(call_llm, chat_id)
-    state = load_state(chat_id)
     fragment = state_as_prompt_fragment(state)
     if fragment:
         system_prompt = system_prompt + "\n" + fragment

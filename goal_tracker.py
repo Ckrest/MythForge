@@ -179,27 +179,59 @@ def generate_goals(call_fn, character_profile: Dict[str, Any], scene_context: Di
     return []
 
 
+def extract_scene_context(text: str) -> str:
+    """Return a basic scene context extracted from ``text``."""
+    return text.strip()
+
+
+def extract_character_profile(text: str) -> str:
+    """Return a basic character profile extracted from ``text``."""
+    return text.strip()
+
+
 def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: str, first_assistant: str) -> None:
-    logger.info("Generating initial state", extra={"chat_id": chat_id})
+    """Populate ``scene_context`` and ``character_profile`` from the first exchange."""
+    logger.info("Ensuring initial state", extra={"chat_id": chat_id})
     state = load_state(chat_id)
-    if state.get("character_profile") is not None:
-        return
-    if "**goals**" not in global_prompt.lower():
-        return
-    data = generate_initial_state(call_fn, global_prompt, first_user, first_assistant)
-    state.update(data)
+    if state.get("scene_context") is None:
+        state["scene_context"] = extract_scene_context(first_user)
+    if state.get("character_profile") is None:
+        state["character_profile"] = extract_character_profile(first_assistant)
     save_state(chat_id, state)
 
 
+def parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
+    """Parse a goal list from LLM ``text`` response."""
+    model = _parse_json(text, GoalsListModel)
+    if model is not None:
+        return [g.dict() for g in model.goals]
+    try:
+        data = json.loads(_extract_json(text))
+        if isinstance(data, list):
+            return [g for g in data if isinstance(g, dict)]
+    except Exception:
+        pass
+    return []
+
+
 def check_and_generate_goals(call_fn, chat_id: str) -> None:
+    """Generate goals if none exist using current state."""
     logger.info("Checking for missing goals", extra={"chat_id": chat_id})
     state = load_state(chat_id)
-    if state.get("character_profile") and state.get("scene_context") and not state.get("goals"):
-        goals = generate_goals(call_fn, state["character_profile"], state["scene_context"])
-        state["goals"] = goals
-        save_state(chat_id, state)
-    else:
-        logger.debug("Goals already present or character state incomplete", extra={"chat_id": chat_id})
+    if state.get("goals"):
+        return
+    fragment = state_as_prompt_fragment(state)
+    if not fragment:
+        logger.debug("Character state incomplete", extra={"chat_id": chat_id})
+        return
+    prompt = (
+        f"{fragment}\n\nBased on the above, identify 2–3 actionable goals for the character."
+    )
+    output = call_fn(prompt, max_tokens=200)
+    text = output["choices"][0]["text"].strip()
+    goals = parse_goals_from_response(text)
+    state["goals"] = goals
+    save_state(chat_id, state)
 
 
 def _load_json(path: str):
@@ -367,27 +399,13 @@ def record_assistant_message(chat_id: str) -> bool:
 
 
 def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
-    lines = []
-    cp = state.get("character_profile")
-    sc = state.get("scene_context")
-    gs = state.get("goals", [])
-    if cp:
-        lines.append("[CHARACTER PROFILE]")
-        for k, v in cp.items():
-            lines.append(f"- {k}: {v}")
-    if sc:
-        lines.append("\n[SCENE CONTEXT]")
-        for k, v in sc.items():
-            lines.append(f"- {k}: {v}")
-    if gs:
-        lines.append("\n[CURRENT GOALS]")
-        for g in gs:
-            status = g.get("status")
-            desc = f"- {g.get('id')}: {g.get('description')} ({g.get('method')})"
-            if status:
-                desc += f" [{status}]"
-            lines.append(desc)
-    return "\n".join(lines)
+    """Return a short prompt fragment describing the current state."""
+    fragments: List[str] = []
+    if state.get("scene_context"):
+        fragments.append(f"Scene Context:\n{state['scene_context']}")
+    if state.get("character_profile"):
+        fragments.append(f"Character Profile:\n{state['character_profile']}")
+    return "\n\n".join(fragments)
 
 # Apply automatic logging to all functions in this module
 import sys
