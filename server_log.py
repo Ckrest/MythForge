@@ -4,6 +4,7 @@ import datetime
 import atexit
 import functools
 import inspect
+from typing import Any, Dict
 
 LOG_DIR = "server_logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -51,6 +52,12 @@ def log_entry(tag: str, func, args, kwargs, result) -> None:
     # Immediately persist logs so the file exists even if the process
     # is long-running.  This ensures that a log file is created as soon
     # as the first entry is recorded instead of only on shutdown.
+    _flush()
+
+
+def log_event(tag: str, data: Dict[str, Any]) -> None:
+    entry = {"time": datetime.datetime.now().isoformat(), "tag": tag, **data}
+    _log_data.append(entry)
     _flush()
 
 
