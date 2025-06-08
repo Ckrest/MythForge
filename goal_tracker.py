@@ -290,6 +290,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
             state["goals"] = goals
             state["messages_since_goal_eval"] = 0
             save_state(chat_id, state)
+            print(f"Goals updated for {chat_id}: {goals}")
             return
         else:
             log_event("goals_parse_failed", {"raw": text})
@@ -369,6 +370,8 @@ def parse_and_merge_goals(data: GoalsListModel, state: Dict[str, Any], min_activ
             if len(active) >= min_active:
                 break
         state["goals"] = active
+
+    print(f"Goals updated: {active}")
 
 
 def _error_path(chat_id: str) -> str:
