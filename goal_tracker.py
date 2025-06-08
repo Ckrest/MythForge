@@ -240,12 +240,24 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         f"{fragment}\n\nBased on the above, identify 2–3 actionable goals for the character."
     )
     logger.debug("Goal generation prompt:\n%s", prompt, extra={"chat_id": chat_id})
-    output = call_fn(prompt, max_tokens=200)
-    text = output["choices"][0]["text"].strip()
-    goals = parse_goals_from_response(text)
-    state["goals"] = goals
-    state["messages_since_goal_eval"] = 0
-    save_state(chat_id, state)
+    for attempt in range(1, 4):
+        output = call_fn(prompt, max_tokens=200)
+        text = output["choices"][0]["text"].strip()
+        logger.debug(
+            "Goal generation attempt %d raw output:\n%s",
+            attempt,
+            text,
+            extra={"chat_id": chat_id},
+        )
+        goals = parse_goals_from_response(text)
+        if goals:
+            state["goals"] = goals
+            state["messages_since_goal_eval"] = 0
+            save_state(chat_id, state)
+            return
+    logger.warning(
+        "Goal generation failed after 3 attempts", extra={"chat_id": chat_id}
+    )
 
 
 def _load_json(path: str):
