@@ -66,7 +66,7 @@ def format_llama3(
     if instruction.strip():
         messages.append({"role": "user", "content": instruction.strip()})
 
-    lines = ["<|begin_of_text|>"]
+    lines: List[str] = []
     for m in messages:
         lines.append(f"<|start_header_id|>{m['role']}<|end_header_id|>")
         lines.append("")
@@ -78,8 +78,8 @@ def format_llama3(
     lines.append("")
 
     prompt = "\n".join(lines)
-    # Guard against accidental duplication of the begin token
-    prompt = re.sub(r"^(<\|begin_of_text\|>)+", "<|begin_of_text|>", prompt)
+    # Strip any stray ``<|begin_of_text|>`` tokens at the start
+    prompt = re.sub(r"^(<\|begin_of_text\|>)+", "", prompt)
     return prompt
 
 
