@@ -272,12 +272,36 @@ def load_global_prompts():
             print(f"Ignoring invalid global prompt file: {fname}")
     return prompts
 
+def list_prompt_names() -> List[str]:
+    """Return only the names of available global prompts."""
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    names: List[str] = []
+    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
+        if not fname.lower().endswith(".json"):
+            continue
+        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Failed to load prompt '{fname}': {e}")
+            continue
+        if isinstance(data, dict) and "name" in data:
+            names.append(data["name"])
+    return names
+
 def get_global_prompt_content(name: str) -> str | None:
     """Return the content string for a prompt ``name`` if it exists."""
-    for prompt in load_global_prompts():
-        if prompt["name"] == name:
-            return prompt["content"]
-    return None
+    path = _prompt_path(name)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("content") if isinstance(data, dict) else None
+    except Exception as e:
+        print(f"Failed to load prompt '{name}': {e}")
+        return None
 
 
 def save_global_prompt(prompt: Dict[str, str]):
@@ -293,13 +317,21 @@ def delete_global_prompt(name: str):
         os.remove(path)
 
 @app.get("/prompts")
-def list_prompts():
+def list_prompts(names_only: bool = False):
+    if names_only:
+        return {"prompts": list_prompt_names()}
     return {"prompts": load_global_prompts()}
+
+@app.get("/prompts/{name}")
+def fetch_prompt(name: str):
+    content = get_global_prompt_content(name)
+    if content is None:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"name": name, "content": content}
 
 @app.post("/prompts")
 def create_prompt(item: PromptItem):
-    prompts = load_global_prompts()
-    if any(p["name"] == item.name for p in prompts):
+    if os.path.exists(_prompt_path(item.name)):
         raise HTTPException(status_code=400, detail="Prompt name already exists")
     save_global_prompt({"name": item.name, "content": item.content})
     return {"detail": "Created", "prompt": {"name": item.name, "content": item.content}}
@@ -308,8 +340,7 @@ def create_prompt(item: PromptItem):
 def update_prompt(name: str, item: PromptItem):
     if item.name != name:
         raise HTTPException(status_code=400, detail="Cannot rename prompt; delete & recreate instead")
-    prompts = load_global_prompts()
-    if not any(p["name"] == name for p in prompts):
+    if not os.path.exists(_prompt_path(name)):
         raise HTTPException(status_code=404, detail="Prompt not found")
     save_global_prompt({"name": name, "content": item.content})
     return {"detail": "Updated", "prompt": {"name": name, "content": item.content}}
@@ -321,10 +352,9 @@ def rename_prompt(name: str, data: Dict[str, str]):
     new_name = data.get("new_name", "").strip()
     if not new_name:
         raise HTTPException(status_code=400, detail="New name required")
-    prompts = load_global_prompts()
-    if not any(p["name"] == name for p in prompts):
+    if not os.path.exists(_prompt_path(name)):
         raise HTTPException(status_code=404, detail="Prompt not found")
-    if any(p["name"] == new_name and p["name"] != name for p in prompts):
+    if os.path.exists(_prompt_path(new_name)) and new_name != name:
         raise HTTPException(status_code=400, detail="Prompt name already exists")
 
     same_name = new_name == name
@@ -344,8 +374,7 @@ def rename_prompt(name: str, data: Dict[str, str]):
 
 @app.delete("/prompts/{name}")
 def delete_prompt(name: str):
-    prompts = load_global_prompts()
-    if not any(p["name"] == name for p in prompts):
+    if not os.path.exists(_prompt_path(name)):
         raise HTTPException(status_code=404, detail="Prompt not found")
     delete_global_prompt(name)
     return {"detail": f"Deleted prompt '{name}'"}
@@ -427,8 +456,7 @@ def build_prompt(chat_id, user_message, global_prompt_name):
     save_json(trimmed_path, context)
 
     # Determine system prompt
-    all_prompts = load_global_prompts()
-    chosen_content = next((p["content"] for p in all_prompts if p["name"] == global_prompt_name), None)
+    chosen_content = get_global_prompt_content(global_prompt_name)
     system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
     assistant_name = "assistant"
 
