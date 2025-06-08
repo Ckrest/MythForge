@@ -240,9 +240,14 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         f"{fragment}\n\nBased on the above, identify 2–3 actionable goals for the character."
     )
     logger.debug("Goal generation prompt:\n%s", prompt, extra={"chat_id": chat_id})
+    # Log full prompt for debugging before sending to the LLM
+    logger.info("LLM goal prompt", extra={"chat_id": chat_id, "prompt": prompt})
     output = call_fn(prompt, max_tokens=200)
     text = output["choices"][0]["text"].strip()
+    logger.info("LLM goal raw output", extra={"chat_id": chat_id, "output": text})
     goals = parse_goals_from_response(text)
+    if not goals:
+        logger.warning("Goal parsing returned no results", extra={"chat_id": chat_id})
     state["goals"] = goals
     state["messages_since_goal_eval"] = 0
     save_state(chat_id, state)
