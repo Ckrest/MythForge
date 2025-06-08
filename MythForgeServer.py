@@ -496,6 +496,17 @@ def list_chats():
     chat_ids = [d for d in os.listdir(CHATS_DIR) if os.path.isdir(os.path.join(CHATS_DIR, d))]
     return {"chats": chat_ids}
 
+@app.post("/chats/{chat_id}")
+def create_chat(chat_id: str):
+    """Create an empty chat directory for ``chat_id``."""
+    chat_dir = os.path.join(CHATS_DIR, chat_id)
+    if os.path.exists(chat_dir):
+        raise HTTPException(status_code=400, detail="Chat already exists")
+    os.makedirs(chat_dir, exist_ok=True)
+    save_json(chat_file(chat_id, "full.json"), [])
+    save_json(chat_file(chat_id, "trimmed.json"), [])
+    return {"detail": f"Created chat '{chat_id}'"}
+
 @app.get("/history/{chat_id}")
 def get_history(chat_id: str):
     path = chat_file(chat_id, "full.json")
