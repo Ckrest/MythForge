@@ -104,5 +104,11 @@ def main() -> None:
     print(result)
 
 
+# Apply automatic logging to all functions in this module
+import sys
+from server_log import patch_module_functions
+patch_module_functions(sys.modules[__name__], "formatting")
+
+
 if __name__ == "__main__":
     main()
