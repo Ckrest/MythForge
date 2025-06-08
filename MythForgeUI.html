@@ -151,6 +151,7 @@
         .message-menu button:hover { background-color: var(--hover-color); }
         pre { background-color: var(--code-bg); color: var(--code-color); padding: 10px; border-radius: 4px; overflow-x: auto; }
         textarea { width: 100%; padding: 12px 110px 12px 12px; border: 1px solid var(--border-color); border-radius: 6px; resize: none; min-height: 24px; max-height: 200px; overflow-y: auto; font-family: inherit; font-size: var(--message-font-size); line-height: 1.4; background-color: var(--input-bg); color: var(--text-color); }
+        textarea.blocked { border: 2px solid var(--primary); }
         textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--shadow-color); }
         .input-area { border-top: 1px solid var(--border-color); padding: 20px; background-color: var(--bg-color); position: relative; }
         .input-container { display: flex; width: 100%; max-width: none; margin: 0; position: relative; }
@@ -840,6 +841,7 @@
             const disabled = state.isGenerating || state.isProcessing;
             sendButton.disabled = disabled;
             sendOnlyButton.disabled = userInput.value.trim()==='' || disabled;
+            userInput.classList.toggle('blocked', disabled);
             userInput.placeholder = state.isProcessing ? 'Generating...' : 'Type a message...';
             promptIndicator.style.display = 'none';
         }
