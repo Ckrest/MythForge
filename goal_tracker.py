@@ -213,17 +213,49 @@ def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: 
 
 
 def parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
-    """Parse a goal list from LLM ``text`` response."""
+    """Parse a goal list from LLM text response, robust to various formats."""
+    # 1. Try strict JSON via Pydantic model
     model = _parse_json(text, GoalsListModel)
     if model is not None:
         return [g.dict() for g in model.goals]
+
+    # 2. Try manual JSON extraction
+    extracted = _extract_json(text)
     try:
-        data = json.loads(_extract_json(text))
+        data = json.loads(extracted)
+        # Handle {"goals": [...]} structure
+        if isinstance(data, dict) and "goals" in data and isinstance(data["goals"], list):
+            goals = []
+            for g in data["goals"]:
+                if isinstance(g, dict):
+                    goals.append(g)
+                elif isinstance(g, str):
+                    goals.append({"text": g})
+            return goals
+        # Handle top-level list
         if isinstance(data, list):
-            return [g for g in data if isinstance(g, dict)]
-    except Exception:
+            goals = []
+            for g in data:
+                if isinstance(g, dict):
+                    goals.append(g)
+                elif isinstance(g, str):
+                    goals.append({"text": g})
+            return goals
+    except json.JSONDecodeError:
         pass
-    return []
+
+    # 3. Fallback: numbered/bulleted lists
+    numbered = re.findall(r'^\s*\d+[\.)]\s*(.+)$', text, flags=re.MULTILINE)
+    if numbered:
+        return [{"text": item.strip()} for item in numbered]
+
+    bullets = re.findall(r'^\s*[-\*•]\s*(.+)$', text, flags=re.MULTILINE)
+    if bullets:
+        return [{"text": item.strip()} for item in bullets]
+
+    # 4. Fallback: each non-empty line
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return [{"text": line} for line in lines]
 
 
 def check_and_generate_goals(call_fn, chat_id: str) -> None:
