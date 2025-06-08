@@ -181,6 +181,9 @@ def evaluate_goals(call_fn, chat_id: str) -> None:
 
 
 def record_user_message(chat_id: str) -> None:
+    path = _state_path(chat_id)
+    if not os.path.exists(path):
+        return
     state = load_state(chat_id)
     state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
     save_state(chat_id, state)
@@ -188,6 +191,9 @@ def record_user_message(chat_id: str) -> None:
 
 def record_assistant_message(chat_id: str) -> bool:
     """Increment message counter and return True if goal evaluation is due."""
+    path = _state_path(chat_id)
+    if not os.path.exists(path):
+        return False
     state = load_state(chat_id)
     state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
     save_state(chat_id, state)
