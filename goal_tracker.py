@@ -337,41 +337,6 @@ def build_prompt(convo: List[Dict[str, str]], instruction: str) -> str:
     return format_llama3("", None, convo, instruction)
 
 
-def parse_and_merge_goals(data: GoalsListModel, state: Dict[str, Any], min_active: int, call_fn) -> None:
-    completed = state.get("completed_goals", [])
-    active = []
-    seen_ids = {g.get("id") for g in completed}
-    for g in data.goals:
-        status = (g.status or "").lower()
-        if status in ("completed", "abandoned"):
-            completed.append(g.dict())
-            seen_ids.add(g.id)
-            continue
-        if g.id in seen_ids:
-            continue
-        active.append(g.dict())
-        seen_ids.add(g.id)
-
-    state["completed_goals"] = completed
-    state["goals"] = active
-
-    if (
-        len(active) < min_active
-        and state.get("character_profile")
-        and state.get("scene_context")
-    ):
-        new_goals = generate_goals(call_fn, state["character_profile"], state["scene_context"])
-        for g in new_goals:
-            gid = g.get("id")
-            if not gid or gid in seen_ids:
-                continue
-            active.append(g)
-            seen_ids.add(gid)
-            if len(active) >= min_active:
-                break
-        state["goals"] = active
-
-    print(f"Goals updated: {active}")
 
 
 def _error_path(chat_id: str) -> str:
@@ -403,26 +368,33 @@ def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListMode
     return None
 
 
-def evaluate_goals(call_fn, chat_id: str, history_window: int = HISTORY_WINDOW, min_active: int = MIN_ACTIVE_GOALS, max_retries: int = 3) -> None:
-    """Evaluate progress on current goals based on recent conversation."""
+def evaluate_and_update_goals(
+    call_fn,
+    chat_id: str,
+    history_window: int = HISTORY_WINDOW,
+    min_active: int = MIN_ACTIVE_GOALS,
+    max_retries: int = 3,
+) -> None:
+    """Evaluate progress on goals and replenish if needed."""
+
     state, convo = load_and_prepare_state(chat_id, history_window)
     goals = state.get("goals") or []
     if not goals:
         logger.info("No goals to evaluate", extra={"chat_id": chat_id})
         return
 
+    goals_json = json.dumps(goals, ensure_ascii=False)
     instruction = (
-        "Evaluate the character's goals based solely on the recent messages. "
-        "For each goal decide if it is completed, in_progress, needs_tactics, or abandoned. "
-        "Add new short term goals only when others are completed or abandoned. "
-        "You must respond with ONLY valid JSON exactly matching this schema:\n"
-        '{"goals": [{"id": "<id>", "description": "<desc>", "method": "<method>", "status": "<status>"}]}'
+        "Given the recent conversation, update the status of each goal in this list:\n"
+        f"{goals_json}\n"
+        "Return ONLY JSON like:\n"
+        '{"goals": [{"id": "g1", "description": "...", "method": "...", "status": "completed"}]}\n'
+        "Status must be one of: in_progress, completed, abandoned."
     )
 
     prompt = build_prompt(convo, instruction)
     logger.debug("Goal evaluation prompt:\n%s", prompt)
 
-    # Trim context if it exceeds threshold (approx token count)
     while len(prompt.split()) > 3500 and convo:
         convo.pop(0)
         prompt = build_prompt(convo, instruction)
@@ -431,23 +403,67 @@ def evaluate_goals(call_fn, chat_id: str, history_window: int = HISTORY_WINDOW, 
 
     backoff = 1.0
     for attempt in range(max_retries):
-        try:
-            output = call_fn(prompt, max_tokens=300)
-            text = output["choices"][0]["text"].strip()
-            logger.debug("Goal evaluation raw output:\n%s", text)
-            model = format_goal_eval_response(text, chat_id)
-            if model is None:
-                raise ValueError("invalid json")
-            parse_and_merge_goals(model, state, min_active, call_fn)
-            state["messages_since_goal_eval"] = 0
-            save_state(chat_id, state)
-            return
-        except Exception as e:
-            logger.warning("Goal evaluation attempt %s failed: %s", attempt + 1, e, extra={"chat_id": chat_id})
+        output = call_fn(prompt, max_tokens=300)
+        text = output["choices"][0]["text"].strip()
+        logger.debug("Goal evaluation raw output:\n%s", text)
+        model = format_goal_eval_response(text, chat_id)
+        if model is None:
+            logger.warning(
+                "Goal evaluation attempt %s returned invalid json", attempt + 1, extra={"chat_id": chat_id}
+            )
             time.sleep(backoff)
             backoff *= 2
+            continue
 
-    # If we get here, all retries failed
+        completed = state.get("completed_goals", [])
+        active = []
+        seen_ids = {g.get("id") for g in completed}
+        seen_desc = {g.get("description", "").lower() for g in completed}
+
+        for g in model.goals:
+            status = (g.status or "in_progress").lower()
+            if status in ("completed", "abandoned"):
+                if g.id not in seen_ids:
+                    completed.append(g.dict())
+                    seen_ids.add(g.id)
+                    seen_desc.add(g.description.lower())
+                continue
+            if g.id in seen_ids or g.description.lower() in seen_desc:
+                continue
+            active.append(g.dict())
+            seen_ids.add(g.id)
+            seen_desc.add(g.description.lower())
+
+        state["completed_goals"] = completed
+        state["goals"] = active
+        state["messages_since_goal_eval"] = 0
+
+        in_progress_count = sum(
+            1 for g in active if (g.get("status") or "in_progress").lower() == "in_progress"
+        )
+
+        if (
+            in_progress_count < min_active
+            and state.get("character_profile")
+            and state.get("scene_context")
+        ):
+            new_goals = generate_goals(call_fn, state["character_profile"], state["scene_context"])
+            for g in new_goals:
+                gid = g.get("id")
+                desc = g.get("description", "").lower()
+                if gid in seen_ids or desc in seen_desc:
+                    continue
+                active.append(g)
+                seen_ids.add(gid)
+                seen_desc.add(desc)
+                if len([x for x in active if (x.get("status") or "in_progress").lower() == "in_progress"]) >= min_active:
+                    break
+            state["goals"] = active
+
+        save_state(chat_id, state)
+        logger.debug("Goals updated: %s", active)
+        return
+
     logger.warning("Goal evaluation failed after retries", extra={"chat_id": chat_id})
     save_state(chat_id, state)
 

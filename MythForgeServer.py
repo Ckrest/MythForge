@@ -18,7 +18,7 @@ from goal_tracker import (
     state_as_prompt_fragment,
     record_user_message,
     record_assistant_message,
-    evaluate_goals,
+    evaluate_and_update_goals,
 )
 from llama_cpp import Llama
 
@@ -647,7 +647,7 @@ def chat(req: ChatRequest):
     full_log.append({"role": "bot", "content": response_text})
     save_json(full_path, full_log)
     if record_assistant_message(chat_id):
-        enqueue_response_prompt(lambda: evaluate_goals(call_llm, chat_id))
+        enqueue_response_prompt(lambda: evaluate_and_update_goals(call_llm, chat_id))
     if len(full_log) == 2:
         first_user = full_log[0].get("content", "") if full_log else ""
         gprompt_content = get_global_prompt_content(global_prompt) or ""
@@ -757,7 +757,7 @@ def chat_stream(req: ChatRequest):
         full_history.append({"role": "bot", "content": text_accumulator})
         save_json(full_path, full_history)
         if record_assistant_message(chat_id):
-            enqueue_response_prompt(lambda: evaluate_goals(call_llm, chat_id))
+            enqueue_response_prompt(lambda: evaluate_and_update_goals(call_llm, chat_id))
 
         # Goal initialization if this was the first exchange
         if len(full_history) == 2:
