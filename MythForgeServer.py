@@ -89,7 +89,11 @@ GENERATION_CONFIG = {
     # ``n_batch`` is set when ``Llama`` is instantiated. Passing it to
     # ``Llama.__call__`` can break older ``llama_cpp`` versions, so it is
     # intentionally omitted here.
-    "stop": SETTINGS.get("stop", ["<|start_header_id|>", "<|eot_id|>"]),
+    # ``<|start_header_id|>`` is omitted from the default stop list to avoid
+    # the "prefix-match" warnings emitted by ``llama_cpp`` when the model
+    # begins generating the next header token.  ``<|eot_id|>`` alone is
+    # sufficient to mark the end of an assistant message.
+    "stop": SETTINGS.get("stop", ["<|eot_id|>"]),
 }
 DEFAULT_MAX_TOKENS = SETTINGS.get("max_tokens", 250)
 SUMMARIZE_THRESHOLD = SETTINGS.get("summarize_threshold", 20)
