@@ -271,12 +271,26 @@ def summarize_chunk(chunk):
         "",
         None,
         history,
-        "Summarize the above conversation in 2-3 sentences.",
+        (
+            "You are summarizing a SPECIFIC SECTION of a roleplaying interaction. "
+            "Clearly summarize only this designated section.\n\n"
+            "Include:\n\n"
+            "[SECTION CHARACTER SUMMARIES]:\n"
+            "- Character Name: Brief motivation, behavior, actions during this section only.\n\n"
+            "[KEY SECTION EVENTS]:\n"
+            "- Short bullet points highlighting only major events, interactions, or turning points within this section.\n\n"
+            "[SECTION END STATE]:\n"
+            "- Describe briefly the emotional or situational state at the end of this specific section.\n\n"
+            "DO NOT include details or context outside the specified section. "
+            "No assumptions. Be direct and precise."
+        ),
     )
     # Use ``call_llm`` to ensure only supported kwargs are passed to the model
     print("DEBUG raw_prompt:", prompt)
     output = call_llm(prompt, max_tokens=150)
-    return {"type": "summary", "content": output["choices"][0]["text"].strip()}
+    summary_text = output["choices"][0]["text"].strip()
+    wrapped = f"[Summery start]\n{summary_text}\n[Summery end]"
+    return {"type": "summary", "content": wrapped}
 
 def trim_context(chat_id):
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
