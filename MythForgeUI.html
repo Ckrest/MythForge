@@ -112,6 +112,7 @@
         }
         .sidebar button { cursor: pointer; background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; padding: 8px; font-size: 14px; }
         .sidebar button:hover { background-color: var(--sidebar-btn-hover); }
+        .sidebar button.active { background-color: var(--sidebar-btn-hover); }
         .sidebar button.new-chat { padding: 12px; text-align: left; margin-bottom: 20px; display: flex; align-items: center; }
         .history-container { flex-grow: 1; overflow-y: auto; }
         .chat-history-item {
@@ -199,6 +200,7 @@
             </div>
             <div id="prompt-section" style="display:none;">
                 <button class="new-chat" id="new-prompt-btn">New Prompt</button>
+                <button class="new-chat" id="no-prompt-btn">No Prompt</button>
                 <div class="history-container" id="prompt-list"></div>
             </div>
             <div id="more-section" style="display:none;">
@@ -323,6 +325,7 @@
        const themeSelect      = document.getElementById('theme-select');
         const textSizeSelect  = document.getElementById('text-size-select');
         const newPromptBtn     = document.getElementById('new-prompt-btn');
+        const noPromptBtn      = document.getElementById('no-prompt-btn');
         const promptList       = document.getElementById('prompt-list');
         const systemToggle     = document.getElementById('system-toggle');
         const systemContainer  = document.getElementById('system-container');
@@ -567,7 +570,7 @@
             try{
                 const res = await fetch('/chats');
                 const json = await res.json();
-                state.chats = json.chats;
+                state.chats = json.chats.sort((a,b)=>a.localeCompare(b));
                 const last = localStorage.getItem('lastChatId');
                 if(last && state.chats.includes(last)){
                     state.currentChatId = last;
@@ -595,6 +598,7 @@
 
         function renderPromptList(){
             promptList.innerHTML='';
+            noPromptBtn.classList.toggle('active', state.currentPrompt==='');
             state.prompts.forEach(name=>{
                 const div=document.createElement('div');
                 div.className='chat-history-item';
@@ -625,14 +629,14 @@
             try{
                 const res = await fetch('/prompts?names_only=1');
                 const json = await res.json();
-                state.prompts = json.prompts;
+                state.prompts = json.prompts.sort((a,b)=>a.localeCompare(b));
                 const last = localStorage.getItem('lastGlobalPrompt');
                 if(last && state.prompts.includes(last)) state.currentPrompt = last;
                 renderPromptList();
             }catch(e){ console.error('Failed to load prompts:',e); }
         }
 
-        async function addNewPrompt(){
+        function addNewPrompt(){
             const existing = state.prompts.map(p => p.toLowerCase());
             let idx = 1;
             let name = `New Prompt ${idx}`;
@@ -640,37 +644,30 @@
                 idx++;
                 name = `New Prompt ${idx}`;
             }
-            try{
-                const res = await fetch('/prompts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name, content: '' })
-                });
-                if(!res.ok){
-                    const err = await res.json();
-                    return alert('Error: ' + err.detail);
-                }
-                localStorage.setItem('lastGlobalPrompt', name);
-                await refreshGlobalPromptList();
-                state.currentPrompt = name;
-                renderPromptList();
-                await openPromptEditor(name);
-            }catch(e){
-                console.error('Failed to create prompt:', e);
-                alert('Failed: ' + e.message);
-            }
+            state.prompts.push(name);
+            state.prompts.sort((a,b)=>a.localeCompare(b));
+            state.currentPrompt = name;
+            renderPromptList();
+            openPromptEditor(name, true);
         }
 
         let editingPromptName = '';
+        let editingPromptIsNew = false;
 
-        async function openPromptEditor(name=state.currentPrompt){
+        async function openPromptEditor(name=state.currentPrompt, isNew=false){
             if(!name) return alert('Select a prompt first.');
+            editingPromptName = name;
+            editingPromptIsNew = isNew;
+            promptModalTitle.textContent = `Edit Prompt \"${name}\"`;
+            if(isNew){
+                promptInput.value = '';
+                promptModal.style.display = 'flex';
+                return;
+            }
             try{
                 const res = await fetch(`/prompts/${encodeURIComponent(name)}`);
                 if(!res.ok){ alert('Prompt not found.'); return; }
                 const promptObj = await res.json();
-                editingPromptName = name;
-                promptModalTitle.textContent = `Edit Prompt \"${name}\"`;
                 promptInput.value = promptObj.content;
                 promptModal.style.display = 'flex';
             }catch(e){ console.error('Failed to load prompt:', e); }
@@ -679,25 +676,47 @@
         function closePromptEditor(){
             promptModal.style.display = 'none';
             editingPromptName = '';
+            editingPromptIsNew = false;
         }
 
         async function savePromptEdit(){
             const contTrim = promptInput.value.trim();
-            if(!contTrim) return alert('Prompt content cannot be empty.');
+            if(contTrim===''){
+                if(editingPromptIsNew){
+                    state.prompts = state.prompts.filter(p=>p!==editingPromptName);
+                    if(state.currentPrompt===editingPromptName){
+                        state.currentPrompt = '';
+                        localStorage.setItem('lastGlobalPrompt','');
+                    }
+                    renderPromptList();
+                    closePromptEditor();
+                    return;
+                }
+                return alert('Prompt content cannot be empty.');
+            }
             try{
-                const updateRes = await fetch(`/prompts/${encodeURIComponent(editingPromptName)}`, {
-                    method:'PUT',
-                    headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({name: editingPromptName, content: contTrim})
-                });
-                if(!updateRes.ok){ const err=await updateRes.json(); return alert('Error: '+err.detail); }
+                if(editingPromptIsNew){
+                    const createRes = await fetch('/prompts', {
+                        method:'POST',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({name: editingPromptName, content: contTrim})
+                    });
+                    if(!createRes.ok){ const err=await createRes.json(); return alert('Error: '+err.detail); }
+                    editingPromptIsNew = false;
+                }else{
+                    const updateRes = await fetch(`/prompts/${encodeURIComponent(editingPromptName)}`, {
+                        method:'PUT',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({name: editingPromptName, content: contTrim})
+                    });
+                    if(!updateRes.ok){ const err=await updateRes.json(); return alert('Error: '+err.detail); }
+                }
                 await refreshGlobalPromptList();
-                alert(`Prompt \"${editingPromptName}\" updated.`);
                 closePromptEditor();
             }catch(e){ console.error('Failed to update prompt:', e); alert('Failed to update prompt: '+e.message); }
         }
 
-        function startNewChat(){
+        async function startNewChat(){
             const existing = state.chats.map(c => c.toLowerCase());
             let idx = 1;
             let name = `New Chat ${idx}`;
@@ -705,7 +724,15 @@
                 idx++;
                 name = `New Chat ${idx}`;
             }
-            state.chats.unshift(name);
+            try{
+                const res = await fetch(`/chats/${encodeURIComponent(name)}`, {method:'POST'});
+                if(!res.ok){
+                    const err = await res.json().catch(()=>({detail:'Server error'}));
+                    alert('Error: '+(err.detail||res.status));
+                }
+            }catch(e){ console.error('Failed to create chat:', e); }
+            state.chats.push(name);
+            state.chats.sort((a,b)=>a.localeCompare(b));
             state.currentChatId = name;
             localStorage.setItem('lastChatId', name);
             renderHistory();
@@ -747,6 +774,7 @@
                     throw new Error(err.detail||'Server error');
                 }
                 state.chats = state.chats.map(c=>c===oldId? trimmed:c);
+                state.chats.sort((a,b)=>a.localeCompare(b));
                 if(state.currentChatId===oldId){
                     state.currentChatId = trimmed;
                     localStorage.setItem('lastChatId', trimmed);
@@ -790,6 +818,7 @@
                 });
                 if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
                 state.prompts = state.prompts.map(p=>p===oldName? trimmed:p);
+                state.prompts.sort((a,b)=>a.localeCompare(b));
                 state.currentPrompt = trimmed;
                 localStorage.setItem('lastGlobalPrompt', trimmed);
                 renderPromptList();
@@ -1058,6 +1087,7 @@
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
             newPromptBtn.addEventListener('click', addNewPrompt);
+            noPromptBtn.addEventListener('click', ()=>selectPrompt(''));
             promptSaveBtn.addEventListener('click', savePromptEdit);
             promptModal.addEventListener('click', e=>{ if(e.target===promptModal) closePromptEditor(); });
             systemToggle.addEventListener('click', toggleSystem);
