@@ -24,6 +24,8 @@ def load_state(chat_id: str) -> Dict[str, Any]:
                 data = json.load(f)
                 if "messages_since_goal_eval" not in data:
                     data["messages_since_goal_eval"] = 0
+                if "completed_goals" not in data:
+                    data["completed_goals"] = []
                 return data
             except Exception as e:
                 print(f"Failed to load state '{path}': {e}")
@@ -31,6 +33,7 @@ def load_state(chat_id: str) -> Dict[str, Any]:
         "character_profile": None,
         "scene_context": None,
         "goals": [],
+        "completed_goals": [],
         "messages_since_goal_eval": 0,
     }
 
@@ -171,7 +174,43 @@ def evaluate_goals(call_fn, chat_id: str) -> None:
     try:
         data = json.loads(text)
         if isinstance(data, dict) and isinstance(data.get("goals"), list):
-            state["goals"] = data["goals"]
+            completed = state.get("completed_goals", [])
+            active = []
+            for g in data["goals"]:
+                status = str(g.get("status", "")).lower()
+                gid = g.get("id")
+                if status in ("completed", "abandoned"):
+                    completed.append(g)
+                    continue
+                if gid and any(c.get("id") == gid for c in completed):
+                    continue
+                active.append(g)
+
+            state["completed_goals"] = completed
+            state["goals"] = active
+
+            if (
+                len(active) < 3
+                and state.get("character_profile")
+                and state.get("scene_context")
+            ):
+                new_goals = generate_goals(
+                    call_fn, state["character_profile"], state["scene_context"]
+                )
+
+                def duplicate(goal):
+                    gid = goal.get("id")
+                    return any(a.get("id") == gid for a in active) or any(
+                        c.get("id") == gid for c in completed
+                    )
+
+                for g in new_goals:
+                    if duplicate(g):
+                        continue
+                    active.append(g)
+                    if len(active) >= 3:
+                        break
+                state["goals"] = active
         else:
             print("[goal_tracker] Invalid goal evaluation format")
     except Exception as e:
@@ -216,6 +255,10 @@ def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
     if gs:
         lines.append("\n[CURRENT GOALS]")
         for g in gs:
-            lines.append(f"- {g.get('id')}: {g.get('description')} ({g.get('method')})")
+            status = g.get("status")
+            desc = f"- {g.get('id')}: {g.get('description')} ({g.get('method')})"
+            if status:
+                desc += f" [{status}]"
+            lines.append(desc)
     return "\n".join(lines)
 
