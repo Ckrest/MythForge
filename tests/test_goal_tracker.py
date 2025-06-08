@@ -32,7 +32,7 @@ def test_format_goal_eval_response_invalid(tmp_path, monkeypatch):
     chat_id = "abc"
     result = format_goal_eval_response("not json", chat_id)
     assert result is None
-    error_path = tmp_path / f"{chat_id}_goal_eval_error.txt"
+    error_path = tmp_path / chat_id / "goal_eval_error.txt"
     assert error_path.exists()
     assert error_path.read_text() == "not json"
 
@@ -43,5 +43,5 @@ def test_format_goal_eval_response_valid(tmp_path, monkeypatch):
     text = '{"goals": [{"id": "1", "description": "d", "method": "", "status": "completed"}]}'
     result = format_goal_eval_response(text, chat_id)
     assert result is not None
-    assert not (tmp_path / f"{chat_id}_goal_eval_error.txt").exists()
+    assert not (tmp_path / chat_id / "goal_eval_error.txt").exists()
 

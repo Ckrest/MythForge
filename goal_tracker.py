@@ -15,7 +15,7 @@ from airoboros_prompter import format_llama3
 # here avoids circular imports.
 CHATS_DIR = "chats"
 
-STATE_SUFFIX = "_state.json"
+STATE_NAME = "state.json"
 
 # Configurable parameters
 HISTORY_WINDOW = int(os.environ.get("MF_HISTORY_WINDOW", 8))
@@ -74,7 +74,7 @@ def _extract_json(text: str) -> str:
 
 
 def _state_path(chat_id: str) -> str:
-    return os.path.join(CHATS_DIR, f"{chat_id}{STATE_SUFFIX}")
+    return os.path.join(CHATS_DIR, chat_id, STATE_NAME)
 
 
 def load_state(chat_id: str) -> Dict[str, Any]:
@@ -101,6 +101,7 @@ def load_state(chat_id: str) -> Dict[str, Any]:
 
 def save_state(chat_id: str, state: Dict[str, Any]) -> None:
     path = _state_path(chat_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
     logger.debug("Saved state to %s", path)
@@ -216,7 +217,7 @@ def _load_json(path: str):
 
 def load_and_prepare_state(chat_id: str, history_window: int = HISTORY_WINDOW):
     state = load_state(chat_id)
-    trimmed_path = os.path.join(CHATS_DIR, f"{chat_id}_trimmed.json")
+    trimmed_path = os.path.join(CHATS_DIR, chat_id, "trimmed.json")
     history = _load_json(trimmed_path)
     convo: List[Dict[str, str]] = []
     for m in history[-history_window:]:
@@ -269,7 +270,9 @@ def parse_and_merge_goals(data: GoalsListModel, state: Dict[str, Any], min_activ
 
 def _error_path(chat_id: str) -> str:
     """Return the path used for goal evaluation error logs."""
-    return os.path.join(CHATS_DIR, f"{chat_id}_goal_eval_error.txt")
+    dir_path = os.path.join(CHATS_DIR, chat_id)
+    os.makedirs(dir_path, exist_ok=True)
+    return os.path.join(dir_path, "goal_eval_error.txt")
 
 
 def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListModel]:
