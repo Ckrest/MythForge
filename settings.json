@@ -16,7 +16,7 @@
   "top_p": 0.95,
   "min_p": 0.05,
   "repeat_penalty": 1.1,
-  "stop": ["<|start_header_id|>", "<|eot_id|>"],
+  "stop": ["<|eot_id|>"],
   "stream": false,
   "echo": false,
   "summarize_threshold": 20,
