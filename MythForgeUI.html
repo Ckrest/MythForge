@@ -230,10 +230,11 @@
                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                         </svg>
                     </button>
-                    <button id="stop-button" class="send-button" style="display:none" title="Stop generation">
+                <button id="stop-button" class="send-button" style="display:none" title="Stop generation">
                         &#9632;
                     </button>
                 </div>
+                <div id="prompt-indicator" style="display:none; position:absolute; left:10px; bottom:8px; color:var(--primary); font-size:14px;">Processing...</div>
             </div>
         </div>
     </div>
@@ -294,7 +295,8 @@
                 min_p: 0.05,
                 repeat_penalty: 1.1
             },
-            isGenerating: false
+            isGenerating: false,
+            isProcessing: false
         };
 
         const chatContainer    = document.getElementById('chat-container');
@@ -304,6 +306,7 @@
         const stopButton       = document.getElementById('stop-button');
         let abortController    = null;
         let handleScroll       = null;
+        let promptCheckTimer   = null;
         const newChatButton    = document.getElementById('new-chat-btn');
         const historyContainer = document.getElementById('history-container');
        const themeSelect      = document.getElementById('theme-select');
@@ -334,6 +337,7 @@
         const chatSection      = document.getElementById('chat-section');
         const promptSection    = document.getElementById('prompt-section');
         const moreSection      = document.getElementById('more-section');
+        const promptIndicator  = document.getElementById('prompt-indicator');
 
        function applyTheme(name){
            document.body.setAttribute('data-theme', name);
@@ -832,6 +836,36 @@
         }
         function removeTyping(){ const t=document.getElementById('typing-indicator'); if(t) t.remove(); }
 
+        function updatePromptIndicator(){
+            const disabled = state.isGenerating || state.isProcessing;
+            sendButton.disabled = disabled;
+            sendOnlyButton.disabled = userInput.value.trim()==='' || disabled;
+            promptIndicator.style.display = state.isProcessing ? 'block' : 'none';
+        }
+
+        async function pollPromptStatus(){
+            try{
+                const res = await fetch('/response_prompt_status');
+                if(res.ok){
+                    const data = await res.json();
+                    if(data.pending===0){
+                        state.isProcessing = false;
+                        updatePromptIndicator();
+                        promptCheckTimer = null;
+                        return;
+                    }
+                }
+            }catch(e){ console.error('Status check failed:', e); }
+            promptCheckTimer = setTimeout(pollPromptStatus, 1000);
+        }
+
+        function startPromptMonitor(){
+            if(promptCheckTimer) return;
+            state.isProcessing = true;
+            updatePromptIndicator();
+            pollPromptStatus();
+        }
+
         async function sendMessage(allowEmpty=false){
             const text = userInput.value.trim();
             if(state.isGenerating || !state.currentChatId) return;
@@ -843,6 +877,7 @@
             stopButton.style.display='inline';
             if(text!=='') appendMessageToUI('user', text);
             addTyping(); state.isGenerating=true;
+            updatePromptIndicator();
             abortController = new AbortController();
             try{
                 const response = await fetch('/chat/stream', {
@@ -928,12 +963,12 @@
                     handleScroll = null;
                 }
                 state.isGenerating=false;
-                sendButton.disabled=state.isGenerating;
-                sendOnlyButton.disabled=userInput.value.trim()==='' || state.isGenerating;
+                updatePromptIndicator();
                 stopButton.style.display='none';
                 sendButton.style.display='inline';
                 sendOnlyButton.style.display='inline';
                 userInput.focus();
+                startPromptMonitor();
             }
         }
 
@@ -952,8 +987,7 @@
             }catch(err){
                 console.error('Send only failed:', err);
             }finally{
-                sendButton.disabled=state.isGenerating;
-                sendOnlyButton.disabled=userInput.value.trim()==='' || state.isGenerating;
+                updatePromptIndicator();
                 userInput.focus();
             }
         }
@@ -964,8 +998,7 @@
             stopButton.style.display="none";
             sendButton.style.display="inline";
             sendOnlyButton.style.display="inline";
-            sendButton.disabled=false;
-            sendOnlyButton.disabled=userInput.value.trim()==="";
+            updatePromptIndicator();
         }
 
         function setupEvents(){
@@ -986,7 +1019,7 @@
             sendOnlyButton.addEventListener('click', sendMessageNoGen);
             stopButton.addEventListener('click', stopGenerating);
             userInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
-            userInput.addEventListener('input', ()=>{ const disGen = state.isGenerating; sendButton.disabled = disGen; sendOnlyButton.disabled = userInput.value.trim()==='' || disGen; autoResize(); });
+            userInput.addEventListener('input', ()=>{ autoResize(); updatePromptIndicator(); });
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
             newPromptBtn.addEventListener('click', addNewPrompt);
@@ -1008,6 +1041,7 @@
             await refreshGlobalPromptList();
             await loadServerSettings();
             autoResize();
+            updatePromptIndicator();
         })();
     </script>
 </body>
