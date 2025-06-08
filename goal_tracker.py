@@ -190,6 +190,17 @@ def extract_character_profile(text: str) -> str:
     return text.strip()
 
 
+def init_state_from_prompt(chat_id: str, global_prompt: str, first_user: str) -> None:
+    """Initialize state using ``global_prompt`` and ``first_user`` if unset."""
+    logger.info("Initializing state from prompt", extra={"chat_id": chat_id})
+    state = load_state(chat_id)
+    if state.get("character_profile") is None:
+        state["character_profile"] = global_prompt.strip()
+    if state.get("scene_context") is None:
+        state["scene_context"] = first_user.strip()
+    save_state(chat_id, state)
+
+
 def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: str, first_assistant: str) -> None:
     """Populate ``scene_context`` and ``character_profile`` from the first exchange."""
     logger.info("Ensuring initial state", extra={"chat_id": chat_id})
@@ -233,6 +244,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
     text = output["choices"][0]["text"].strip()
     goals = parse_goals_from_response(text)
     state["goals"] = goals
+    state["messages_since_goal_eval"] = 0
     save_state(chat_id, state)
 
 
