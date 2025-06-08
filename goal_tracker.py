@@ -1,6 +1,7 @@
 # Goal tracking utilities for Myth Forge
 import json
 import os
+import re
 from typing import Dict, Any, List
 
 from airoboros_prompter import format_llama3
@@ -10,6 +11,20 @@ from airoboros_prompter import format_llama3
 CHATS_DIR = "chats"
 
 STATE_SUFFIX = "_state.json"
+
+
+def _extract_json(text: str) -> str:
+    """Return ``text`` with surrounding Markdown code fences removed."""
+    cleaned = text.strip()
+    # Find the first fence
+    if "```" in cleaned:
+        start = cleaned.find("```")
+        end = cleaned.rfind("```")
+        if end > start:
+            cleaned = cleaned[start + 3 : end]
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:]
+    return cleaned.strip()
 
 
 def _state_path(chat_id: str) -> str:
@@ -73,7 +88,7 @@ def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant
     text = output["choices"][0]["text"].strip()
     print("[goal_tracker] Initial state raw output:\n" + text)
     try:
-        data = json.loads(text)
+        data = json.loads(_extract_json(text))
     except Exception as e:
         print(f"Failed to parse initial state: {e}")
         data = {"character_profile": None, "scene_context": None, "goals": []}
@@ -102,7 +117,7 @@ def generate_goals(call_fn, character_profile: Dict[str, Any], scene_context: Di
     text = output["choices"][0]["text"].strip()
     print("[goal_tracker] Goals raw output:\n" + text)
     try:
-        goals = json.loads(text)
+        goals = json.loads(_extract_json(text))
     except Exception as e:
         print(f"Failed to parse goals: {e}")
         goals = []
@@ -172,7 +187,7 @@ def evaluate_goals(call_fn, chat_id: str) -> None:
     text = output["choices"][0]["text"].strip()
     print("[goal_tracker] Goal evaluation raw output:\n" + text)
     try:
-        data = json.loads(text)
+        data = json.loads(_extract_json(text))
         if isinstance(data, dict) and isinstance(data.get("goals"), list):
             completed = state.get("completed_goals", [])
             active = []
