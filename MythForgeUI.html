@@ -303,6 +303,7 @@
         const sendOnlyButton   = document.getElementById('send-only-button');
         const stopButton       = document.getElementById('stop-button');
         let abortController    = null;
+        let handleScroll       = null;
         const newChatButton    = document.getElementById('new-chat-btn');
         const historyContainer = document.getElementById('history-container');
        const themeSelect      = document.getElementById('theme-select');
@@ -860,7 +861,7 @@
                 let limitReached = false;
                 let manualStop = false;
                 const scrollLimit = parseInt(state.settings.autoScrollLines) || 0;
-                const handleScroll = () => {
+                handleScroll = () => {
                     const atBottom = chatContainer.scrollHeight - chatContainer.scrollTop <= chatContainer.clientHeight + 10;
                     if(!atBottom){
                         manualStop = true;
@@ -915,7 +916,10 @@
                     removeTyping(); appendMessageToUI('assistant','[Error generating response]');
                 }
             }finally{
-                chatContainer.removeEventListener('scroll', handleScroll);
+                if(handleScroll){
+                    chatContainer.removeEventListener('scroll', handleScroll);
+                    handleScroll = null;
+                }
                 state.isGenerating=false;
                 sendButton.disabled=state.isGenerating;
                 sendOnlyButton.disabled=userInput.value.trim()==='' || state.isGenerating;
