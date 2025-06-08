@@ -9,7 +9,7 @@ from typing import Dict, List
 from llama_cpp import Llama
 
 # Prompt formatting utilities
-from airoboros_prompter import format_airoboros
+from airoboros_prompter import format_llama3
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -262,10 +262,16 @@ def delete_prompt(name: str):
 
 # ========== Summarization & Trimming ==========
 def summarize_chunk(chunk):
-    text = "\n".join([f"{m['role']}: {m['content']}" for m in chunk])
-    prompt = (
-        f"BEGININPUT\n{text}\nENDINPUT\n"
-        f"BEGININSTRUCTION\nSummarize the above conversation in 2-3 sentences.\nENDINSTRUCTION"
+    history = []
+    for m in chunk:
+        role = "assistant" if m.get("role") == "bot" else m.get("role")
+        history.append({"role": role, "content": m.get("content", "")})
+
+    prompt = format_llama3(
+        "",
+        None,
+        history,
+        "Summarize the above conversation in 2-3 sentences.",
     )
     # Use ``call_llm`` to ensure only supported kwargs are passed to the model
     print("DEBUG raw_prompt:", prompt)
@@ -298,7 +304,7 @@ def trim_context(chat_id):
     return history
 
 def build_prompt(chat_id, user_message, global_prompt_name):
-    """Construct the next prompt using the Airoboros format."""
+    """Construct the next prompt using the LLaMA3 header-token format."""
 
     trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
     full_path = f"{CHATS_DIR}/{chat_id}_full.json"
@@ -320,7 +326,7 @@ def build_prompt(chat_id, user_message, global_prompt_name):
     system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
     assistant_name = "assistant"
 
-    # Gather summaries and raw history for Airoboros formatting
+    # Gather summaries and raw history for prompt formatting
     summaries: List[str] = []
     history: List[Dict[str, str]] = []
     for m in context:
@@ -330,7 +336,7 @@ def build_prompt(chat_id, user_message, global_prompt_name):
             role = assistant_name if m.get("role") == "bot" else m.get("role")
             history.append({"role": role, "content": m.get("content", "")})
 
-    prompt_str = format_airoboros(
+    prompt_str = format_llama3(
         system_prompt,
         summaries,
         history,
