@@ -243,7 +243,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
     # Log full prompt for debugging before sending to the LLM
     logger.info("LLM goal prompt", extra={"chat_id": chat_id, "prompt": prompt})
 
-    for attempt in range(1, 4):
+    for attempt in range(1, 3):
         output = call_fn(prompt, max_tokens=200)
         text = output["choices"][0]["text"].strip()
         logger.debug(
@@ -266,7 +266,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
             )
 
     logger.warning(
-        "Goal generation failed after 3 attempts",
+        "Goal generation failed after 2 attempts",
         extra={"chat_id": chat_id}
     )
 

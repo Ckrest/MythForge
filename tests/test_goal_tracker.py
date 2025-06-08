@@ -133,5 +133,5 @@ def test_check_and_generate_goals_retry_failure(tmp_path, monkeypatch):
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
     assert new_state["goals"] == []
     assert new_state["messages_since_goal_eval"] == 5
-    assert calls["n"] == 3
+    assert calls["n"] == 2
 
