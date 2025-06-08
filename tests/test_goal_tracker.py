@@ -81,3 +81,57 @@ def test_check_and_generate_goals_resets_counter(tmp_path, monkeypatch):
     assert new_state["goals"][0]["id"] == "1"
     assert new_state["messages_since_goal_eval"] == 0
 
+
+def test_check_and_generate_goals_retry_success(tmp_path, monkeypatch):
+    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    chat_id = "retry_success"
+    state = {
+        "character_profile": "p",
+        "scene_context": "s",
+        "goals": [],
+        "messages_since_goal_eval": 5,
+    }
+    os.makedirs(tmp_path / chat_id, exist_ok=True)
+    with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
+        json.dump(state, f)
+
+    calls = {"n": 0}
+
+    def fake_call(_prompt, max_tokens=200):
+        calls["n"] += 1
+        if calls["n"] < 2:
+            return {"choices": [{"text": "[]"}]}
+        return {"choices": [{"text": '[{"id":"1","description":"d","method":""}]'}]}
+
+    goal_tracker.check_and_generate_goals(fake_call, chat_id)
+    new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
+    assert new_state["goals"][0]["id"] == "1"
+    assert new_state["messages_since_goal_eval"] == 0
+    assert calls["n"] == 2
+
+
+def test_check_and_generate_goals_retry_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    chat_id = "retry_fail"
+    state = {
+        "character_profile": "p",
+        "scene_context": "s",
+        "goals": [],
+        "messages_since_goal_eval": 5,
+    }
+    os.makedirs(tmp_path / chat_id, exist_ok=True)
+    with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
+        json.dump(state, f)
+
+    calls = {"n": 0}
+
+    def fake_call(_prompt, max_tokens=200):
+        calls["n"] += 1
+        return {"choices": [{"text": "[]"}]}
+
+    goal_tracker.check_and_generate_goals(fake_call, chat_id)
+    new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
+    assert new_state["goals"] == []
+    assert new_state["messages_since_goal_eval"] == 5
+    assert calls["n"] == 3
+
