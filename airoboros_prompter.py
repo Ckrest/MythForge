@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Airoboros prompt formatter.
+"""Prompt formatter for LLaMA3 style header-token conversations.
 
-This module converts chat history and metadata into the simplified
-Airoboros format described in the project instructions.
+The previous version of this module generated prompts using the
+Airoboros ``BEGININPUT``/``BEGININSTRUCTION`` style.  It has been
+refactored to output the header-token format required by models such as
+LLaMA3.  Each message is wrapped with ``<|start_header_id|>`` and
+``<|end_header_id|>`` tokens followed by a blank line and the message
+content.  Messages are separated with ``<|eot_id|>`` tokens and the final
+prompt ends with an ``assistant`` header so the model knows to respond.
 """
 
 from __future__ import annotations
@@ -21,53 +26,62 @@ def _strip_junk(text: str) -> str:
     return cleaned.strip()
 
 
-def format_airoboros(
+def format_llama3(
     global_prompt: str,
     summaries: Optional[List[str]],
     history: List[Dict[str, str]],
     instruction: str,
     assistant_name: str = "assistant",
 ) -> str:
-    """Return the conversation formatted for Airoboros."""
+    """Return the conversation formatted for the LLaMA3 header-token style."""
 
-    lines = [
-        "BEGININPUT",
-        "BEGINCONTEXT",
-        f"{global_prompt}",
-        "ENDCONTEXT",
-    ]
+    messages: List[Dict[str, str]] = []
 
+    system_parts: List[str] = []
+    if global_prompt:
+        system_parts.append(global_prompt.strip())
     if summaries:
-        lines.append(summaries[-1])
+        system_parts.append(summaries[-1])
+    if system_parts:
+        messages.append({"role": "system", "content": "\n".join(system_parts)})
 
     for msg in history:
         role = msg.get("role", "user")
         if role == "assistant":
             role = assistant_name
         content = _strip_junk(msg.get("content", ""))
-        lines.append(f"{role}: {content}")
+        if role == assistant_name:
+            role = "assistant"
+        messages.append({"role": role, "content": content})
 
-    lines.append("ENDINPUT")
+    if instruction.strip():
+        messages.append({"role": "user", "content": instruction.strip()})
 
-    lines.extend([
-        "",
-        "BEGININSTRUCTION",
-        instruction.strip(),
-        "ENDINSTRUCTION",
-    ])
+    lines = ["<|begin_of_text|>"]
+    for m in messages:
+        lines.append(f"<|start_header_id|>{m['role']}<|end_header_id|>")
+        lines.append("")
+        lines.append(m["content"])
+        lines.append("")
+        lines.append("<|eot_id|>")
+
+    lines.append("<|start_header_id|>assistant<|end_header_id|>")
+    lines.append("")
 
     return "\n".join(lines)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Format a chat session in Airoboros style")
+    parser = argparse.ArgumentParser(
+        description="Format a chat session in LLaMA3 header-token style"
+    )
     parser.add_argument("json_file", help="Path to JSON file containing the session data")
     args = parser.parse_args()
 
     with open(args.json_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    result = format_airoboros(
+    result = format_llama3(
         data.get("global_prompt", ""),
         data.get("summaries"),
         data.get("history", []),
