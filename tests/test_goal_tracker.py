@@ -1,11 +1,15 @@
 import sys
 import os
+import json
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import goal_tracker
 from goal_tracker import (
     parse_and_merge_goals,
     GoalsListModel,
     format_goal_eval_response,
     CHATS_DIR,
+    init_state_from_prompt,
+    check_and_generate_goals,
 )
 
 def test_duplicate_ids():
@@ -44,4 +48,36 @@ def test_format_goal_eval_response_valid(tmp_path, monkeypatch):
     result = format_goal_eval_response(text, chat_id)
     assert result is not None
     assert not (tmp_path / chat_id / "goal_eval_error.txt").exists()
+
+
+def test_init_state_from_prompt(tmp_path, monkeypatch):
+    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    chat_id = "init"
+    goal_tracker.init_state_from_prompt(chat_id, "profile", "scene")
+    path = tmp_path / chat_id / "state.json"
+    data = json.loads(path.read_text())
+    assert data["character_profile"] == "profile"
+    assert data["scene_context"] == "scene"
+
+
+def test_check_and_generate_goals_resets_counter(tmp_path, monkeypatch):
+    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    chat_id = "gen"
+    state = {
+        "character_profile": "p",
+        "scene_context": "s",
+        "goals": [],
+        "messages_since_goal_eval": 5,
+    }
+    os.makedirs(tmp_path / chat_id, exist_ok=True)
+    with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
+        json.dump(state, f)
+
+    def fake_call(_prompt, max_tokens=200):
+        return {"choices": [{"text": '[{"id":"1","description":"d","method":""}]'}]}
+
+    goal_tracker.check_and_generate_goals(fake_call, chat_id)
+    new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
+    assert new_state["goals"][0]["id"] == "1"
+    assert new_state["messages_since_goal_eval"] == 0
 

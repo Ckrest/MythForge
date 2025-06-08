@@ -13,6 +13,7 @@ import goal_tracker
 from goal_tracker import (
     load_state,
     ensure_initial_state,
+    init_state_from_prompt,
     check_and_generate_goals,
     state_as_prompt_fragment,
     record_user_message,
@@ -452,6 +453,13 @@ def build_prompt(chat_id, user_message, global_prompt_name):
         full_log.append({"role": "user", "content": user_message})
         context.append({"type": "raw", "role": "user", "content": user_message})
         record_user_message(chat_id)
+        chosen_content = get_global_prompt_content(global_prompt_name)
+        if (
+            chosen_content
+            and "**goals**" in chosen_content
+            and len(full_log) == 1
+        ):
+            init_state_from_prompt(chat_id, chosen_content, user_message)
         state = load_state(chat_id)
         if goal_tracker.DEBUG_MODE or state.get("messages_since_goal_eval", 0) >= 2:
             check_and_generate_goals(call_llm, chat_id)
@@ -648,6 +656,8 @@ def chat(req: ChatRequest):
                 call_llm, chat_id, gp, fu, rt
             )
         )
+        if "**goals**" in gprompt_content:
+            check_and_generate_goals(call_llm, chat_id)
 
     # Append bot to trimmed context
     trimmed = load_json(trimmed_path)
@@ -758,6 +768,8 @@ def chat_stream(req: ChatRequest):
                     call_llm, chat_id, gp, fu, rt
                 )
             )
+            if "**goals**" in gprompt_content:
+                check_and_generate_goals(call_llm, chat_id)
 
         # (2) Trimmed context
         trimmed = load_json(trimmed_path)
