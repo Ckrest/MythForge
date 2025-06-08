@@ -21,10 +21,18 @@ def load_state(chat_id: str) -> Dict[str, Any]:
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             try:
-                return json.load(f)
+                data = json.load(f)
+                if "messages_since_goal_eval" not in data:
+                    data["messages_since_goal_eval"] = 0
+                return data
             except Exception as e:
                 print(f"Failed to load state '{path}': {e}")
-    return {"character_profile": None, "scene_context": None, "goals": []}
+    return {
+        "character_profile": None,
+        "scene_context": None,
+        "goals": [],
+        "messages_since_goal_eval": 0,
+    }
 
 
 def save_state(chat_id: str, state: Dict[str, Any]) -> None:
@@ -118,6 +126,72 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         save_state(chat_id, state)
     else:
         print("[goal_tracker] Goals already present or character state incomplete")
+
+
+def _load_json(path: str):
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except Exception as e:
+                print(f"Failed to load json '{path}': {e}")
+    return []
+
+
+def evaluate_goals(call_fn, chat_id: str) -> None:
+    """Evaluate progress on current goals based on recent conversation."""
+    state = load_state(chat_id)
+    goals = state.get("goals") or []
+    if not goals:
+        print("[goal_tracker] No goals to evaluate")
+        return
+
+    trimmed_path = os.path.join(CHATS_DIR, f"{chat_id}_trimmed.json")
+    history = _load_json(trimmed_path)
+    convo: List[Dict[str, str]] = []
+    for m in history[-8:]:  # include recent context
+        if m.get("type") == "summary":
+            convo.append({"role": "system", "content": f"SUMMARY: {m['content']}"})
+        else:
+            role = "assistant" if m.get("role") == "bot" else m.get("role", "user")
+            convo.append({"role": role, "content": m.get("content", "")})
+
+    instruction = (
+        "Evaluate the character's current goals based on the recent conversation. "
+        "For each goal decide if it is completed, still in progress, needs new tactics or should be abandoned. "
+        "If goals are completed or abandoned you may add new short term goals. "
+        "Return JSON with a 'goals' list where each goal has id, description, method and status."
+    )
+
+    prompt = format_llama3("", None, convo, instruction)
+    print("[goal_tracker] Goal evaluation prompt:\n" + prompt)
+    output = call_fn(prompt, max_tokens=300)
+    text = output["choices"][0]["text"].strip()
+    print("[goal_tracker] Goal evaluation raw output:\n" + text)
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict) and isinstance(data.get("goals"), list):
+            state["goals"] = data["goals"]
+        else:
+            print("[goal_tracker] Invalid goal evaluation format")
+    except Exception as e:
+        print(f"Failed to parse goal evaluation: {e}")
+    state["messages_since_goal_eval"] = 0
+    save_state(chat_id, state)
+
+
+def record_user_message(chat_id: str) -> None:
+    state = load_state(chat_id)
+    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    save_state(chat_id, state)
+
+
+def record_assistant_message(chat_id: str) -> bool:
+    """Increment message counter and return True if goal evaluation is due."""
+    state = load_state(chat_id)
+    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    save_state(chat_id, state)
+    return bool(state.get("goals")) and state["messages_since_goal_eval"] >= 4
 
 
 def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
