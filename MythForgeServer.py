@@ -780,3 +780,8 @@ def response_prompt_status():
 # ========== Static UI Mount ==========
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
+# Apply automatic logging to all functions in this module
+import sys
+from server_log import patch_module_functions
+patch_module_functions(sys.modules[__name__], "server")
+
