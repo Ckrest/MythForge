@@ -246,6 +246,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
     for attempt in range(1, 3):
         output = call_fn(prompt, max_tokens=200)
         text = output["choices"][0]["text"].strip()
+        log_event("goals_llm_raw", {"raw": text})
         logger.debug(
             "Goal generation attempt %d raw output:\n%s",
             attempt,
@@ -259,6 +260,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
             save_state(chat_id, state)
             return
         else:
+            log_event("goals_parse_failed", {"raw": text})
             logger.warning(
                 "Goal parsing returned no results on attempt %d",
                 attempt,
@@ -453,6 +455,6 @@ def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
 
 # Apply automatic logging to all functions in this module
 import sys
-from server_log import patch_module_functions
+from server_log import patch_module_functions, log_event
 patch_module_functions(sys.modules[__name__], "goals system")
 
