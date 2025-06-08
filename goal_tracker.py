@@ -203,11 +203,14 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
 
 def _load_json(path: str):
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            try:
-                return json.load(f)
-            except Exception as e:
-                logger.warning("Failed to load json '%s': %s", path, e)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if not content:
+                    return []
+                return json.loads(content)
+        except Exception as e:
+            logger.warning("Failed to load json '%s': %s", path, e)
     return []
 
 

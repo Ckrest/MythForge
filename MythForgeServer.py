@@ -210,11 +210,16 @@ def enqueue_response_prompt(fn) -> None:
 # ========== Helpers ==========
 def load_json(path):
     if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError as e:
-                print(f"Failed to parse JSON from '{path}': {e}")
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:
+                    return []
+                return json.loads(content)
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON from '{path}': {e}")
+        except Exception as e:
+            print(f"Failed to load JSON from '{path}': {e}")
     return []
 
 def save_json(path, data):
