@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from queue import Queue
+from threading import Thread
 from pydantic import BaseModel
 from typing import Dict, List
 
@@ -161,6 +163,36 @@ def call_llm(prompt: str, **kwargs):
     else:  # Fallback if inspection failed
         filtered = kwargs
     return llm(prompt, **filtered)
+
+# ========== Response Prompt Queue ==========
+# Some operations (e.g. summarization, goal evaluation) trigger their own
+# prompts after a response is generated. Running these concurrently can
+# conflict with the single shared LLM instance. A simple queue ensures these
+# follow-up prompts execute sequentially.
+
+RESPONSE_PROMPT_QUEUE: Queue = Queue()
+
+
+def _response_prompt_worker() -> None:
+    while True:
+        fn = RESPONSE_PROMPT_QUEUE.get()
+        if fn is None:
+            break
+        try:
+            fn()
+        except Exception as e:
+            print(f"[response_prompt_queue] task failed: {e}")
+        finally:
+            RESPONSE_PROMPT_QUEUE.task_done()
+
+
+_RESPONSE_PROMPT_THREAD = Thread(target=_response_prompt_worker, daemon=True)
+_RESPONSE_PROMPT_THREAD.start()
+
+
+def enqueue_response_prompt(fn) -> None:
+    """Add ``fn`` to the post-response processing queue."""
+    RESPONSE_PROMPT_QUEUE.put(fn)
 
 # ========== Helpers ==========
 def load_json(path):
@@ -549,15 +581,18 @@ def chat(req: ChatRequest):
     if len(full_log) == 2:
         first_user = full_log[0].get("content", "") if full_log else ""
         gprompt_content = get_global_prompt_content(global_prompt) or ""
-        ensure_initial_state(call_llm, chat_id, gprompt_content, first_user, response_text)
-        check_and_generate_goals(call_llm, chat_id)
+        enqueue_response_prompt(
+            lambda fu=first_user, gp=gprompt_content, rt=response_text: ensure_initial_state(
+                call_llm, chat_id, gp, fu, rt
+            )
+        )
+        enqueue_response_prompt(lambda: check_and_generate_goals(call_llm, chat_id))
 
     # Append bot to trimmed context
     trimmed = load_json(trimmed_path)
     trimmed.append({"type": "raw", "role": "bot", "content": response_text})
     save_json(trimmed_path, trimmed)
-    # Now that both sides of the exchange are recorded, attempt summarization
-    trim_context(chat_id)
+    enqueue_response_prompt(lambda: trim_context(chat_id))
 
     return ChatResponse(response=response_text, prompt_preview=prompt)
 
@@ -655,15 +690,18 @@ def chat_stream(req: ChatRequest):
         if len(full_history) == 2:
             first_user = full_history[0].get("content", "") if full_history else ""
             gprompt_content = get_global_prompt_content(global_prompt) or ""
-            ensure_initial_state(call_llm, chat_id, gprompt_content, first_user, text_accumulator)
-            check_and_generate_goals(call_llm, chat_id)
+            enqueue_response_prompt(
+                lambda fu=first_user, gp=gprompt_content, rt=text_accumulator: ensure_initial_state(
+                    call_llm, chat_id, gp, fu, rt
+                )
+            )
+            enqueue_response_prompt(lambda: check_and_generate_goals(call_llm, chat_id))
 
         # (2) Trimmed context
         trimmed = load_json(trimmed_path)
         trimmed.append({"type": "raw", "role": "bot", "content": text_accumulator})
         save_json(trimmed_path, trimmed)
-        # Attempt summarization now that the exchange is complete
-        trim_context(chat_id)
+        enqueue_response_prompt(lambda: trim_context(chat_id))
 
     return StreamingResponse(
         generate_and_stream(),
