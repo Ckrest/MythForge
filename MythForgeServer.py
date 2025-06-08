@@ -124,6 +124,21 @@ for key in ("f16_kv", "use_mmap", "use_mlock", "n_gpu_layers", "main_memory_kv")
     if key in SETTINGS and SETTINGS[key] is not None:
         _model_config[key] = SETTINGS[key]
 
+# ``llama_cpp`` may automatically prepend ``<|begin_of_text|>`` when
+# tokenizing prompts. Our prompts already include this token, so we
+# disable the automatic behavior if supported to avoid the warning
+# about duplicate leading tokens.
+try:
+    import inspect
+
+    sig = inspect.signature(Llama)
+    if "add_bos" in sig.parameters:
+        _model_config["add_bos"] = False
+    elif "add_bos_token" in sig.parameters:
+        _model_config["add_bos_token"] = False
+except Exception:
+    pass
+
 llm = Llama(**_model_config)
 
 # Determine which keyword arguments ``llm.__call__`` accepts.  Older versions
