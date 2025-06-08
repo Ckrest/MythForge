@@ -484,7 +484,7 @@
             systemContainer.style.display = current === 'none' ? 'block' : 'none';
         }
 
-       function showChatTab(){
+        function showChatTab(){
             sidebar.classList.remove('hidden');
             chatSection.style.display = 'flex';
             promptSection.style.display = 'none';
@@ -674,6 +674,14 @@
         }
 
         function closePromptEditor(){
+            if(editingPromptIsNew){
+                state.prompts = state.prompts.filter(p=>p!==editingPromptName);
+                if(state.currentPrompt===editingPromptName){
+                    state.currentPrompt = '';
+                    localStorage.setItem('lastGlobalPrompt','');
+                }
+                renderPromptList();
+            }
             promptModal.style.display = 'none';
             editingPromptName = '';
             editingPromptIsNew = false;
@@ -729,10 +737,10 @@
                 if(!res.ok){
                     const err = await res.json().catch(()=>({detail:'Server error'}));
                     alert('Error: '+(err.detail||res.status));
+                    return;
                 }
-            }catch(e){ console.error('Failed to create chat:', e); }
-            state.chats.push(name);
-            state.chats.sort((a,b)=>a.localeCompare(b));
+            }catch(e){ console.error('Failed to create chat:', e); return; }
+            await fetchChatList();
             state.currentChatId = name;
             localStorage.setItem('lastChatId', name);
             renderHistory();
@@ -747,8 +755,8 @@
             try{
                 const res = await fetch(`/chat/${encodeURIComponent(state.currentChatId)}`, {method:'DELETE'});
                 if(!res.ok){ if(res.status===404) throw new Error('Chat not found on server.'); else throw new Error('Unknown server error.'); }
-                state.chats = state.chats.filter(c=>c!==state.currentChatId);
-                state.currentChatId = state.chats.length? state.chats[0] : '';
+                await fetchChatList();
+                state.currentChatId = state.chats.length ? state.chats[0] : '';
                 localStorage.setItem('lastChatId', state.currentChatId);
                 renderHistory();
                 chatContainer.innerHTML = '';
@@ -769,16 +777,13 @@
                     headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({new_id: trimmed})
                 });
-                if(!res.ok && res.status!==404){
-                    const err = await res.json();
+                if(!res.ok){
+                    const err = await res.json().catch(()=>({detail:'Server error'}));
                     throw new Error(err.detail||'Server error');
                 }
-                state.chats = state.chats.map(c=>c===oldId? trimmed:c);
-                state.chats.sort((a,b)=>a.localeCompare(b));
-                if(state.currentChatId===oldId){
-                    state.currentChatId = trimmed;
-                    localStorage.setItem('lastChatId', trimmed);
-                }
+                await fetchChatList();
+                state.currentChatId = trimmed;
+                localStorage.setItem('lastChatId', trimmed);
                 renderHistory();
             }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); }
         }
@@ -794,7 +799,7 @@
             try{
                 const res = await fetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
                 if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                state.prompts = state.prompts.filter(p=>p!==name);
+                await refreshGlobalPromptList();
                 if(state.currentPrompt===name){
                     state.currentPrompt = state.prompts.length? state.prompts[0]:'';
                     localStorage.setItem('lastGlobalPrompt', state.currentPrompt);
@@ -817,8 +822,7 @@
                     body: JSON.stringify({new_name: trimmed})
                 });
                 if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                state.prompts = state.prompts.map(p=>p===oldName? trimmed:p);
-                state.prompts.sort((a,b)=>a.localeCompare(b));
+                await refreshGlobalPromptList();
                 state.currentPrompt = trimmed;
                 localStorage.setItem('lastGlobalPrompt', trimmed);
                 renderPromptList();
@@ -1103,6 +1107,7 @@
             loadTextSize();
             setupEvents();
             showChatTab();
+            await refreshGlobalPromptList();
             await fetchChatList();
             if(state.currentChatId) await loadChat(state.currentChatId);
             await loadServerSettings();
