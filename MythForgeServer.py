@@ -14,6 +14,9 @@ from goal_tracker import (
     ensure_initial_state,
     check_and_generate_goals,
     state_as_prompt_fragment,
+    record_user_message,
+    record_assistant_message,
+    evaluate_goals,
 )
 from llama_cpp import Llama
 
@@ -391,6 +394,7 @@ def build_prompt(chat_id, user_message, global_prompt_name):
     if user_message.strip():
         full_log.append({"role": "user", "content": user_message})
         context.append({"type": "raw", "role": "user", "content": user_message})
+        record_user_message(chat_id)
     # Ensure history files exist even if no message was appended
     save_json(full_path, full_log)
     save_json(trimmed_path, context)
@@ -578,6 +582,8 @@ def chat(req: ChatRequest):
     full_log = load_json(full_path)
     full_log.append({"role": "bot", "content": response_text})
     save_json(full_path, full_log)
+    if record_assistant_message(chat_id):
+        enqueue_response_prompt(lambda: evaluate_goals(call_llm, chat_id))
     if len(full_log) == 2:
         first_user = full_log[0].get("content", "") if full_log else ""
         gprompt_content = get_global_prompt_content(global_prompt) or ""
@@ -685,6 +691,8 @@ def chat_stream(req: ChatRequest):
         full_history = load_json(full_path)
         full_history.append({"role": "bot", "content": text_accumulator})
         save_json(full_path, full_history)
+        if record_assistant_message(chat_id):
+            enqueue_response_prompt(lambda: evaluate_goals(call_llm, chat_id))
 
         # Goal initialization if this was the first exchange
         if len(full_history) == 2:
