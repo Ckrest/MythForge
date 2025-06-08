@@ -60,6 +60,17 @@ CHATS_DIR          = "chats"
 GLOBAL_PROMPTS_DIR = "global_prompts"
 SETTINGS_PATH      = "settings.json"
 
+# Helper utilities for per-chat directories
+def chat_file(chat_id: str, filename: str) -> str:
+    """Return the path for ``filename`` within ``chat_id``'s directory."""
+    return os.path.join(CHATS_DIR, chat_id, filename)
+
+def ensure_chat_dir(chat_id: str) -> str:
+    """Create and return the directory path for ``chat_id``."""
+    path = os.path.join(CHATS_DIR, chat_id)
+    os.makedirs(path, exist_ok=True)
+    return path
+
 # Match LM Studio defaults for a 4 GB VRAM setup
 DEFAULT_CTX_SIZE   = 4096
 DEFAULT_N_BATCH    = 512
@@ -372,7 +383,7 @@ def summarize_chunk(chunk):
     return {"type": "summary", "content": wrapped}
 
 def trim_context(chat_id):
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    trimmed_path = chat_file(chat_id, "trimmed.json")
     history = load_json(trimmed_path)
 
     # Collect indices of raw messages so we know where to insert summaries
@@ -399,8 +410,9 @@ def trim_context(chat_id):
 def build_prompt(chat_id, user_message, global_prompt_name):
     """Construct the next prompt using the LLaMA3 header-token format."""
 
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
-    full_path = f"{CHATS_DIR}/{chat_id}_full.json"
+    ensure_chat_dir(chat_id)
+    trimmed_path = chat_file(chat_id, "trimmed.json")
+    full_path = chat_file(chat_id, "full.json")
 
     # Append user message to history if it is not empty.  When generating with
     # an empty prompt, we do not want to record a blank user message.
@@ -451,13 +463,12 @@ def build_prompt(chat_id, user_message, global_prompt_name):
 @app.get("/chats")
 def list_chats():
     os.makedirs(CHATS_DIR, exist_ok=True)
-    files = os.listdir(CHATS_DIR)
-    chat_ids = [fname[:-len("_full.json")] for fname in files if fname.endswith("_full.json")]
+    chat_ids = [d for d in os.listdir(CHATS_DIR) if os.path.isdir(os.path.join(CHATS_DIR, d))]
     return {"chats": chat_ids}
 
 @app.get("/history/{chat_id}")
 def get_history(chat_id: str):
-    path = f"{CHATS_DIR}/{chat_id}_full.json"
+    path = chat_file(chat_id, "full.json")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Chat not found")
     return load_json(path)
@@ -465,8 +476,8 @@ def get_history(chat_id: str):
 @app.put("/history/{chat_id}/{index}")
 def edit_message(chat_id: str, index: int, data: Dict[str, str]):
     """Update the content of a message at ``index`` in ``chat_id``."""
-    full_path = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    full_path = chat_file(chat_id, "full.json")
+    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="Chat not found")
     full = load_json(full_path)
@@ -489,8 +500,8 @@ def edit_message(chat_id: str, index: int, data: Dict[str, str]):
 @app.delete("/history/{chat_id}/{index}")
 def delete_message(chat_id: str, index: int):
     """Remove the message at ``index`` from ``chat_id``."""
-    full_path = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    full_path = chat_file(chat_id, "full.json")
+    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="Chat not found")
     full = load_json(full_path)
@@ -512,17 +523,12 @@ def delete_message(chat_id: str, index: int):
 
 @app.delete("/chat/{chat_id}")
 def delete_chat(chat_id: str):
-    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
-    existed = False
-    if os.path.exists(full_path):
-        os.remove(full_path)
-        existed = True
-    if os.path.exists(trimmed_path):
-        os.remove(trimmed_path)
-        existed = True
-    if not existed:
+    chat_dir = os.path.join(CHATS_DIR, chat_id)
+    if not os.path.isdir(chat_dir):
         raise HTTPException(status_code=404, detail="Chat not found")
+    for fname in os.listdir(chat_dir):
+        os.remove(os.path.join(chat_dir, fname))
+    os.rmdir(chat_dir)
     return {"detail": f"Deleted chat '{chat_id}'"}
 
 @app.put("/chat/{chat_id}")
@@ -541,20 +547,14 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
     if new_id == chat_id:
         return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
-    old_full = f"{CHATS_DIR}/{chat_id}_full.json"
-    old_trim = f"{CHATS_DIR}/{chat_id}_trimmed.json"
-    if not (os.path.exists(old_full) or os.path.exists(old_trim)):
+    old_dir = os.path.join(CHATS_DIR, chat_id)
+    new_dir = os.path.join(CHATS_DIR, new_id)
+    if not os.path.isdir(old_dir):
         raise HTTPException(status_code=404, detail="Chat not found")
-
-    new_full = f"{CHATS_DIR}/{new_id}_full.json"
-    new_trim = f"{CHATS_DIR}/{new_id}_trimmed.json"
-    if os.path.exists(new_full) or os.path.exists(new_trim):
+    if os.path.exists(new_dir):
         raise HTTPException(status_code=400, detail="Chat name already exists")
 
-    if os.path.exists(old_full):
-        os.rename(old_full, new_full)
-    if os.path.exists(old_trim):
-        os.rename(old_trim, new_trim)
+    os.rename(old_dir, new_dir)
 
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
@@ -564,9 +564,9 @@ def chat(req: ChatRequest):
     user_message  = req.message
     global_prompt = req.global_prompt or ""
 
-    os.makedirs(CHATS_DIR, exist_ok=True)
-    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    ensure_chat_dir(chat_id)
+    full_path    = chat_file(chat_id, "full.json")
+    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
         save_json(trimmed_path, [])
@@ -631,9 +631,9 @@ def chat_stream(req: ChatRequest):
     user_message  = req.message
     global_prompt = req.global_prompt or ""
 
-    os.makedirs(CHATS_DIR, exist_ok=True)
-    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    ensure_chat_dir(chat_id)
+    full_path    = chat_file(chat_id, "full.json")
+    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
         save_json(trimmed_path, [])
@@ -740,9 +740,9 @@ def log_message(req: ChatRequest):
     user_message  = req.message
     global_prompt = req.global_prompt or ""
 
-    os.makedirs(CHATS_DIR, exist_ok=True)
-    full_path    = f"{CHATS_DIR}/{chat_id}_full.json"
-    trimmed_path = f"{CHATS_DIR}/{chat_id}_trimmed.json"
+    ensure_chat_dir(chat_id)
+    full_path    = chat_file(chat_id, "full.json")
+    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
         save_json(trimmed_path, [])
