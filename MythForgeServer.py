@@ -340,7 +340,7 @@ def build_prompt(chat_id, user_message, global_prompt_name):
         system_prompt,
         summaries,
         history,
-        user_message,
+        "",
         assistant_name,
     )
     return prompt_str, assistant_name
