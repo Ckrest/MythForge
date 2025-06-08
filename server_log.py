@@ -29,6 +29,10 @@ def log_entry(tag: str, func: str, args, kwargs, result) -> None:
         "result": repr(result),
     }
     _log_data.append(entry)
+    # Immediately persist logs so the file exists even if the process
+    # is long-running.  This ensures that a log file is created as soon
+    # as the first entry is recorded instead of only on shutdown.
+    _flush()
 
 
 def log_function(tag: str):
