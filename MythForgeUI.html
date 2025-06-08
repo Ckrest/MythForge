@@ -868,20 +868,14 @@
             scrollToBottom();
         }
 
-        function addTyping(){
-            const div=document.createElement('div'); div.className='message ai-message'; div.id='typing-indicator';
-            const avatar=document.createElement('div'); avatar.className='avatar ai-avatar'; avatar.textContent=(state.settings.botName[0]||'A');
-            const cont=document.createElement('div'); cont.className='message-content'; cont.textContent='...';
-            div.appendChild(avatar); div.appendChild(cont); chatContainer.appendChild(div); scrollToBottom();
-        }
-        function removeTyping(){ const t=document.getElementById('typing-indicator'); if(t) t.remove(); }
+
 
         function updatePromptIndicator(){
             const disabled = state.isGenerating || state.isProcessing;
             sendButton.disabled = disabled;
             sendOnlyButton.disabled = userInput.value.trim()==='' || disabled;
             userInput.classList.toggle('blocked', disabled);
-            userInput.placeholder = state.isProcessing ? 'Generating...' : 'Type a message...';
+            userInput.placeholder = state.isProcessing ? 'Thinking...' : 'Type a message...';
             promptIndicator.style.display = 'none';
         }
 
@@ -918,7 +912,7 @@
             sendOnlyButton.style.display='none';
             stopButton.style.display='inline';
             if(text!=='') appendMessageToUI('user', text);
-            addTyping(); state.isGenerating=true;
+            state.isGenerating=true;
             updatePromptIndicator();
             abortController = new AbortController();
             try{
@@ -933,7 +927,6 @@
                     signal: abortController.signal
                 });
                 if(!response.ok) throw new Error(`Server returned ${response.status}`);
-                removeTyping();
                 appendMessageToUI('assistant','');
                 const aiElement = chatContainer.lastChild.querySelector('.message-content');
                 const reader = response.body.getReader();
@@ -997,7 +990,7 @@
             }catch(err){
                 if(err.name!=='AbortError'){
                     console.error('Streaming fetch failed:', err);
-                    removeTyping(); appendMessageToUI('assistant','[Error generating response]');
+                    appendMessageToUI('assistant','[Error generating response]');
                 }
             }finally{
                 if(handleScroll){
