@@ -228,6 +228,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
     prompt = (
         f"{fragment}\n\nBased on the above, identify 2–3 actionable goals for the character."
     )
+    logger.debug("Goal generation prompt:\n%s", prompt, extra={"chat_id": chat_id})
     output = call_fn(prompt, max_tokens=200)
     text = output["choices"][0]["text"].strip()
     goals = parse_goals_from_response(text)
@@ -395,13 +396,25 @@ def record_assistant_message(chat_id: str) -> bool:
 
 
 def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
-    """Return a short prompt fragment describing the current state."""
-    fragments: List[str] = []
-    if state.get("scene_context"):
-        fragments.append(f"Scene Context:\n{state['scene_context']}")
-    if state.get("character_profile"):
-        fragments.append(f"Character Profile:\n{state['character_profile']}")
-    return "\n\n".join(fragments)
+    """Return a short prompt fragment describing the current state.
+
+    If either ``scene_context`` or ``character_profile`` is missing, a
+    ``[missing]`` placeholder is inserted for that section.  Only when both
+    are absent is an empty string returned.
+    """
+
+    scene_context = state.get("scene_context")
+    character_profile = state.get("character_profile")
+
+    if not scene_context and not character_profile:
+        return ""
+
+    parts = [
+        f"Scene Context:\n{scene_context if scene_context else '[missing]'}",
+        f"Character Profile:\n{character_profile if character_profile else '[missing]'}",
+    ]
+
+    return "\n\n".join(parts)
 
 # Apply automatic logging to all functions in this module
 import sys
