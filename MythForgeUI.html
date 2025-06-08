@@ -234,7 +234,7 @@
                         &#9632;
                     </button>
                 </div>
-                <div id="prompt-indicator" style="display:none; position:absolute; left:10px; bottom:8px; color:var(--primary); font-size:14px;">Processing...</div>
+                <div id="prompt-indicator" style="display:none; position:absolute; left:10px; bottom:8px; color:var(--primary); font-size:14px;"></div>
             </div>
         </div>
     </div>
@@ -840,7 +840,8 @@
             const disabled = state.isGenerating || state.isProcessing;
             sendButton.disabled = disabled;
             sendOnlyButton.disabled = userInput.value.trim()==='' || disabled;
-            promptIndicator.style.display = state.isProcessing ? 'block' : 'none';
+            userInput.placeholder = state.isProcessing ? 'Generating...' : 'Type a message...';
+            promptIndicator.style.display = 'none';
         }
 
         async function pollPromptStatus(){
