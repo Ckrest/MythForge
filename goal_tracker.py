@@ -267,6 +267,33 @@ def parse_and_merge_goals(data: GoalsListModel, state: Dict[str, Any], min_activ
         state["goals"] = active
 
 
+def _error_path(chat_id: str) -> str:
+    """Return the path used for goal evaluation error logs."""
+    return os.path.join(CHATS_DIR, f"{chat_id}_goal_eval_error.txt")
+
+
+def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListModel]:
+    """Return a ``GoalsListModel`` parsed from ``text``.
+
+    If ``text`` cannot be parsed or does not conform to the schema, the raw
+    value is written to an error file for troubleshooting and ``None`` is
+    returned.
+    """
+
+    model = _parse_json(text, GoalsListModel)
+    if model is not None:
+        return model
+
+    path = _error_path(chat_id)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        logger.warning("Wrote invalid goal evaluation output to %s", path)
+    except Exception as e:  # pragma: no cover - file write errors are rare
+        logger.warning("Failed to write goal evaluation error file '%s': %s", path, e)
+    return None
+
+
 def evaluate_goals(call_fn, chat_id: str, history_window: int = HISTORY_WINDOW, min_active: int = MIN_ACTIVE_GOALS, max_retries: int = 3) -> None:
     """Evaluate progress on current goals based on recent conversation."""
     state, convo = load_and_prepare_state(chat_id, history_window)
@@ -276,10 +303,11 @@ def evaluate_goals(call_fn, chat_id: str, history_window: int = HISTORY_WINDOW, 
         return
 
     instruction = (
-        "Evaluate the character's current goals based on the recent conversation. "
-        "For each goal decide if it is completed, still in progress, needs new tactics or should be abandoned. "
-        "If goals are completed or abandoned you may add new short term goals. "
-        "Return JSON with a 'goals' list where each goal has id, description, method and status."
+        "Evaluate the character's goals based solely on the recent messages. "
+        "For each goal decide if it is completed, in_progress, needs_tactics, or abandoned. "
+        "Add new short term goals only when others are completed or abandoned. "
+        "You must respond with ONLY valid JSON exactly matching this schema:\n"
+        '{"goals": [{"id": "<id>", "description": "<desc>", "method": "<method>", "status": "<status>"}]}'
     )
 
     prompt = build_prompt(convo, instruction)
@@ -298,7 +326,7 @@ def evaluate_goals(call_fn, chat_id: str, history_window: int = HISTORY_WINDOW, 
             output = call_fn(prompt, max_tokens=300)
             text = output["choices"][0]["text"].strip()
             logger.debug("Goal evaluation raw output:\n%s", text)
-            model = _parse_json(text, GoalsListModel)
+            model = format_goal_eval_response(text, chat_id)
             if model is None:
                 raise ValueError("invalid json")
             parse_and_merge_goals(model, state, min_active, call_fn)
