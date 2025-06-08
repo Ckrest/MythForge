@@ -6,6 +6,13 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Dict, List
+
+from goal_tracker import (
+    load_state,
+    ensure_initial_state,
+    check_and_generate_goals,
+    state_as_prompt_fragment,
+)
 from llama_cpp import Llama
 
 # Prompt formatting utilities
@@ -340,6 +347,14 @@ def build_prompt(chat_id, user_message, global_prompt_name):
     system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
     assistant_name = "assistant"
 
+    # Incorporate character state and goals if available
+    state = load_state(chat_id)
+    check_and_generate_goals(call_llm, chat_id)
+    state = load_state(chat_id)
+    fragment = state_as_prompt_fragment(state)
+    if fragment:
+        system_prompt = system_prompt + "\n" + fragment
+
     # Gather summaries and raw history for prompt formatting
     summaries: List[str] = []
     history: List[Dict[str, str]] = []
@@ -509,6 +524,10 @@ def chat(req: ChatRequest):
     full_log = load_json(full_path)
     full_log.append({"role": "bot", "content": response_text})
     save_json(full_path, full_log)
+    if len(full_log) == 2:
+        first_user = full_log[0].get("content", "") if full_log else ""
+        ensure_initial_state(call_llm, chat_id, global_prompt, first_user, response_text)
+        check_and_generate_goals(call_llm, chat_id)
 
     # Append bot to trimmed context
     trimmed = load_json(trimmed_path)
@@ -609,6 +628,12 @@ def chat_stream(req: ChatRequest):
         full_history.append({"role": "bot", "content": text_accumulator})
         save_json(full_path, full_history)
 
+        # Goal initialization if this was the first exchange
+        if len(full_history) == 2:
+            first_user = full_history[0].get("content", "") if full_history else ""
+            ensure_initial_state(call_llm, chat_id, global_prompt, first_user, text_accumulator)
+            check_and_generate_goals(call_llm, chat_id)
+
         # (2) Trimmed context
         trimmed = load_json(trimmed_path)
         trimmed.append({"type": "raw", "role": "bot", "content": text_accumulator})
@@ -661,3 +686,4 @@ def update_settings(data: Dict[str, object]):
 
 # ========== Static UI Mount ==========
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
+
