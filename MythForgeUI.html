@@ -495,6 +495,7 @@
             chatTab.classList.remove('active');
             promptTab.classList.add('active');
             moreTab.classList.remove('active');
+            refreshGlobalPromptList();
         }
 
         function hideSidebar(){
@@ -608,9 +609,9 @@
 
         async function refreshGlobalPromptList(){
             try{
-                const res = await fetch('/prompts');
+                const res = await fetch('/prompts?names_only=1');
                 const json = await res.json();
-                state.prompts = json.prompts.map(p=>p.name);
+                state.prompts = json.prompts;
                 const last = localStorage.getItem('lastGlobalPrompt');
                 if(last && state.prompts.includes(last)) state.currentPrompt = last;
                 renderPromptList();
@@ -648,9 +649,11 @@
         async function openPromptEditor(name=state.currentPrompt){
             if(!name) return alert('Select a prompt first.');
             try{
-                const res = await fetch('/prompts'); const json = await res.json();
-                const promptObj = json.prompts.find(p=>p.name===name); if(!promptObj) return alert('Prompt not found.');
-                const newContent = prompt(`Edit content for "${name}":`, promptObj.content); if(newContent===null) return; const contTrim = newContent.trim(); if(!contTrim) return alert('Prompt content cannot be empty.');
+                const res = await fetch(`/prompts/${encodeURIComponent(name)}`);
+                if(!res.ok){ alert('Prompt not found.'); return; }
+                const promptObj = await res.json();
+                const newContent = prompt(`Edit content for "${name}":`, promptObj.content);
+                if(newContent===null) return; const contTrim = newContent.trim(); if(!contTrim) return alert('Prompt content cannot be empty.');
                 const updateRes = await fetch(`/prompts/${encodeURIComponent(name)}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, content: contTrim})});
                 if(!updateRes.ok){ const err=await updateRes.json(); return alert('Error: '+err.detail); }
                 await refreshGlobalPromptList();
@@ -1041,7 +1044,6 @@
             showChatTab();
             await fetchChatList();
             if(state.currentChatId) await loadChat(state.currentChatId);
-            await refreshGlobalPromptList();
             await loadServerSettings();
             autoResize();
             updatePromptIndicator();
