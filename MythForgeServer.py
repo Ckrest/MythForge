@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from queue import Queue
-from threading import Thread
+from threading import Thread, Lock
 from pydantic import BaseModel
 from typing import Dict, List
 
@@ -178,6 +178,8 @@ def call_llm(prompt: str, **kwargs):
 # follow-up prompts execute sequentially.
 
 RESPONSE_PROMPT_QUEUE: Queue = Queue()
+_RESP_PENDING = 0
+_RESP_LOCK = Lock()
 
 
 def _response_prompt_worker() -> None:
@@ -190,6 +192,8 @@ def _response_prompt_worker() -> None:
         except Exception as e:
             print(f"[response_prompt_queue] task failed: {e}")
         finally:
+            with _RESP_LOCK:
+                globals()['_RESP_PENDING'] = max(0, _RESP_PENDING - 1)
             RESPONSE_PROMPT_QUEUE.task_done()
 
 
@@ -199,6 +203,8 @@ _RESPONSE_PROMPT_THREAD.start()
 
 def enqueue_response_prompt(fn) -> None:
     """Add ``fn`` to the post-response processing queue."""
+    with _RESP_LOCK:
+        globals()['_RESP_PENDING'] += 1
     RESPONSE_PROMPT_QUEUE.put(fn)
 
 # ========== Helpers ==========
@@ -757,6 +763,14 @@ def update_settings(data: Dict[str, object]):
     global DEFAULT_MAX_TOKENS
     DEFAULT_MAX_TOKENS = SETTINGS.get("max_tokens", DEFAULT_MAX_TOKENS)
     return {"detail": "Updated", "settings": SETTINGS}
+
+# ========== Response Prompt Status ==========
+@app.get("/response_prompt_status")
+def response_prompt_status():
+    """Return the number of queued or running response prompts."""
+    with _RESP_LOCK:
+        pending = _RESP_PENDING
+    return {"pending": pending}
 
 # ========== Static UI Mount ==========
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
