@@ -211,6 +211,13 @@ def load_global_prompts():
             print(f"Ignoring invalid global prompt file: {fname}")
     return prompts
 
+def get_global_prompt_content(name: str) -> str | None:
+    """Return the content string for a prompt ``name`` if it exists."""
+    for prompt in load_global_prompts():
+        if prompt["name"] == name:
+            return prompt["content"]
+    return None
+
 
 def save_global_prompt(prompt: Dict[str, str]):
     os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
@@ -541,7 +548,8 @@ def chat(req: ChatRequest):
     save_json(full_path, full_log)
     if len(full_log) == 2:
         first_user = full_log[0].get("content", "") if full_log else ""
-        ensure_initial_state(call_llm, chat_id, global_prompt, first_user, response_text)
+        gprompt_content = get_global_prompt_content(global_prompt) or ""
+        ensure_initial_state(call_llm, chat_id, gprompt_content, first_user, response_text)
         check_and_generate_goals(call_llm, chat_id)
 
     # Append bot to trimmed context
@@ -646,7 +654,8 @@ def chat_stream(req: ChatRequest):
         # Goal initialization if this was the first exchange
         if len(full_history) == 2:
             first_user = full_history[0].get("content", "") if full_history else ""
-            ensure_initial_state(call_llm, chat_id, global_prompt, first_user, text_accumulator)
+            gprompt_content = get_global_prompt_content(global_prompt) or ""
+            ensure_initial_state(call_llm, chat_id, gprompt_content, first_user, text_accumulator)
             check_and_generate_goals(call_llm, chat_id)
 
         # (2) Trimmed context
