@@ -20,7 +20,11 @@ from typing import Dict, List, Optional
 
 def _strip_junk(text: str) -> str:
     """Remove LM Studio tokens and metadata lines."""
-    cleaned = re.sub(r"<\|start_header_id\>|<\|end_header_id\>|<\|eot_id\>", "", text)
+    cleaned = re.sub(
+        r"<\|start_header_id\>|<\|end_header_id\>|<\|eot_id\>|<\|begin_of_text\|>",
+        "",
+        text,
+    )
     cleaned = re.sub(r"^Cutting Knowledge Date.*\n?", "", cleaned, flags=re.MULTILINE)
     cleaned = re.sub(r"^Today Date.*\n?", "", cleaned, flags=re.MULTILINE)
     return cleaned.strip()
