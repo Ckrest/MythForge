@@ -1,8 +1,13 @@
 # Goal tracking utilities for Myth Forge
 import json
+import logging
 import os
 import re
-from typing import Dict, Any, List
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Type
+
+from pydantic import BaseModel, ValidationError
 
 from airoboros_prompter import format_llama3
 
@@ -11,6 +16,47 @@ from airoboros_prompter import format_llama3
 CHATS_DIR = "chats"
 
 STATE_SUFFIX = "_state.json"
+
+# Configurable parameters
+HISTORY_WINDOW = int(os.environ.get("MF_HISTORY_WINDOW", 8))
+MIN_ACTIVE_GOALS = int(os.environ.get("MF_MIN_ACTIVE_GOALS", 3))
+
+logger = logging.getLogger("goal_tracker")
+
+
+class GoalModel(BaseModel):
+    id: str
+    description: str
+    method: str
+    status: Optional[str] = None
+
+
+class GoalsListModel(BaseModel):
+    goals: List[GoalModel]
+
+
+class InitialStateModel(BaseModel):
+    character_profile: Optional[Dict[str, Any]] = None
+    scene_context: Optional[Dict[str, Any]] = None
+    goals: List[GoalModel] = []
+
+
+def _parse_json(text: str, model: Type[BaseModel]) -> Optional[BaseModel]:
+    """Parse ``text`` using ``model`` after stripping fences."""
+    cleaned = _extract_json(text)
+    try:
+        data = json.loads(cleaned)
+    except Exception as e:
+        logger.warning("JSON decoding failed: %s", e)
+        logger.debug("Raw text: %s", text)
+        return None
+
+    try:
+        return model.parse_obj(data)
+    except ValidationError as e:
+        logger.warning("Schema validation failed: %s", e)
+        logger.debug("Raw data: %s", data)
+        return None
 
 
 def _extract_json(text: str) -> str:
@@ -43,7 +89,7 @@ def load_state(chat_id: str) -> Dict[str, Any]:
                     data["completed_goals"] = []
                 return data
             except Exception as e:
-                print(f"Failed to load state '{path}': {e}")
+                logger.warning("Failed to load state '%s': %s", path, e)
     return {
         "character_profile": None,
         "scene_context": None,
@@ -57,12 +103,12 @@ def save_state(chat_id: str, state: Dict[str, Any]) -> None:
     path = _state_path(chat_id)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
-    print(f"[goal_tracker] Saved state to {path}")
+    logger.debug("Saved state to %s", path)
 
 
 def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant_msg: str) -> Dict[str, Any]:
     """Use the language model to create an initial state for the character."""
-    print("[goal_tracker] Generating initial state ...")
+    logger.info("Generating initial state")
     instruction = (
         "Analyze the global prompt, the user's first message, and the assistant's first reply. "
         "Return JSON with keys 'character_profile', 'scene_context', and 'goals'. "
@@ -83,22 +129,22 @@ def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant
         },
     ]
     prompt = format_llama3("", None, messages, "")
-    print("[goal_tracker] Initial state prompt:\n" + prompt)
+    logger.debug("Initial state prompt:\n%s", prompt)
     output = call_fn(prompt, max_tokens=400)
     text = output["choices"][0]["text"].strip()
-    print("[goal_tracker] Initial state raw output:\n" + text)
-    try:
-        data = json.loads(_extract_json(text))
-    except Exception as e:
-        print(f"Failed to parse initial state: {e}")
-        data = {"character_profile": None, "scene_context": None, "goals": []}
-    print("[goal_tracker] Parsed initial state:", data)
+    logger.debug("Initial state raw output:\n%s", text)
+    model = _parse_json(text, InitialStateModel)
+    if model is None:
+        logger.warning("Failed to parse initial state")
+        return {"character_profile": None, "scene_context": None, "goals": []}
+    data = model.dict()
+    logger.debug("Parsed initial state: %s", data)
     return data
 
 
 def generate_goals(call_fn, character_profile: Dict[str, Any], scene_context: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Generate new goals using the language model."""
-    print("[goal_tracker] Generating goals ...")
+    logger.info("Generating goals")
     instruction = (
         "Based on the character profile and scene context, generate 2 to 3 specific, "
         "actionable goals for the character. Return JSON list of goal objects with id, "
@@ -112,20 +158,28 @@ def generate_goals(call_fn, character_profile: Dict[str, Any], scene_context: Di
         },
     ]
     prompt = format_llama3("", None, messages, "")
-    print("[goal_tracker] Goals prompt:\n" + prompt)
+    logger.debug("Goals prompt:\n%s", prompt)
     output = call_fn(prompt, max_tokens=200)
     text = output["choices"][0]["text"].strip()
-    print("[goal_tracker] Goals raw output:\n" + text)
+    logger.debug("Goals raw output:\n%s", text)
     try:
-        goals = json.loads(_extract_json(text))
+        data = json.loads(_extract_json(text))
     except Exception as e:
-        print(f"Failed to parse goals: {e}")
-        goals = []
-    print("[goal_tracker] Parsed goals:", goals)
-    return goals
+        logger.warning("Failed to parse goals: %s", e)
+        return []
+    if isinstance(data, list):
+        result = []
+        for g in data:
+            if isinstance(g, dict) and "id" in g and "description" in g:
+                result.append(g)
+        logger.debug("Parsed goals: %s", result)
+        return result
+    logger.warning("Goal generation returned invalid format")
+    return []
 
 
 def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: str, first_assistant: str) -> None:
+    logger.info("Generating initial state", extra={"chat_id": chat_id})
     state = load_state(chat_id)
     if state.get("character_profile") is not None:
         return
@@ -137,13 +191,14 @@ def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: 
 
 
 def check_and_generate_goals(call_fn, chat_id: str) -> None:
+    logger.info("Checking for missing goals", extra={"chat_id": chat_id})
     state = load_state(chat_id)
     if state.get("character_profile") and state.get("scene_context") and not state.get("goals"):
         goals = generate_goals(call_fn, state["character_profile"], state["scene_context"])
         state["goals"] = goals
         save_state(chat_id, state)
     else:
-        print("[goal_tracker] Goals already present or character state incomplete")
+        logger.debug("Goals already present or character state incomplete", extra={"chat_id": chat_id})
 
 
 def _load_json(path: str):
@@ -152,27 +207,70 @@ def _load_json(path: str):
             try:
                 return json.load(f)
             except Exception as e:
-                print(f"Failed to load json '{path}': {e}")
+                logger.warning("Failed to load json '%s': %s", path, e)
     return []
 
 
-def evaluate_goals(call_fn, chat_id: str) -> None:
-    """Evaluate progress on current goals based on recent conversation."""
+def load_and_prepare_state(chat_id: str, history_window: int = HISTORY_WINDOW):
     state = load_state(chat_id)
-    goals = state.get("goals") or []
-    if not goals:
-        print("[goal_tracker] No goals to evaluate")
-        return
-
     trimmed_path = os.path.join(CHATS_DIR, f"{chat_id}_trimmed.json")
     history = _load_json(trimmed_path)
     convo: List[Dict[str, str]] = []
-    for m in history[-8:]:  # include recent context
+    for m in history[-history_window:]:
         if m.get("type") == "summary":
             convo.append({"role": "system", "content": f"SUMMARY: {m['content']}"})
         else:
             role = "assistant" if m.get("role") == "bot" else m.get("role", "user")
             convo.append({"role": role, "content": m.get("content", "")})
+    return state, convo
+
+
+def build_prompt(convo: List[Dict[str, str]], instruction: str) -> str:
+    return format_llama3("", None, convo, instruction)
+
+
+def parse_and_merge_goals(data: GoalsListModel, state: Dict[str, Any], min_active: int, call_fn) -> None:
+    completed = state.get("completed_goals", [])
+    active = []
+    seen_ids = {g.get("id") for g in completed}
+    for g in data.goals:
+        status = (g.status or "").lower()
+        if status in ("completed", "abandoned"):
+            completed.append(g.dict())
+            seen_ids.add(g.id)
+            continue
+        if g.id in seen_ids:
+            continue
+        active.append(g.dict())
+        seen_ids.add(g.id)
+
+    state["completed_goals"] = completed
+    state["goals"] = active
+
+    if (
+        len(active) < min_active
+        and state.get("character_profile")
+        and state.get("scene_context")
+    ):
+        new_goals = generate_goals(call_fn, state["character_profile"], state["scene_context"])
+        for g in new_goals:
+            gid = g.get("id")
+            if not gid or gid in seen_ids:
+                continue
+            active.append(g)
+            seen_ids.add(gid)
+            if len(active) >= min_active:
+                break
+        state["goals"] = active
+
+
+def evaluate_goals(call_fn, chat_id: str, history_window: int = HISTORY_WINDOW, min_active: int = MIN_ACTIVE_GOALS, max_retries: int = 3) -> None:
+    """Evaluate progress on current goals based on recent conversation."""
+    state, convo = load_and_prepare_state(chat_id, history_window)
+    goals = state.get("goals") or []
+    if not goals:
+        logger.info("No goals to evaluate", extra={"chat_id": chat_id})
+        return
 
     instruction = (
         "Evaluate the character's current goals based on the recent conversation. "
@@ -181,56 +279,36 @@ def evaluate_goals(call_fn, chat_id: str) -> None:
         "Return JSON with a 'goals' list where each goal has id, description, method and status."
     )
 
-    prompt = format_llama3("", None, convo, instruction)
-    print("[goal_tracker] Goal evaluation prompt:\n" + prompt)
-    output = call_fn(prompt, max_tokens=300)
-    text = output["choices"][0]["text"].strip()
-    print("[goal_tracker] Goal evaluation raw output:\n" + text)
-    try:
-        data = json.loads(_extract_json(text))
-        if isinstance(data, dict) and isinstance(data.get("goals"), list):
-            completed = state.get("completed_goals", [])
-            active = []
-            for g in data["goals"]:
-                status = str(g.get("status", "")).lower()
-                gid = g.get("id")
-                if status in ("completed", "abandoned"):
-                    completed.append(g)
-                    continue
-                if gid and any(c.get("id") == gid for c in completed):
-                    continue
-                active.append(g)
+    prompt = build_prompt(convo, instruction)
+    logger.debug("Goal evaluation prompt:\n%s", prompt)
 
-            state["completed_goals"] = completed
-            state["goals"] = active
+    # Trim context if it exceeds threshold (approx token count)
+    while len(prompt.split()) > 3500 and convo:
+        convo.pop(0)
+        prompt = build_prompt(convo, instruction)
+    if len(prompt.split()) > 3500:
+        logger.warning("Context truncated for goal evaluation", extra={"chat_id": chat_id})
 
-            if (
-                len(active) < 3
-                and state.get("character_profile")
-                and state.get("scene_context")
-            ):
-                new_goals = generate_goals(
-                    call_fn, state["character_profile"], state["scene_context"]
-                )
+    backoff = 1.0
+    for attempt in range(max_retries):
+        try:
+            output = call_fn(prompt, max_tokens=300)
+            text = output["choices"][0]["text"].strip()
+            logger.debug("Goal evaluation raw output:\n%s", text)
+            model = _parse_json(text, GoalsListModel)
+            if model is None:
+                raise ValueError("invalid json")
+            parse_and_merge_goals(model, state, min_active, call_fn)
+            state["messages_since_goal_eval"] = 0
+            save_state(chat_id, state)
+            return
+        except Exception as e:
+            logger.warning("Goal evaluation attempt %s failed: %s", attempt + 1, e, extra={"chat_id": chat_id})
+            time.sleep(backoff)
+            backoff *= 2
 
-                def duplicate(goal):
-                    gid = goal.get("id")
-                    return any(a.get("id") == gid for a in active) or any(
-                        c.get("id") == gid for c in completed
-                    )
-
-                for g in new_goals:
-                    if duplicate(g):
-                        continue
-                    active.append(g)
-                    if len(active) >= 3:
-                        break
-                state["goals"] = active
-        else:
-            print("[goal_tracker] Invalid goal evaluation format")
-    except Exception as e:
-        print(f"Failed to parse goal evaluation: {e}")
-    state["messages_since_goal_eval"] = 0
+    # If we get here, all retries failed
+    logger.warning("Goal evaluation failed after retries", extra={"chat_id": chat_id})
     save_state(chat_id, state)
 
 
