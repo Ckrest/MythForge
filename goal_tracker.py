@@ -20,6 +20,7 @@ STATE_NAME = "state.json"
 # Configurable parameters
 HISTORY_WINDOW = int(os.environ.get("MF_HISTORY_WINDOW", 8))
 MIN_ACTIVE_GOALS = int(os.environ.get("MF_MIN_ACTIVE_GOALS", 3))
+DEBUG_MODE = os.environ.get("MF_DEBUG", "0") in ("1", "true", "yes")
 
 logger = logging.getLogger("goal_tracker")
 
@@ -379,19 +380,14 @@ def evaluate_goals(call_fn, chat_id: str, history_window: int = HISTORY_WINDOW, 
 
 
 def record_user_message(chat_id: str) -> None:
-    path = _state_path(chat_id)
-    if not os.path.exists(path):
-        return
+    """Increment the message counter for ``chat_id``."""
     state = load_state(chat_id)
     state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
     save_state(chat_id, state)
 
 
 def record_assistant_message(chat_id: str) -> bool:
-    """Increment message counter and return True if goal evaluation is due."""
-    path = _state_path(chat_id)
-    if not os.path.exists(path):
-        return False
+    """Increment the counter and return True when goal evaluation should run."""
     state = load_state(chat_id)
     state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
     save_state(chat_id, state)
