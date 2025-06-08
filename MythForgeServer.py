@@ -9,6 +9,7 @@ from threading import Thread, Lock
 from pydantic import BaseModel
 from typing import Dict, List
 
+import goal_tracker
 from goal_tracker import (
     load_state,
     ensure_initial_state,
@@ -451,6 +452,9 @@ def build_prompt(chat_id, user_message, global_prompt_name):
         full_log.append({"role": "user", "content": user_message})
         context.append({"type": "raw", "role": "user", "content": user_message})
         record_user_message(chat_id)
+        state = load_state(chat_id)
+        if goal_tracker.DEBUG_MODE or state.get("messages_since_goal_eval", 0) >= 2:
+            check_and_generate_goals(call_llm, chat_id)
     # Ensure history files exist even if no message was appended
     save_json(full_path, full_log)
     save_json(trimmed_path, context)
@@ -633,7 +637,6 @@ def chat(req: ChatRequest):
                 call_llm, chat_id, gp, fu, rt
             )
         )
-        enqueue_response_prompt(lambda: check_and_generate_goals(call_llm, chat_id))
 
     # Append bot to trimmed context
     trimmed = load_json(trimmed_path)
@@ -744,7 +747,6 @@ def chat_stream(req: ChatRequest):
                     call_llm, chat_id, gp, fu, rt
                 )
             )
-            enqueue_response_prompt(lambda: check_and_generate_goals(call_llm, chat_id))
 
         # (2) Trimmed context
         trimmed = load_json(trimmed_path)
