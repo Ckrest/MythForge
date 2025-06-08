@@ -19,11 +19,30 @@ def _flush():
 atexit.register(_flush)
 
 
-def log_entry(tag: str, func: str, args, kwargs, result) -> None:
+def _get_function_details(fn):
+    """Return a detailed description of the function for logging."""
+    try:
+        file = inspect.getsourcefile(fn) or ""
+        line = inspect.getsourcelines(fn)[1]
+    except (OSError, TypeError):
+        file = ""
+        line = None
+    return {
+        "name": fn.__name__,
+        "qualified_name": fn.__qualname__,
+        "module": fn.__module__,
+        "file": file,
+        "line": line,
+        "signature": str(inspect.signature(fn)),
+        "doc": inspect.getdoc(fn),
+    }
+
+
+def log_entry(tag: str, func, args, kwargs, result) -> None:
     entry = {
         "time": datetime.datetime.now().isoformat(),
         "tag": tag,
-        "function": func,
+        "function": _get_function_details(func),
         "args": repr(args),
         "kwargs": repr(kwargs),
         "result": repr(result),
@@ -41,10 +60,10 @@ def log_function(tag: str):
         def wrapper(*args, **kwargs):
             try:
                 res = fn(*args, **kwargs)
-                log_entry(tag, fn.__name__, args, kwargs, res)
+                log_entry(tag, fn, args, kwargs, res)
                 return res
             except Exception as e:
-                log_entry(tag, fn.__name__, args, kwargs, f"ERROR: {e}")
+                log_entry(tag, fn, args, kwargs, f"ERROR: {e}")
                 raise
         wrapper._patched = True
         return wrapper
