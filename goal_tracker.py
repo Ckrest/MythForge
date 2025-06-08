@@ -31,10 +31,12 @@ def save_state(chat_id: str, state: Dict[str, Any]) -> None:
     path = _state_path(chat_id)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+    print(f"[goal_tracker] Saved state to {path}")
 
 
 def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant_msg: str) -> Dict[str, Any]:
     """Use the language model to create an initial state for the character."""
+    print("[goal_tracker] Generating initial state ...")
     instruction = (
         "Analyze the global prompt, the user's first message, and the assistant's first reply. "
         "Return JSON with keys 'character_profile', 'scene_context', and 'goals'. "
@@ -55,18 +57,22 @@ def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant
         },
     ]
     prompt = format_llama3("", None, messages, "")
+    print("[goal_tracker] Initial state prompt:\n" + prompt)
     output = call_fn(prompt, max_tokens=400)
     text = output["choices"][0]["text"].strip()
+    print("[goal_tracker] Initial state raw output:\n" + text)
     try:
         data = json.loads(text)
     except Exception as e:
         print(f"Failed to parse initial state: {e}")
         data = {"character_profile": None, "scene_context": None, "goals": []}
+    print("[goal_tracker] Parsed initial state:", data)
     return data
 
 
 def generate_goals(call_fn, character_profile: Dict[str, Any], scene_context: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Generate new goals using the language model."""
+    print("[goal_tracker] Generating goals ...")
     instruction = (
         "Based on the character profile and scene context, generate 2 to 3 specific, "
         "actionable goals for the character. Return JSON list of goal objects with id, "
@@ -80,13 +86,16 @@ def generate_goals(call_fn, character_profile: Dict[str, Any], scene_context: Di
         },
     ]
     prompt = format_llama3("", None, messages, "")
+    print("[goal_tracker] Goals prompt:\n" + prompt)
     output = call_fn(prompt, max_tokens=200)
     text = output["choices"][0]["text"].strip()
+    print("[goal_tracker] Goals raw output:\n" + text)
     try:
         goals = json.loads(text)
     except Exception as e:
         print(f"Failed to parse goals: {e}")
         goals = []
+    print("[goal_tracker] Parsed goals:", goals)
     return goals
 
 
@@ -107,6 +116,8 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         goals = generate_goals(call_fn, state["character_profile"], state["scene_context"])
         state["goals"] = goals
         save_state(chat_id, state)
+    else:
+        print("[goal_tracker] Goals already present or character state incomplete")
 
 
 def state_as_prompt_fragment(state: Dict[str, Any]) -> str:

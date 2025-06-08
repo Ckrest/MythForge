@@ -41,6 +41,11 @@ def format_llama3(
 
     messages: List[Dict[str, str]] = []
 
+    # Remove any stray header tokens from user provided text to avoid
+    # duplicating them in the final prompt.
+    global_prompt = _strip_junk(global_prompt)
+    instruction = _strip_junk(instruction)
+
     system_parts: List[str] = []
     if global_prompt:
         system_parts.append(global_prompt.strip())
@@ -72,7 +77,10 @@ def format_llama3(
     lines.append("<|start_header_id|>assistant<|end_header_id|>")
     lines.append("")
 
-    return "\n".join(lines)
+    prompt = "\n".join(lines)
+    # Guard against accidental duplication of the begin token
+    prompt = re.sub(r"^(<\|begin_of_text\|>)+", "<|begin_of_text|>", prompt)
+    return prompt
 
 
 def main() -> None:
