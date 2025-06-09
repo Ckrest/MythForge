@@ -166,6 +166,62 @@ def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: 
         log_event("state_saved", {"path": _state_path(chat_id)})
 
 
+def _parse_goal_items(text: str) -> List[Dict[str, Any]]:
+    """Return a list of goal dictionaries parsed from ``text``.
+
+    Each dictionary may contain ``id``, ``description``, ``method`` and
+    ``status`` keys depending on what was present in the source text.
+    """
+
+    items: List[Dict[str, Any]] = []
+    extracted = _extract_json(text)
+    try:
+        data = json.loads(extracted)
+        if isinstance(data, dict):
+            if "goals" in data:
+                data = data["goals"]
+            else:
+                return items
+        if isinstance(data, list):
+            for entry in data:
+                if isinstance(entry, dict):
+                    goal = {
+                        "id": entry.get("id"),
+                        "description": entry.get("description")
+                        or entry.get("text", ""),
+                        "method": entry.get("method", ""),
+                        "status": entry.get("status"),
+                    }
+                    if goal["description"] or goal["id"]:
+                        items.append(goal)
+                elif isinstance(entry, str):
+                    items.append({
+                        "id": None,
+                        "description": entry.strip(),
+                        "method": "",
+                        "status": None,
+                    })
+            return items
+    except json.JSONDecodeError:
+        pass
+
+    numbered = re.findall(r"^\s*\d+[\.)]\s*(.+)$", text, flags=re.MULTILINE)
+    bullets = re.findall(r"^\s*[-\*•]\s*(.+)$", text, flags=re.MULTILINE)
+    lines = numbered if numbered else bullets
+    if not lines:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    for line in lines:
+        items.append({
+            "id": None,
+            "description": line.strip(),
+            "method": "",
+            "status": None,
+        })
+
+    return items
+
+
 def parse_goals_from_response(
     text: str, goals: Optional[List[Dict[str, Any]]] = None
 ) -> List[Dict[str, Any]]:
@@ -179,34 +235,11 @@ def parse_goals_from_response(
     if goals is None:
         goals = []
 
-    # Try JSON extraction first
-    extracted = _extract_json(text)
-    try:
-        data = json.loads(extracted)
-        if isinstance(data, dict) and "goals" in data:
-            data = data["goals"]
-        if isinstance(data, list):
-            for item in data:
-                if isinstance(item, dict):
-                    desc = item.get("description") or item.get("text", "")
-                    method = item.get("method", "")
-                    if desc:
-                        goals.append({"description": desc, "method": method})
-                elif isinstance(item, str):
-                    goals.append({"description": item.strip(), "method": ""})
-            return goals
-    except json.JSONDecodeError:
-        pass
-
-    # Fallback: numbered/bulleted lists or plain text lines
-    numbered = re.findall(r'^\s*\d+[\.)]\s*(.+)$', text, flags=re.MULTILINE)
-    bullets = re.findall(r'^\s*[-\*•]\s*(.+)$', text, flags=re.MULTILINE)
-    lines = numbered if numbered else bullets
-    if not lines:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-
-    for line in lines:
-        goals.append({"description": line.strip(), "method": ""})
+    for item in _parse_goal_items(text):
+        desc = item.get("description", "")
+        method = item.get("method", "")
+        if desc:
+            goals.append({"description": desc, "method": method})
 
     return goals
 
@@ -436,6 +469,13 @@ def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListMode
     model = _parse_json(text, GoalsListModel)
     if model is not None:
         return model
+
+    fallback_items = _parse_goal_items(text)
+    if fallback_items:
+        try:
+            return GoalsListModel(goals=[GoalModel(**item) for item in fallback_items])
+        except ValidationError:
+            pass
 
     logger.warning("Invalid goal evaluation output", extra={"chat_id": chat_id})
     log_event("goal_eval_invalid_output", {"raw": text, "chat_id": chat_id})
