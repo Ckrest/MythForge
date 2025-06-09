@@ -13,7 +13,7 @@ def test_log_event_includes_function_name(tmp_path, monkeypatch):
 
     sample()
 
-    data = [json.loads(line) for line in log_path.read_text().splitlines()]
+    data = [json.loads(e) for e in log_path.read_text().split("\n\n") if e.strip()]
     entry = data[0]
     assert entry["function_name"] == "sample"
     assert entry["tag"] == "test_tag"
@@ -30,7 +30,7 @@ def test_log_function_includes_function_name(tmp_path, monkeypatch):
 
     foo(3)
 
-    data = [json.loads(line) for line in log_path.read_text().splitlines()]
+    data = [json.loads(e) for e in log_path.read_text().split("\n\n") if e.strip()]
     entry = data[0]
     assert entry["function_name"] == "foo"
     assert entry["tag"] == "decorated"

@@ -176,13 +176,25 @@ except Exception:  # pragma: no cover - signature introspection may fail
 
 
 def call_llm(prompt: str, **kwargs):
-    """Call the ``llm`` object with only the supported keyword arguments."""
+    """Call the ``llm`` object and log all raw text outputs."""
 
     if _CALL_KWARGS:
         filtered = {k: v for k, v in kwargs.items() if k in _CALL_KWARGS}
     else:  # Fallback if inspection failed
         filtered = kwargs
-    return llm(prompt, **filtered)
+
+    if filtered.get("stream"):
+        for chunk in llm(prompt, **filtered):
+            text = chunk["choices"][0]["text"]
+            log_event("llm_raw_output", {"raw": text})
+            yield chunk
+    else:
+        res = llm(prompt, **filtered)
+        text = res["choices"][0]["text"]
+        log_event("llm_raw_output", {"raw": text})
+        return res
+
+call_llm._patched = True
 
 # ========== Response Prompt Queue ==========
 # Some operations (e.g. summarization, goal evaluation) trigger their own
@@ -833,6 +845,6 @@ app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 # Apply automatic logging to all functions in this module
 import sys
-from server_log import patch_module_functions
+from server_log import patch_module_functions, log_event
 patch_module_functions(sys.modules[__name__], "server")
 
