@@ -153,6 +153,8 @@ def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant
     ]
     prompt = format_llama3("", None, messages, "")
     logger.debug("Initial state prompt:\n%s", prompt)
+    logger.debug("Final LLM prompt:\n%s", prompt)
+    log_event("llm_final_prompt", {"prompt": prompt})
     output = call_fn(prompt, max_tokens=400)
     text = output["choices"][0]["text"].strip()
     logger.debug("Initial state raw output:\n%s", text)
@@ -182,6 +184,8 @@ def generate_goals(call_fn, character_profile: Dict[str, Any], scene_context: Di
     ]
     prompt = format_llama3("", None, messages, "")
     logger.debug("Goals prompt:\n%s", prompt)
+    logger.debug("Final LLM prompt:\n%s", prompt)
+    log_event("llm_final_prompt", {"prompt": prompt})
     output = call_fn(prompt, max_tokens=200)
     text = output["choices"][0]["text"].strip()
     logger.debug("Goals raw output:\n%s", text)
@@ -399,6 +403,8 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
     logger.debug("Goal generation prompt:\n%s", prompt, extra={"chat_id": chat_id})
     # Log full prompt for debugging before sending to the LLM
     logger.info("LLM goal prompt", extra={"chat_id": chat_id, "prompt": prompt})
+    logger.debug("Final LLM prompt:\n%s", prompt)
+    log_event("llm_final_prompt", {"prompt": prompt})
 
     for attempt in range(1, 3):
         output = call_fn(prompt, max_tokens=200)
@@ -519,6 +525,9 @@ def evaluate_and_update_goals(
         prompt = build_prompt(convo, instruction)
     if len(prompt.split()) > 3500:
         logger.warning("Context truncated for goal evaluation", extra={"chat_id": chat_id})
+
+    logger.debug("Final LLM prompt:\n%s", prompt)
+    log_event("llm_final_prompt", {"prompt": prompt})
 
     backoff = 1.0
     for attempt in range(max_retries):
@@ -653,9 +662,10 @@ def record_assistant_message(chat_id: str) -> bool:
 def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
     """Return a short prompt fragment describing the current state.
 
-    If either ``scene_context`` or ``character_profile`` is missing, a
-    ``[missing]`` placeholder is inserted for that section.  Only when both
-    are absent is an empty string returned.
+    ``scene_context`` is included while ``character_profile`` is only used to
+    determine if the overall state is empty.  When both values are missing an
+    empty string is returned.  Otherwise the scene context is emitted with a
+    ``[missing]`` placeholder when absent.
     """
 
     scene_context = state.get("scene_context")
@@ -664,10 +674,7 @@ def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
     if not scene_context and not character_profile:
         return ""
 
-    parts = [
-        f"Scene Context:\n{scene_context if scene_context else '[missing]'}",
-        f"Character Profile:\n{character_profile if character_profile else '[missing]'}",
-    ]
+    parts = [f"Scene Context:\n{scene_context if scene_context else '[missing]'}"]
 
     return "\n\n".join(parts)
 
