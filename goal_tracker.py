@@ -356,6 +356,42 @@ def _apply_goal_update(
     return False
 
 
+def _check_goal_similarity(
+    call_fn,
+    chat_id: str,
+    existing: List[Dict[str, Any]],
+    updated: List[Dict[str, Any]],
+) -> bool:
+    """Return True when any of ``updated`` are too similar to ``existing``."""
+
+    payload = {"current": existing, "new": updated}
+    instruction = (
+        "If any of the new goals are too similar to the current goals, return "
+        "ONLY JSON like {\"duplicates\": true}. Otherwise return {\"duplicates\": false}."
+    )
+    messages = [
+        {"role": "system", "content": instruction},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+    prompt = format_llama3("", None, messages, "")
+    logger.debug("Goal similarity prompt:\n%s", prompt, extra={"chat_id": chat_id})
+    output = call_fn(prompt, max_tokens=50, temperature=0)
+    text = output["choices"][0]["text"].strip()
+    log_event("goal_similarity_raw", {"raw": text})
+    try:
+        data = json.loads(_extract_json(text))
+        dup = bool(data.get("duplicates"))
+        logger.info(
+            "Goal similarity duplicates=%s", dup, extra={"chat_id": chat_id}
+        )
+        return dup
+    except Exception as e:
+        logger.warning(
+            "Failed to parse goal similarity response: %s", e, extra={"chat_id": chat_id}
+        )
+        log_event("goal_similarity_parse_failed", {"raw": text})
+    return False
+
 def check_and_generate_goals(call_fn, chat_id: str) -> None:
     """Generate goals if none exist using current state."""
     logger.info("Checking for missing goals", extra={"chat_id": chat_id})
@@ -401,6 +437,8 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
             changed = _apply_goal_update(chat_id, state, prepared, original_goals)
             if changed:
                 state["messages_since_goal_eval"] = 0
+                if original_goals:
+                    _check_goal_similarity(call_fn, chat_id, original_goals, state.get("goals", []))
                 if save_state(chat_id, state):
                     log_event("state_saved", {"path": _state_path(chat_id)})
                 logger.info(
