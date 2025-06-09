@@ -313,3 +313,14 @@ def test_preserve_goal_details_on_completion(tmp_path, monkeypatch):
     assert new_state["goals"] == []
     assert new_state["completed_goals"] == [{"id": "1", "description": "orig", "method": "m", "status": "completed"}]
 
+
+def test_parse_goals_from_response_appends():
+    existing = [{"id": "1", "description": "a", "method": ""}]
+    text = '[{"id": "2", "description": "b", "method": ""}]'
+    result = goal_tracker.parse_goals_from_response(text, existing)
+    assert result is existing
+    assert existing == [
+        {"id": "1", "description": "a", "method": ""},
+        {"id": "2", "description": "b", "method": ""},
+    ]
+

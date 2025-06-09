@@ -212,12 +212,22 @@ def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: 
     save_state(chat_id, state)
 
 
-def parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
-    """Parse a goal list from LLM text response, robust to various formats."""
+def parse_goals_from_response(
+    text: str, goals: Optional[List[Dict[str, Any]]] = None
+) -> List[Dict[str, Any]]:
+    """Parse a goal list from LLM text response, robust to various formats.
+
+    If ``goals`` is provided, new items are appended to it. A new list is
+    created otherwise and returned.
+    """
+    if goals is None:
+        goals = []
+
     # 1. Try strict JSON via Pydantic model
     model = _parse_json(text, GoalsListModel)
     if model is not None:
-        return [g.dict() for g in model.goals]
+        goals.extend(g.dict() for g in model.goals)
+        return goals
 
     # 2. Try manual JSON extraction
     extracted = _extract_json(text)
@@ -225,7 +235,6 @@ def parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
         data = json.loads(extracted)
         # Handle {"goals": [...]} structure
         if isinstance(data, dict) and "goals" in data and isinstance(data["goals"], list):
-            goals = []
             for g in data["goals"]:
                 if isinstance(g, dict):
                     goals.append(g)
@@ -234,7 +243,6 @@ def parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
             return goals
         # Handle top-level list
         if isinstance(data, list):
-            goals = []
             for g in data:
                 if isinstance(g, dict):
                     goals.append(g)
@@ -247,15 +255,18 @@ def parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
     # 3. Fallback: numbered/bulleted lists
     numbered = re.findall(r'^\s*\d+[\.)]\s*(.+)$', text, flags=re.MULTILINE)
     if numbered:
-        return [{"text": item.strip()} for item in numbered]
+        goals.extend({"text": item.strip()} for item in numbered)
+        return goals
 
     bullets = re.findall(r'^\s*[-\*•]\s*(.+)$', text, flags=re.MULTILINE)
     if bullets:
-        return [{"text": item.strip()} for item in bullets]
+        goals.extend({"text": item.strip()} for item in bullets)
+        return goals
 
     # 4. Fallback: each non-empty line
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return [{"text": line} for line in lines]
+    goals.extend({"text": line} for line in lines)
+    return goals
 
 
 def check_and_generate_goals(call_fn, chat_id: str) -> None:
