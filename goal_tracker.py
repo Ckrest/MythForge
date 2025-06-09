@@ -1,6 +1,7 @@
 # Goal tracking utilities for Myth Forge
 import json
 import logging
+from server_log import log_function
 import os
 import re
 import time
@@ -101,6 +102,7 @@ def load_state(chat_id: str) -> Dict[str, Any]:
     }
 
 
+@log_function("state_writer")
 def save_state(chat_id: str, state: Dict[str, Any]) -> bool:
     """Persist ``state`` to disk if it differs from the existing file.
 
@@ -142,6 +144,7 @@ def extract_character_profile(text: str) -> str:
     return text.strip()
 
 
+@log_function("state_writer")
 def init_state_from_prompt(chat_id: str, global_prompt: str, first_user: str) -> None:
     """Initialize state using ``global_prompt`` and ``first_user`` if unset."""
     logger.info("Initializing state from prompt", extra={"chat_id": chat_id})
@@ -154,6 +157,7 @@ def init_state_from_prompt(chat_id: str, global_prompt: str, first_user: str) ->
         log_event("state_saved", {"path": _state_path(chat_id)})
 
 
+@log_function("state_writer")
 def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: str, first_assistant: str) -> None:
     """Populate ``scene_context`` and ``character_profile`` from the first exchange."""
     logger.info("Ensuring initial state", extra={"chat_id": chat_id})
@@ -419,6 +423,7 @@ def _check_goal_similarity(
         log_event("goal_similarity_parse_failed", {"raw": text})
     return False
 
+@log_function("state_writer")
 def check_and_generate_goals(call_fn, chat_id: str) -> None:
     """Generate goals if none exist using current state."""
     logger.info("Checking for missing goals", extra={"chat_id": chat_id})
@@ -555,6 +560,7 @@ def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListMode
     return None
 
 
+@log_function("state_writer")
 def evaluate_and_update_goals(
     call_fn,
     chat_id: str,
@@ -694,6 +700,7 @@ def evaluate_and_update_goals(
         log_event("state_saved", {"path": _state_path(chat_id)})
 
 
+@log_function("state_writer")
 def record_user_message(chat_id: str) -> None:
     """Increment the message counter for ``chat_id``."""
     state = load_state(chat_id)
@@ -702,6 +709,7 @@ def record_user_message(chat_id: str) -> None:
         log_event("state_saved", {"path": _state_path(chat_id)})
 
 
+@log_function("state_writer")
 def record_assistant_message(chat_id: str) -> bool:
     """Increment the counter and return True when goal evaluation should run."""
     state = load_state(chat_id)
