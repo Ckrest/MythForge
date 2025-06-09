@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import uuid
 import atexit
 import functools
 import inspect
@@ -10,7 +11,8 @@ LOG_DIR = "server_logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
 _log_data = []
-_log_file = os.path.join(LOG_DIR, f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+_session_id = os.environ.get("MF_SESSION_ID") or uuid.uuid4().hex
+_log_file = os.path.join(LOG_DIR, f"{_session_id}.json")
 
 
 def _flush():
