@@ -21,10 +21,10 @@ from .goals import (
     record_assistant_message,
     evaluate_and_update_goals,
 )
-from llama_cpp import Llama
 
 # Prompt formatting utilities
 from .model_call import format_llama3
+from . import model_launch
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -62,10 +62,17 @@ class PromptItem(BaseModel):
 
 
 # ========== Configuration ==========
-MODELS_DIR = "models"
 CHATS_DIR = "chats"
 GLOBAL_PROMPTS_DIR = "global_prompts"
-MODEL_SETTINGS_PATH = "model_settings.json"
+
+# Import model configuration and helpers
+MODEL_SETTINGS_PATH = model_launch.MODEL_SETTINGS_PATH
+MODEL_SETTINGS = model_launch.MODEL_SETTINGS
+GENERATION_CONFIG = model_launch.GENERATION_CONFIG
+DEFAULT_MAX_TOKENS = model_launch.DEFAULT_MAX_TOKENS
+SUMMARIZE_THRESHOLD = model_launch.SUMMARIZE_THRESHOLD
+SUMMARIZE_BATCH = model_launch.SUMMARIZE_BATCH
+call_llm = model_launch.call_llm
 
 
 # Helper utilities for per-chat directories
@@ -80,141 +87,6 @@ def ensure_chat_dir(chat_id: str) -> str:
     os.makedirs(path, exist_ok=True)
     return path
 
-
-# Match LM Studio defaults for a 4 GB VRAM setup
-DEFAULT_CTX_SIZE = 4096
-DEFAULT_N_BATCH = 512
-DEFAULT_N_THREADS = os.cpu_count() or 1
-
-
-def load_model_settings(path: str = MODEL_SETTINGS_PATH) -> Dict[str, object]:
-    """Load the model settings from ``path`` if it exists."""
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            try:
-                return json.load(f)
-            except Exception as e:
-                print(f"Failed to load model settings '{path}': {e}")
-    return {}
-
-
-MODEL_SETTINGS = load_model_settings()
-
-# Generation settings matching LM Studio's defaults
-GENERATION_CONFIG = {
-    "temperature": MODEL_SETTINGS.get("temperature", 0.8),
-    "top_k": MODEL_SETTINGS.get("top_k", 40),
-    "top_p": MODEL_SETTINGS.get("top_p", 0.95),
-    "min_p": MODEL_SETTINGS.get("min_p", 0.05),
-    "repeat_penalty": MODEL_SETTINGS.get("repeat_penalty", 1.1),
-    # ``n_batch`` is set when ``Llama`` is instantiated. Passing it to
-    # ``Llama.__call__`` can break older ``llama_cpp`` versions, so it is
-    # intentionally omitted here.
-    # ``<|start_header_id|>`` is omitted from the default stop list to avoid
-    # the "prefix-match" warnings emitted by ``llama_cpp`` when the model
-    # begins generating the next header token.  ``<|eot_id|>`` alone is
-    # sufficient to mark the end of an assistant message.
-    "stop": MODEL_SETTINGS.get("stop", ["<|eot_id|>"]),
-}
-DEFAULT_MAX_TOKENS = MODEL_SETTINGS.get("max_tokens", 250)
-SUMMARIZE_THRESHOLD = MODEL_SETTINGS.get("summarize_threshold", 20)
-SUMMARIZE_BATCH = MODEL_SETTINGS.get("summarize_batch", 12)
-
-
-# ========== Model Loading ==========
-def discover_model_path():
-    """Return the path to the first ``.gguf`` model file under ``MODELS_DIR``.
-
-    Previously the code assumed models were stored in subdirectories and that
-    each subdirectory contained a file named ``model.gguf``.  Users often place
-    the downloaded model file directly under ``models`` or use a different
-    filename.  This function now walks the directory tree and returns the first
-    file with a ``.gguf`` extension regardless of its directory structure.
-    """
-
-    if not os.path.isdir(MODELS_DIR):
-        raise FileNotFoundError(f"Models directory '{MODELS_DIR}' not found")
-
-    for root, _dirs, files in os.walk(MODELS_DIR):
-        for fname in files:
-            if fname.lower().endswith(".gguf"):
-                return os.path.join(root, fname)
-
-    raise FileNotFoundError(f"No .gguf model files found under '{MODELS_DIR}'")
-
-
-_model_config = {
-    "model_path": MODEL_SETTINGS.get("model_path") or discover_model_path(),
-    "n_ctx": MODEL_SETTINGS.get("n_ctx", DEFAULT_CTX_SIZE),
-    "n_batch": MODEL_SETTINGS.get("n_batch", DEFAULT_N_BATCH),
-    "n_threads": MODEL_SETTINGS.get("n_threads") or DEFAULT_N_THREADS,
-    "prompt_template": MODEL_SETTINGS.get("prompt_template", ""),
-}
-
-for key in (
-    "f16_kv",
-    "use_mmap",
-    "use_mlock",
-    "n_gpu_layers",
-    "main_memory_kv",
-):
-    if key in MODEL_SETTINGS and MODEL_SETTINGS[key] is not None:
-        _model_config[key] = MODEL_SETTINGS[key]
-
-# ``llama_cpp`` may automatically prepend ``<|begin_of_text|>`` when
-# tokenizing prompts. Our prompts already include this token, so we
-# disable the automatic behavior if supported to avoid the warning
-# about duplicate leading tokens.
-try:
-    import inspect
-
-    sig = inspect.signature(Llama)
-    if "add_bos" in sig.parameters:
-        _model_config["add_bos"] = False
-    elif "add_bos_token" in sig.parameters:
-        _model_config["add_bos_token"] = False
-except Exception:
-    pass
-
-llm = Llama(**_model_config)
-
-# Determine which keyword arguments ``llm.__call__`` accepts.  Older versions
-# of ``llama_cpp`` do not support certain generation parameters (e.g.
-# ``n_batch``).  We inspect the call signature once so we can filter unsupported
-# keys when generating text.
-try:
-    import inspect
-
-    _CALL_KWARGS = set(inspect.signature(llm.__call__).parameters)
-except Exception:  # pragma: no cover - signature introspection may fail
-    _CALL_KWARGS = set()
-
-
-def call_llm(prompt: str, **kwargs):
-    """Call the ``llm`` object and log all raw text outputs."""
-
-    if _CALL_KWARGS:
-        filtered = {k: v for k, v in kwargs.items() if k in _CALL_KWARGS}
-    else:  # Fallback if inspection failed
-        filtered = kwargs
-
-    if filtered.get("stream"):
-
-        def _stream():
-            for chunk in llm(prompt, **filtered):
-                text = chunk["choices"][0]["text"]
-                log_event("llm_raw_output", {"raw": text})
-                yield chunk
-
-        return _stream()
-
-    res = llm(prompt, **filtered)
-    text = res["choices"][0]["text"]
-    log_event("llm_raw_output", {"raw": text})
-    return res
-
-
-call_llm._patched = True
 
 # ========== Response Prompt Queue ==========
 # Some operations (e.g. summarization, goal evaluation) trigger their own
@@ -942,6 +814,6 @@ app.mount("/", StaticFiles(directory="ui", html=True), name="static")
 
 # Apply automatic logging to all functions in this module
 import sys
-from .disable import patch_module_functions, log_event
+from .disable import patch_module_functions
 
 patch_module_functions(sys.modules[__name__], "server")
