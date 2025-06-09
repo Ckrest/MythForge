@@ -100,13 +100,33 @@ def load_state(chat_id: str) -> Dict[str, Any]:
     }
 
 
-def save_state(chat_id: str, state: Dict[str, Any]) -> None:
+def save_state(chat_id: str, state: Dict[str, Any]) -> bool:
+    """Persist ``state`` to disk if it differs from the existing file.
+
+    Returns ``True`` when the file was written.
+    """
+
     path = _state_path(chat_id)
     os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    existing: Optional[Dict[str, Any]] = None
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            existing = None
+
+    if existing == state:
+        logger.debug("State unchanged; not writing %s", path)
+        return False
+
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+
     logger.debug("Saved state to %s", path)
     log_event("state_saved", {"path": path})
+    return True
 
 
 def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant_msg: str) -> Dict[str, Any]:
@@ -199,8 +219,8 @@ def init_state_from_prompt(chat_id: str, global_prompt: str, first_user: str) ->
         state["character_profile"] = global_prompt.strip()
     if state.get("scene_context") is None:
         state["scene_context"] = first_user.strip()
-    save_state(chat_id, state)
-    log_event("state_saved", {"path": _state_path(chat_id)})
+    if save_state(chat_id, state):
+        log_event("state_saved", {"path": _state_path(chat_id)})
 
 
 def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: str, first_assistant: str) -> None:
@@ -211,8 +231,8 @@ def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: 
         state["scene_context"] = extract_scene_context(first_user)
     if state.get("character_profile") is None:
         state["character_profile"] = extract_character_profile(first_assistant)
-    save_state(chat_id, state)
-    log_event("state_saved", {"path": _state_path(chat_id)})
+    if save_state(chat_id, state):
+        log_event("state_saved", {"path": _state_path(chat_id)})
 
 
 def parse_goals_from_response(
@@ -272,6 +292,90 @@ def parse_goals_from_response(
     return goals
 
 
+def _merge_goals(
+    existing: List[Dict[str, Any]],
+    incoming: List[Dict[str, Any]],
+    remove_missing: bool = False,
+) -> tuple[list[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+    """Return ``existing`` merged with ``incoming`` keyed by ``id``.
+
+    Each goal in the result contains the keys ``id``, ``description``,
+    ``method`` and ``status``.  ``incoming`` values overwrite existing ones only
+    when they are not ``None``.  When ``remove_missing`` is ``True`` any goal
+    not present in ``incoming`` is dropped from the result and reported in the
+    ``removed`` list.
+    """
+
+    by_id = {g.get("id"): g.copy() for g in existing if g.get("id")}
+    added: List[Dict[str, Any]] = []
+    updated: List[Dict[str, Any]] = []
+    processed: set[str] = set()
+
+    result: List[Dict[str, Any]] = []
+    for g in incoming:
+        gid = g.get("id")
+        if not gid:
+            continue
+        processed.add(gid)
+        base = by_id.pop(gid, {}).copy()
+        if not base:
+            base["id"] = gid
+        changed = False
+        for field in ("description", "method", "status"):
+            val = g.get(field)
+            if val is not None:
+                if base.get(field) != val:
+                    base[field] = val
+                    changed = True
+            elif field not in base:
+                base[field] = None
+        if gid not in {e.get("id") for e in existing}:
+            added.append(base.copy())
+        elif changed:
+            updated.append(base.copy())
+        result.append(base)
+
+    removed = []
+    if remove_missing:
+        removed = list(by_id.values())
+    else:
+        result.extend(by_id.values())
+
+    diff = {"added": added, "updated": updated, "removed": removed}
+    return result, diff
+
+
+def _apply_goal_update(
+    chat_id: str,
+    state: Dict[str, Any],
+    new_goals: List[Dict[str, Any]],
+    remove_missing: bool = False,
+) -> bool:
+    """Merge ``new_goals`` into ``state`` and log the changes."""
+
+    merged, diff = _merge_goals(state.get("goals", []), new_goals, remove_missing)
+    if diff["added"] or diff["updated"] or diff["removed"]:
+        state["goals"] = merged
+        logger.debug(
+            "Goal update diff added=%s updated=%s removed=%s",
+            diff["added"],
+            diff["updated"],
+            diff["removed"],
+            extra={"chat_id": chat_id},
+        )
+        log_event(
+            "goals_changed",
+            {
+                "chat_id": chat_id,
+                "added": diff["added"],
+                "updated": diff["updated"],
+                "removed": diff["removed"],
+            },
+        )
+        return True
+    return False
+
+
 def check_and_generate_goals(call_fn, chat_id: str) -> None:
     """Generate goals if none exist using current state."""
     logger.info("Checking for missing goals", extra={"chat_id": chat_id})
@@ -301,12 +405,15 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         )
         goals = parse_goals_from_response(text)
         if goals:
-            state["goals"] = goals
-            state["messages_since_goal_eval"] = 0
-            save_state(chat_id, state)
-            log_event("state_saved", {"path": _state_path(chat_id)})
-            print(f"Goals updated for {chat_id}: {goals}")
-            return
+            changed = _apply_goal_update(chat_id, state, goals)
+            if changed:
+                state["messages_since_goal_eval"] = 0
+                if save_state(chat_id, state):
+                    log_event("state_saved", {"path": _state_path(chat_id)})
+                print(f"Goals updated for {chat_id}: {goals}")
+                return
+            else:
+                return
         else:
             log_event("goals_parse_failed", {"raw": text})
             logger.warning(
@@ -427,10 +534,24 @@ def evaluate_and_update_goals(
         processed: set[str] = set()
 
         for g in model.goals:
-            status = (g.status or existing.get(g.id, {}).get("status") or "in_progress").lower()
             orig = existing.pop(g.id, None)
-            goal_data = orig if orig is not None else g.dict()
+            goal_data = orig.copy() if orig is not None else {"id": g.id}
+
+            for field in ("description", "method"):
+                val = getattr(g, field, None)
+                if val is not None:
+                    goal_data[field] = val
+                elif field not in goal_data:
+                    goal_data[field] = ""
+
+            status = (
+                g.status
+                if g.status is not None
+                else goal_data.get("status")
+                or "in_progress"
+            ).lower()
             goal_data["status"] = status
+
             desc_key = goal_data.get("description", "").lower()
 
             if status in ("completed", "abandoned"):
@@ -457,8 +578,15 @@ def evaluate_and_update_goals(
             seen_ids.add(gid)
             seen_desc.add(desc_key)
 
-        state["completed_goals"] = completed
-        state["goals"] = active
+        changed = False
+        old_completed = state.get("completed_goals", [])
+        if completed != old_completed:
+            state["completed_goals"] = completed
+            changed = True
+
+        active_changed = _apply_goal_update(chat_id, state, active, remove_missing=True)
+        changed = changed or active_changed
+
         state["messages_since_goal_eval"] = 0
 
         in_progress_count = sum(
@@ -481,32 +609,36 @@ def evaluate_and_update_goals(
                 seen_desc.add(desc)
                 if len([x for x in active if (x.get("status") or "in_progress").lower() == "in_progress"]) >= min_active:
                     break
-            state["goals"] = active
+            active_changed = _apply_goal_update(chat_id, state, active, remove_missing=True) or active_changed
 
-        save_state(chat_id, state)
-        log_event("state_saved", {"path": _state_path(chat_id)})
-        logger.debug("Goals updated: %s", active)
+        if changed or active_changed:
+            logger.debug("Goals updated: %s", state.get("goals"))
+        else:
+            logger.debug("Goals evaluated with no changes", extra={"chat_id": chat_id})
+
+        if save_state(chat_id, state):
+            log_event("state_saved", {"path": _state_path(chat_id)})
         return
 
     logger.warning("Goal evaluation failed after retries", extra={"chat_id": chat_id})
-    save_state(chat_id, state)
-    log_event("state_saved", {"path": _state_path(chat_id)})
+    if save_state(chat_id, state):
+        log_event("state_saved", {"path": _state_path(chat_id)})
 
 
 def record_user_message(chat_id: str) -> None:
     """Increment the message counter for ``chat_id``."""
     state = load_state(chat_id)
     state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
-    save_state(chat_id, state)
-    log_event("state_saved", {"path": _state_path(chat_id)})
+    if save_state(chat_id, state):
+        log_event("state_saved", {"path": _state_path(chat_id)})
 
 
 def record_assistant_message(chat_id: str) -> bool:
     """Increment the counter and return True when goal evaluation should run."""
     state = load_state(chat_id)
     state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
-    save_state(chat_id, state)
-    log_event("state_saved", {"path": _state_path(chat_id)})
+    if save_state(chat_id, state):
+        log_event("state_saved", {"path": _state_path(chat_id)})
     return bool(state.get("goals")) and state["messages_since_goal_eval"] >= 4
 
 
