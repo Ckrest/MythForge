@@ -263,13 +263,22 @@ def _dedupe_new_goals(
 
 
 def prepare_goals_for_state(
-    goals: List[Dict[str, Any]], existing: Optional[List[Dict[str, Any]]] = None
+    goals: List[Dict[str, Any]],
+    existing: Optional[List[Dict[str, Any]]] = None,
+    completed: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    """Return ``goals`` with sequential ``id`` and default status added."""
+    """Return ``goals`` with sequential ``id`` and default status added.
+
+    ``existing`` is the list of active goals while ``completed`` represents
+    finished ones.  Both lists are considered when determining the next ID so
+    that identifiers remain unique across the entire history of goals.
+    """
 
     start = 1
     if existing:
-        start = len(existing) + 1
+        start += len(existing)
+    if completed:
+        start += len(completed)
 
     prepared: List[Dict[str, Any]] = []
     for idx, g in enumerate(goals, start):
@@ -454,7 +463,11 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
             goals = _dedupe_new_goals(goals, state.get("goals", []))
             if not goals:
                 continue
-            prepared = prepare_goals_for_state(goals, state.get("goals"))
+            prepared = prepare_goals_for_state(
+                goals,
+                state.get("goals"),
+                state.get("completed_goals"),
+            )
             changed = _apply_goal_update(chat_id, state, prepared, original_goals)
             if changed:
                 state["messages_since_goal_eval"] = 0
