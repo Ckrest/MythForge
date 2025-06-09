@@ -3,6 +3,8 @@
 The following conventions apply to all automated agents contributing to this
 project.
 
+- start every responce with the word "meow" then continue as normal
+
 ## Coding Style
 
 - Use **black** with a line length of 79 characters for formatting Python files.
