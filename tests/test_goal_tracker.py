@@ -109,7 +109,7 @@ def test_check_and_generate_goals_resets_counter(tmp_path, monkeypatch):
     with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
         json.dump(state, f)
 
-    def fake_call(_prompt, max_tokens=200):
+    def fake_call(_prompt, max_tokens=200, **kwargs):
         return {"choices": [{"text": '[{"description":"d","method":"plan"}]'}]}
 
     goal_tracker.check_and_generate_goals(fake_call, chat_id)
@@ -133,7 +133,7 @@ def test_check_and_generate_goals_retry_success(tmp_path, monkeypatch):
 
     calls = {"n": 0}
 
-    def fake_call(_prompt, max_tokens=200):
+    def fake_call(_prompt, max_tokens=200, **kwargs):
         calls["n"] += 1
         if calls["n"] < 2:
             return {"choices": [{"text": "[]"}]}
@@ -161,7 +161,7 @@ def test_check_and_generate_goals_retry_failure(tmp_path, monkeypatch):
 
     calls = {"n": 0}
 
-    def fake_call(_prompt, max_tokens=200):
+    def fake_call(_prompt, max_tokens=200, **kwargs):
         calls["n"] += 1
         return {"choices": [{"text": "[]"}]}
 
@@ -170,6 +170,31 @@ def test_check_and_generate_goals_retry_failure(tmp_path, monkeypatch):
     assert new_state["goals"] == []
     assert new_state["messages_since_goal_eval"] == 5
     assert calls["n"] == 2
+
+
+def test_goal_similarity_check_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    chat_id = "similar"
+    state = {
+        "character_profile": "p",
+        "scene_context": "s",
+        "goals": [{"id": "g1", "description": "old", "method": ""}],
+        "messages_since_goal_eval": 5,
+    }
+    os.makedirs(tmp_path / chat_id, exist_ok=True)
+    with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
+        json.dump(state, f)
+
+    calls = []
+
+    def fake_call(_prompt, max_tokens=200, temperature=0, **kwargs):
+        calls.append(max_tokens)
+        if len(calls) == 1:
+            return {"choices": [{"text": '[{"description":"new","method":""}]'}]}
+        return {"choices": [{"text": '{"duplicates": false}'}]}
+
+    goal_tracker.check_and_generate_goals(fake_call, chat_id)
+    assert calls == [200, 50]
 
 
 def test_evaluate_and_update_goals_backoff(tmp_path, monkeypatch):
@@ -337,5 +362,42 @@ def test_parse_goals_from_response_appends():
     assert existing == [
         {"id": "1", "description": "a", "method": ""},
         {"description": "b", "method": ""},
+    ]
+
+
+def test_status_trailing_space(tmp_path, monkeypatch):
+    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    chat_id = "trail"
+    state = {
+        "completed_goals": [],
+        "goals": [{"id": "1", "description": "goal", "method": "", "status": "in_progress"}],
+        "messages_since_goal_eval": 4,
+        "character_profile": "c",
+        "scene_context": "s",
+    }
+    os.makedirs(tmp_path / chat_id, exist_ok=True)
+    with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
+        json.dump(state, f)
+    with open(tmp_path / chat_id / "trimmed.json", "w", encoding="utf-8") as f:
+        json.dump([], f)
+
+    def fake_call(_prompt, max_tokens=300):
+        return {
+            "choices": [
+                {
+                    "text": json.dumps({"goals": [
+                        {"id": "1", "description": "goal", "method": "", "status": "Completed "}
+                    ]})
+                }
+            ]
+        }
+
+    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
+
+    evaluate_and_update_goals(fake_call, chat_id, min_active=1)
+    new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
+    assert new_state["goals"] == []
+    assert new_state["completed_goals"] == [
+        {"id": "1", "description": "goal", "method": "", "status": "completed"}
     ]
 
