@@ -185,12 +185,15 @@ def _parse_goal_items(text: str) -> List[Dict[str, Any]]:
         if isinstance(data, list):
             for entry in data:
                 if isinstance(entry, dict):
+                    status = entry.get("status")
+                    if isinstance(status, str):
+                        status = status.strip().lower()
                     goal = {
                         "id": entry.get("id"),
                         "description": entry.get("description")
                         or entry.get("text", ""),
                         "method": entry.get("method", ""),
-                        "status": entry.get("status"),
+                        "status": status,
                     }
                     if goal["description"] or goal["id"]:
                         items.append(goal)
@@ -591,11 +594,8 @@ def evaluate_and_update_goals(
                     goal_data[field] = ""
 
             status = (
-                g.status
-                if g.status is not None
-                else goal_data.get("status")
-                or "in_progress"
-            ).lower()
+                (g.status or goal_data.get("status") or "in_progress").strip().lower()
+            )
             goal_data["status"] = status
 
             desc_key = goal_data.get("description", "").lower()
