@@ -8,6 +8,7 @@ project.
 - Use **black** with a line length of 79 characters for formatting Python files.
 - Prefer f-strings for string interpolation.
 - Document functions with docstrings when adding new code.
+- Prefer adding more functionality to existing functions and files over adding new ones
 
 ## Programmatic Checks
 
