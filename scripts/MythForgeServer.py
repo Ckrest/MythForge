@@ -57,6 +57,113 @@ def save_json(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+def load_item(kind: str, name: str | None = None):
+    """Load a JSON item based on ``kind`` and ``name``."""
+
+    if kind == "chat_history" and name:
+        return load_json(chat_file(name, "full.json"))
+    if kind == "chats":
+        os.makedirs(CHATS_DIR, exist_ok=True)
+        return [
+            d
+            for d in os.listdir(CHATS_DIR)
+            if os.path.isdir(os.path.join(CHATS_DIR, d))
+        ]
+    if kind == "prompts":
+        if name:
+            content = get_global_prompt_content(name)
+            if content is None:
+                raise HTTPException(status_code=404, detail="Prompt not found")
+            return {"name": name, "content": content}
+        return load_global_prompts()
+    if kind == "prompt_names":
+        return list_prompt_names()
+    if kind == "settings":
+        return model_launch.MODEL_SETTINGS
+    raise HTTPException(status_code=400, detail="Invalid load request")
+
+
+def save_item(
+    kind: str,
+    name: str | None = None,
+    *,
+    data: object | None = None,
+    delete: bool = False,
+    new_name: str | None = None,
+):
+    """Handle saving, deleting, or renaming items."""
+
+    if kind == "chat_history" and name:
+        if delete:
+            chat_dir = os.path.join(CHATS_DIR, name)
+            if not os.path.isdir(chat_dir):
+                raise HTTPException(status_code=404, detail="Chat not found")
+            for fname in os.listdir(chat_dir):
+                os.remove(os.path.join(chat_dir, fname))
+            os.rmdir(chat_dir)
+            return
+        if new_name:
+            old_dir = os.path.join(CHATS_DIR, name)
+            new_dir = os.path.join(CHATS_DIR, new_name)
+            if not os.path.isdir(old_dir):
+                raise HTTPException(status_code=404, detail="Chat not found")
+            if os.path.exists(new_dir):
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
+            os.rename(old_dir, new_dir)
+            return
+        ensure_chat_dir(name)
+        save_json(chat_file(name, "full.json"), data or [])
+        return
+
+    if kind == "prompts" and name:
+        if delete:
+            delete_global_prompt(name)
+            return
+        if new_name:
+            old_path = _prompt_path(name)
+            new_path = _prompt_path(new_name)
+            if not os.path.exists(old_path):
+                raise HTTPException(status_code=404, detail="Prompt not found")
+            if os.path.exists(new_path):
+                raise HTTPException(
+                    status_code=400, detail="Prompt name already exists"
+                )
+            os.rename(old_path, new_path)
+            return
+        if data is None:
+            raise HTTPException(
+                status_code=400, detail="No prompt data provided"
+            )
+        save_global_prompt({"name": name, "content": str(data)})
+        return
+
+    if kind == "settings" and isinstance(data, dict):
+        model_launch.MODEL_SETTINGS.update(data)
+        save_json(
+            model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS
+        )
+        for key in (
+            "temperature",
+            "top_k",
+            "top_p",
+            "min_p",
+            "repeat_penalty",
+            "stop",
+        ):
+            if key in model_launch.MODEL_SETTINGS:
+                model_launch.GENERATION_CONFIG[key] = (
+                    model_launch.MODEL_SETTINGS[key]
+                )
+        model_launch.DEFAULT_MAX_TOKENS = model_launch.MODEL_SETTINGS.get(
+            "max_tokens", model_launch.DEFAULT_MAX_TOKENS
+        )
+        return
+
+    raise HTTPException(status_code=400, detail="Invalid save request")
+
+
 # ─── Global Prompts CRUD ─────────────────────────────────────────────────
 def _prompt_path(name: str) -> str:
     """Return the filesystem path for a prompt ``name``."""
@@ -136,14 +243,70 @@ def delete_global_prompt(name: str):
         os.remove(path)
 
 
+# ========== Prompt Endpoints ==========
+@app.get("/prompts")
+def list_prompts(names_only: int = 0):
+    if names_only:
+        return {"prompts": load_item("prompt_names")}
+    return {"prompts": load_item("prompts")}
+
+
+@app.get("/prompts/{name}")
+def get_prompt(name: str):
+    return load_item("prompts", name)
+
+
+@app.post("/prompts")
+def create_prompt(item: Dict[str, str]):
+    save_item("prompts", item["name"], data=item.get("content", ""))
+    return {"detail": "Created"}
+
+
+@app.put("/prompts/{name}")
+def update_prompt(name: str, item: Dict[str, str]):
+    if item.get("name") != name:
+        raise HTTPException(status_code=400, detail="Name mismatch")
+    save_item("prompts", name, data=item.get("content", ""))
+    return {"detail": "Updated"}
+
+
+@app.put("/prompts/{name}/rename")
+def rename_prompt(name: str, data: Dict[str, str]):
+    new_name = data.get("new_name", "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="New name required")
+    save_item("prompts", name, new_name=new_name)
+    return {"detail": f"Renamed prompt '{name}'"}
+
+
+@app.delete("/prompts/{name}")
+def remove_prompt(name: str):
+    save_item("prompts", name, delete=True)
+    return {"detail": f"Deleted prompt '{name}'"}
+
+
+# ========== Settings Endpoints ==========
+@app.get("/settings")
+def get_settings():
+    return load_item("settings")
+
+
+@app.put("/settings")
+def update_settings(data: Dict[str, object]):
+    save_item("settings", data=data)
+    return {"detail": "Updated", "settings": load_item("settings")}
+
+
+# ─── Response Prompt Status ───────────────────────────────────────────────
+@app.get("/response_prompt_status")
+def response_prompt_status():
+    return {"pending": 0}
+
+
 # ========== Standard Chat Endpoints ==========
 @app.get("/chats")
 def list_chats():
-    os.makedirs(CHATS_DIR, exist_ok=True)
-    chat_ids = [
-        d for d in os.listdir(CHATS_DIR) if os.path.isdir(os.path.join(CHATS_DIR, d))
-    ]
-    return {"chats": chat_ids}
+    return {"chats": load_item("chats")}
 
 
 @app.post("/chats/{chat_id}")
@@ -152,30 +315,29 @@ def create_chat(chat_id: str):
     chat_dir = os.path.join(CHATS_DIR, chat_id)
     if os.path.exists(chat_dir):
         raise HTTPException(status_code=400, detail="Chat already exists")
-    os.makedirs(chat_dir, exist_ok=True)
-    save_json(chat_file(chat_id, "full.json"), [])
+    save_item("chat_history", chat_id, data=[])
     return {"detail": f"Created chat '{chat_id}'"}
 
 
 @app.get("/history/{chat_id}")
 def get_history(chat_id: str):
-    path = chat_file(chat_id, "full.json")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Chat not found")
-    return load_json(path)
+    try:
+        return load_item("chat_history", chat_id)
+    except HTTPException as exc:
+        raise exc
 
 
 @app.put("/history/{chat_id}/{index}")
 def edit_message(chat_id: str, index: int, data: Dict[str, str]):
     """Update the content of a message at ``index`` in ``chat_id``."""
-    full_path = chat_file(chat_id, "full.json")
-    if not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail="Chat not found")
-    full = load_json(full_path)
+    try:
+        full = load_item("chat_history", chat_id)
+    except HTTPException as exc:
+        raise exc
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full[index]["content"] = data.get("content", "")
-    save_json(full_path, full)
+    save_item("chat_history", chat_id, data=full)
 
     return {"detail": "Updated"}
 
@@ -183,26 +345,21 @@ def edit_message(chat_id: str, index: int, data: Dict[str, str]):
 @app.delete("/history/{chat_id}/{index}")
 def delete_message(chat_id: str, index: int):
     """Remove the message at ``index`` from ``chat_id``."""
-    full_path = chat_file(chat_id, "full.json")
-    if not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail="Chat not found")
-    full = load_json(full_path)
+    try:
+        full = load_item("chat_history", chat_id)
+    except HTTPException as exc:
+        raise exc
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full.pop(index)
-    save_json(full_path, full)
+    save_item("chat_history", chat_id, data=full)
 
     return {"detail": "Deleted"}
 
 
 @app.delete("/chat/{chat_id}")
 def delete_chat(chat_id: str):
-    chat_dir = os.path.join(CHATS_DIR, chat_id)
-    if not os.path.isdir(chat_dir):
-        raise HTTPException(status_code=404, detail="Chat not found")
-    for fname in os.listdir(chat_dir):
-        os.remove(os.path.join(chat_dir, fname))
-    os.rmdir(chat_dir)
+    save_item("chat_history", chat_id, delete=True)
     return {"detail": f"Deleted chat '{chat_id}'"}
 
 
@@ -222,14 +379,7 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
     if new_id == chat_id:
         return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
-    old_dir = os.path.join(CHATS_DIR, chat_id)
-    new_dir = os.path.join(CHATS_DIR, new_id)
-    if not os.path.isdir(old_dir):
-        raise HTTPException(status_code=404, detail="Chat not found")
-    if os.path.exists(new_dir):
-        raise HTTPException(status_code=400, detail="Chat name already exists")
-
-    os.rename(old_dir, new_dir)
+    save_item("chat_history", chat_id, new_name=new_id)
 
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
@@ -239,10 +389,9 @@ def save_message(req: ChatRequest):
     """Store ``req.message`` in ``req.chat_id`` without generating a reply."""
 
     ensure_chat_dir(req.chat_id)
-    path = chat_file(req.chat_id, "full.json")
-    history = load_json(path)
+    history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
-    save_json(path, history)
+    save_item("chat_history", req.chat_id, data=history)
 
     return {"detail": "Message stored"}
 
@@ -252,12 +401,11 @@ def chat_stream(req: ChatRequest):
     """Return a streamed placeholder assistant response."""
 
     ensure_chat_dir(req.chat_id)
-    path = chat_file(req.chat_id, "full.json")
-    history = load_json(path)
+    history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
     assistant_reply = "[Model call disabled]"
     history.append({"role": "assistant", "content": assistant_reply})
-    save_json(path, history)
+    save_item("chat_history", req.chat_id, data=history)
 
     def generate():
         meta = {"prompt": req.global_prompt or ""}
