@@ -423,7 +423,11 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
                 state["messages_since_goal_eval"] = 0
                 if save_state(chat_id, state):
                     log_event("state_saved", {"path": _state_path(chat_id)})
-                print(f"Goals updated for {chat_id}: {goals}")
+                logger.info(
+                    "Goals updated: %s",
+                    goals,
+                    extra={"chat_id": chat_id},
+                )
                 return
             else:
                 return
