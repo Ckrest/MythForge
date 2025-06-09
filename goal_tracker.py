@@ -106,6 +106,7 @@ def save_state(chat_id: str, state: Dict[str, Any]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
     logger.debug("Saved state to %s", path)
+    log_event("state_saved", {"path": path})
 
 
 def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant_msg: str) -> Dict[str, Any]:
