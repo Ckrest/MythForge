@@ -4,6 +4,9 @@ from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+
+from . import model_launch
 from pydantic import BaseModel
 
 app = FastAPI(title="Myth Forge Server")
@@ -138,9 +141,7 @@ def delete_global_prompt(name: str):
 def list_chats():
     os.makedirs(CHATS_DIR, exist_ok=True)
     chat_ids = [
-        d
-        for d in os.listdir(CHATS_DIR)
-        if os.path.isdir(os.path.join(CHATS_DIR, d))
+        d for d in os.listdir(CHATS_DIR) if os.path.isdir(os.path.join(CHATS_DIR, d))
     ]
     return {"chats": chat_ids}
 
