@@ -172,18 +172,14 @@ def parse_goals_from_response(
     """Parse a goal list from LLM text response, robust to various formats.
 
     If ``goals`` is provided, new items are appended to it. A new list is
-    created otherwise and returned.
+    created otherwise and returned.  Returned goal dictionaries contain only
+    ``description`` and ``method`` keys.
     """
+
     if goals is None:
         goals = []
 
-    # 1. Try strict JSON via Pydantic model
-    model = _parse_json(text, GoalsListModel)
-    if model is not None:
-        goals.extend(g.dict() for g in model.goals)
-        return goals
-
-    # 2. Try manual JSON extraction
+    # Try JSON extraction first
     extracted = _extract_json(text)
     try:
         data = json.loads(extracted)
@@ -192,22 +188,17 @@ def parse_goals_from_response(
         if isinstance(data, list):
             for item in data:
                 if isinstance(item, dict):
-                    g = {
-                        "id": item.get("id") or f"g{len(goals)+1}",
-                        "description": item.get("description") or item.get("text", ""),
-                        "method": item.get("method", ""),
-                    }
-                    if item.get("status") is not None:
-                        g["status"] = item["status"]
-                    if g["description"]:
-                        goals.append(g)
+                    desc = item.get("description") or item.get("text", "")
+                    method = item.get("method", "")
+                    if desc:
+                        goals.append({"description": desc, "method": method})
                 elif isinstance(item, str):
-                    goals.append({"id": f"g{len(goals)+1}", "description": item.strip(), "method": ""})
+                    goals.append({"description": item.strip(), "method": ""})
             return goals
     except json.JSONDecodeError:
         pass
 
-    # 3. Fallback: numbered/bulleted lists
+    # Fallback: numbered/bulleted lists or plain text lines
     numbered = re.findall(r'^\s*\d+[\.)]\s*(.+)$', text, flags=re.MULTILINE)
     bullets = re.findall(r'^\s*[-\*•]\s*(.+)$', text, flags=re.MULTILINE)
     lines = numbered if numbered else bullets
@@ -215,8 +206,31 @@ def parse_goals_from_response(
         lines = [line.strip() for line in text.splitlines() if line.strip()]
 
     for line in lines:
-        goals.append({"id": f"g{len(goals)+1}", "description": line.strip(), "method": ""})
+        goals.append({"description": line.strip(), "method": ""})
+
     return goals
+
+
+def prepare_goals_for_state(
+    goals: List[Dict[str, Any]], existing: Optional[List[Dict[str, Any]]] = None
+) -> List[Dict[str, Any]]:
+    """Return ``goals`` with sequential ``id`` and default status added."""
+
+    start = 1
+    if existing:
+        start = len(existing) + 1
+
+    prepared: List[Dict[str, Any]] = []
+    for idx, g in enumerate(goals, start):
+        prepared.append(
+            {
+                "id": f"g{idx}",
+                "description": g.get("description", ""),
+                "method": g.get("method", ""),
+                "status": "in_progress",
+            }
+        )
+    return prepared
 
 
 def _merge_goals(
@@ -321,8 +335,8 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         return
     instruction = (
         "Based on the character profile and scene context, generate 2 to 3 specific, "
-        "actionable goals for the character. Return JSON list of goal objects with id, "
-        "description and method."
+        "actionable goals for the character along with a short plan to achieve each. "
+        "Return ONLY JSON like: {\"goals\": [{\"description\": \"...\", \"method\": \"...\"}]}."
     )
     messages = [
         {"role": "system", "content": instruction},
@@ -349,14 +363,15 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         )
         goals = parse_goals_from_response(text)
         if goals:
-            changed = _apply_goal_update(chat_id, state, goals, original_goals)
+            prepared = prepare_goals_for_state(goals, state.get("goals"))
+            changed = _apply_goal_update(chat_id, state, prepared, original_goals)
             if changed:
                 state["messages_since_goal_eval"] = 0
                 if save_state(chat_id, state):
                     log_event("state_saved", {"path": _state_path(chat_id)})
                 logger.info(
                     "Goals updated: %s",
-                    goals,
+                    prepared,
                     extra={"chat_id": chat_id},
                 )
                 return

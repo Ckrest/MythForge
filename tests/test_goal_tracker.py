@@ -110,11 +110,11 @@ def test_check_and_generate_goals_resets_counter(tmp_path, monkeypatch):
         json.dump(state, f)
 
     def fake_call(_prompt, max_tokens=200):
-        return {"choices": [{"text": '[{"id":"1","description":"d","method":""}]'}]}
+        return {"choices": [{"text": '[{"description":"d","method":"plan"}]'}]}
 
     goal_tracker.check_and_generate_goals(fake_call, chat_id)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
-    assert new_state["goals"][0]["id"] == "1"
+    assert new_state["goals"][0]["id"] == "g1"
     assert new_state["messages_since_goal_eval"] == 0
 
 
@@ -137,11 +137,11 @@ def test_check_and_generate_goals_retry_success(tmp_path, monkeypatch):
         calls["n"] += 1
         if calls["n"] < 2:
             return {"choices": [{"text": "[]"}]}
-        return {"choices": [{"text": '[{"id":"1","description":"d","method":""}]'}]}
+        return {"choices": [{"text": '[{"description":"d","method":""}]'}]}
 
     goal_tracker.check_and_generate_goals(fake_call, chat_id)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
-    assert new_state["goals"][0]["id"] == "1"
+    assert new_state["goals"][0]["id"] == "g1"
     assert new_state["messages_since_goal_eval"] == 0
     assert calls["n"] == 2
 
@@ -331,11 +331,11 @@ def test_preserve_goal_details_on_completion(tmp_path, monkeypatch):
 
 def test_parse_goals_from_response_appends():
     existing = [{"id": "1", "description": "a", "method": ""}]
-    text = '[{"id": "2", "description": "b", "method": ""}]'
+    text = '[{"description": "b", "method": ""}]'
     result = goal_tracker.parse_goals_from_response(text, existing)
     assert result is existing
     assert existing == [
         {"id": "1", "description": "a", "method": ""},
-        {"id": "2", "description": "b", "method": ""},
+        {"description": "b", "method": ""},
     ]
 
