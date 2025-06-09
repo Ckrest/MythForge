@@ -1,17 +1,18 @@
-import os
 import json
+import os
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from . import model_launch
-from pydantic import BaseModel
 
 app = FastAPI(title="Myth Forge Server")
 
-# ========== Configuration ==========
+# --- Configuration ---------------------------------------------------------
+
 CHATS_DIR = "chats"
 GLOBAL_PROMPTS_DIR = "global_prompts"
 
@@ -24,8 +25,10 @@ class ChatRequest(BaseModel):
     global_prompt: str | None = None
 
 
-# ========== Helpers ==========
-def load_json(path):
+# --- Helper utilities ------------------------------------------------------
+
+
+def load_json(path: str) -> list:
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -40,6 +43,11 @@ def load_json(path):
     return []
 
 
+def save_json(path: str, data: object) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
 def chat_file(chat_id: str, filename: str) -> str:
     """Return the path for ``filename`` within ``chat_id``'s directory."""
     return os.path.join(CHATS_DIR, chat_id, filename)
@@ -52,14 +60,91 @@ def ensure_chat_dir(chat_id: str) -> str:
     return path
 
 
-def save_json(path, data):
+# --- Global prompt utilities ----------------------------------------------
+
+
+def _prompt_path(name: str) -> str:
+    """Return the filesystem path for a prompt ``name``."""
+    safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
+    return os.path.join(GLOBAL_PROMPTS_DIR, f"{safe}.json")
+
+
+def load_global_prompts() -> List[Dict[str, str]]:
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    prompts: List[Dict[str, str]] = []
+    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
+        if not fname.lower().endswith(".json"):
+            continue
+        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Failed to load prompt '{fname}': {e}")
+            continue
+        if isinstance(data, dict) and "name" in data and "content" in data:
+            prompts.append({"name": data["name"], "content": data["content"]})
+        else:
+            print(f"Ignoring invalid global prompt file: {fname}")
+    return prompts
+
+
+def list_prompt_names() -> List[str]:
+    """Return only the names of available global prompts."""
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    names: List[str] = []
+    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
+        if not fname.lower().endswith(".json"):
+            continue
+        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Failed to load prompt '{fname}': {e}")
+            continue
+        if isinstance(data, dict) and "name" in data:
+            names.append(data["name"])
+    return names
+
+
+def get_global_prompt_content(name: str) -> str | None:
+    """Return the content string for a prompt ``name`` if it exists."""
+    path = _prompt_path(name)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("content") if isinstance(data, dict) else None
+    except Exception as e:
+        print(f"Failed to load prompt '{name}': {e}")
+        return None
+
+
+def save_global_prompt(prompt: Dict[str, str]) -> None:
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    path = _prompt_path(prompt["name"])
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+        json.dump(
+            {"name": prompt["name"], "content": prompt["content"]},
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
+
+
+def delete_global_prompt(name: str) -> None:
+    path = _prompt_path(name)
+    if os.path.exists(path):
+        os.remove(path)
+
+
+# --- Load/Save operations --------------------------------------------------
 
 
 def load_item(kind: str, name: str | None = None):
     """Load a JSON item based on ``kind`` and ``name``."""
-
     if kind == "chat_history" and name:
         return load_json(chat_file(name, "full.json"))
     if kind == "chats":
@@ -92,7 +177,6 @@ def save_item(
     new_name: str | None = None,
 ):
     """Handle saving, deleting, or renaming items."""
-
     if kind == "chat_history" and name:
         if delete:
             chat_dir = os.path.join(CHATS_DIR, name)
@@ -164,86 +248,9 @@ def save_item(
     raise HTTPException(status_code=400, detail="Invalid save request")
 
 
-# ─── Global Prompts CRUD ─────────────────────────────────────────────────
-def _prompt_path(name: str) -> str:
-    """Return the filesystem path for a prompt ``name``."""
-    safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
-    return os.path.join(GLOBAL_PROMPTS_DIR, f"{safe}.json")
+# --- Prompt Endpoints -----------------------------------------------------
 
 
-def load_global_prompts():
-    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
-    prompts = []
-    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
-        if not fname.lower().endswith(".json"):
-            continue
-        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            print(f"Failed to load prompt '{fname}': {e}")
-            continue
-
-        if isinstance(data, dict) and "name" in data and "content" in data:
-            prompts.append({"name": data["name"], "content": data["content"]})
-        else:
-            print(f"Ignoring invalid global prompt file: {fname}")
-    return prompts
-
-
-def list_prompt_names() -> List[str]:
-    """Return only the names of available global prompts."""
-    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
-    names: List[str] = []
-    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
-        if not fname.lower().endswith(".json"):
-            continue
-        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            print(f"Failed to load prompt '{fname}': {e}")
-            continue
-        if isinstance(data, dict) and "name" in data:
-            names.append(data["name"])
-    return names
-
-
-def get_global_prompt_content(name: str) -> str | None:
-    """Return the content string for a prompt ``name`` if it exists."""
-    path = _prompt_path(name)
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("content") if isinstance(data, dict) else None
-    except Exception as e:
-        print(f"Failed to load prompt '{name}': {e}")
-        return None
-
-
-def save_global_prompt(prompt: Dict[str, str]):
-    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
-    path = _prompt_path(prompt["name"])
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(
-            {"name": prompt["name"], "content": prompt["content"]},
-            f,
-            indent=2,
-            ensure_ascii=False,
-        )
-
-
-def delete_global_prompt(name: str):
-    path = _prompt_path(name)
-    if os.path.exists(path):
-        os.remove(path)
-
-
-# ========== Prompt Endpoints ==========
 @app.get("/prompts")
 def list_prompts(names_only: int = 0):
     if names_only:
@@ -285,7 +292,9 @@ def remove_prompt(name: str):
     return {"detail": f"Deleted prompt '{name}'"}
 
 
-# ========== Settings Endpoints ==========
+# --- Settings Endpoints ---------------------------------------------------
+
+
 @app.get("/settings")
 def get_settings():
     return load_item("settings")
@@ -297,13 +306,17 @@ def update_settings(data: Dict[str, object]):
     return {"detail": "Updated", "settings": load_item("settings")}
 
 
-# ─── Response Prompt Status ───────────────────────────────────────────────
+# --- Response Prompt Status -----------------------------------------------
+
+
 @app.get("/response_prompt_status")
 def response_prompt_status():
     return {"pending": 0}
 
 
-# ========== Standard Chat Endpoints ==========
+# --- Standard Chat Endpoints ---------------------------------------------
+
+
 @app.get("/chats")
 def list_chats():
     return {"chats": load_item("chats")}
@@ -338,7 +351,6 @@ def edit_message(chat_id: str, index: int, data: Dict[str, str]):
         raise HTTPException(status_code=400, detail="Invalid index")
     full[index]["content"] = data.get("content", "")
     save_item("chat_history", chat_id, data=full)
-
     return {"detail": "Updated"}
 
 
@@ -353,7 +365,6 @@ def delete_message(chat_id: str, index: int):
         raise HTTPException(status_code=400, detail="Invalid index")
     full.pop(index)
     save_item("chat_history", chat_id, data=full)
-
     return {"detail": "Deleted"}
 
 
@@ -365,12 +376,7 @@ def delete_chat(chat_id: str):
 
 @app.put("/chat/{chat_id}")
 def rename_chat(chat_id: str, data: Dict[str, str]):
-    """Rename an existing chat ``chat_id`` to ``data['new_id']``.
-
-    Renames the associated history files on disk.  If no history files exist
-    yet for ``chat_id``, a ``404`` is returned.  If files for the new name
-    already exist, a ``400`` is returned.
-    """
+    """Rename an existing chat ``chat_id`` to ``data['new_id']``."""
 
     new_id = data.get("new_id", "").strip()
     if not new_id:
@@ -380,7 +386,6 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
         return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
     save_item("chat_history", chat_id, new_name=new_id)
-
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
 
@@ -392,7 +397,6 @@ def save_message(req: ChatRequest):
     history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
     save_item("chat_history", req.chat_id, data=history)
-
     return {"detail": "Message stored"}
 
 
@@ -423,5 +427,6 @@ def chat(req: ChatRequest):
     return {"detail": "Model call disabled"}
 
 
-# ========== Static UI Mount ==========
+# --- Static UI Mount ------------------------------------------------------
+
 app.mount("/", StaticFiles(directory="ui", html=True), name="static")
