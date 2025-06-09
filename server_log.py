@@ -14,8 +14,14 @@ _log_file = os.path.join(LOG_DIR, f"{datetime.datetime.now().strftime('%Y%m%d_%H
 
 
 def _flush():
-    with open(_log_file, 'w', encoding='utf-8') as f:
-        json.dump(_log_data, f, indent=2, ensure_ascii=False)
+    """Append buffered log entries to the log file in JSONL format."""
+    if not _log_data:
+        return
+    with open(_log_file, 'a', encoding='utf-8') as f:
+        for entry in _log_data:
+            f.write(json.dumps(entry, ensure_ascii=False))
+            f.write("\n")
+    _log_data.clear()
 
 atexit.register(_flush)
 
@@ -49,9 +55,7 @@ def log_entry(tag: str, func, args, kwargs, result) -> None:
         "result": repr(result),
     }
     _log_data.append(entry)
-    # Immediately persist logs so the file exists even if the process
-    # is long-running.  This ensures that a log file is created as soon
-    # as the first entry is recorded instead of only on shutdown.
+    # Persist immediately so the file exists even if the process runs long.
     _flush()
 
 
