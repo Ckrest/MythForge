@@ -300,7 +300,14 @@
     </div>
 
     <script>
-        const CONFIG = { apiUrl: window.location.origin };
+        const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
+        const CONFIG = { apiUrl: window.location.origin + basePath };
+
+        function apiFetch(path, options){
+            const base = CONFIG.apiUrl.replace(/\/$/, '');
+            const rel = path.startsWith('/') ? path : '/' + path;
+            return fetch(base + rel, options);
+        }
         const state = {
             chats: [],
             currentChatId: '',
@@ -433,7 +440,7 @@
 
         async function loadServerSettings(){
             try{
-                const res = await fetch('/settings');
+                const res = await apiFetch('/settings');
                 if(!res.ok) return;
                 const data = await res.json();
                 state.serverSettings = data;
@@ -456,7 +463,7 @@
                 repeat_penalty: parseFloat(repeatPenaltyInput.value) || 0
             };
             try{
-                const res = await fetch('/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+                const res = await apiFetch('/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
                 if(!res.ok){
                     const err = await res.json();
                     alert('Error: ' + (err.detail || res.status));
@@ -628,7 +635,7 @@
 
         async function fetchChatList(){
             try{
-                const res = await fetch('/chats');
+                const res = await apiFetch('/chats');
                 const json = await res.json();
                 state.chats = json.chats.sort((a,b)=>a.localeCompare(b));
                 const last = localStorage.getItem('lastChatId');
@@ -649,7 +656,7 @@
             systemPrompt.textContent='';
             systemToggle.style.display='none';
             try{
-                const res = await fetch(`/history/${encodeURIComponent(id)}`);
+                const res = await apiFetch(`/history/${encodeURIComponent(id)}`);
                 if(!res.ok) return;
                 const msgs = await res.json();
                 msgs.forEach(m => appendMessageToUI(m.role==='bot'?'assistant':m.role, m.content));
@@ -687,7 +694,7 @@
 
         async function refreshGlobalPromptList(){
             try{
-                const res = await fetch('/prompts?names_only=1');
+                const res = await apiFetch('/prompts?names_only=1');
                 const json = await res.json();
                 state.prompts = json.prompts.sort((a,b)=>a.localeCompare(b));
                 const last = localStorage.getItem('lastGlobalPrompt');
@@ -726,7 +733,7 @@
                 return;
             }
             try{
-                const res = await fetch(`/prompts/${encodeURIComponent(name)}`);
+                const res = await apiFetch(`/prompts/${encodeURIComponent(name)}`);
                 if(!res.ok){ alert('Prompt not found.'); return; }
                 const promptObj = await res.json();
                 promptInput.value = promptObj.content;
@@ -755,7 +762,7 @@
             if(contTrim==='') return alert('Prompt content cannot be empty.');
             try{
                 if(editingPromptIsNew){
-                    const createRes = await fetch('/prompts', {
+                    const createRes = await apiFetch('/prompts', {
                         method:'POST',
                         headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({name: nameTrim, content: contTrim})
@@ -765,7 +772,7 @@
                     editingPromptName = nameTrim;
                 }else{
                     if(nameTrim !== editingPromptName){
-                        const renameRes = await fetch(`/prompts/${encodeURIComponent(editingPromptName)}/rename`, {
+                        const renameRes = await apiFetch(`/prompts/${encodeURIComponent(editingPromptName)}/rename`, {
                             method:'PUT',
                             headers:{'Content-Type':'application/json'},
                             body: JSON.stringify({new_name: nameTrim})
@@ -774,7 +781,7 @@
                         editingPromptName = nameTrim;
                         state.currentPrompt = nameTrim;
                     }
-                    const updateRes = await fetch(`/prompts/${encodeURIComponent(nameTrim)}`, {
+                    const updateRes = await apiFetch(`/prompts/${encodeURIComponent(nameTrim)}`, {
                         method:'PUT',
                         headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({name: nameTrim, content: contTrim})
@@ -795,7 +802,7 @@
                 name = `New Chat ${idx}`;
             }
             try{
-                const res = await fetch(`/chats/${encodeURIComponent(name)}`, {method:'POST'});
+                const res = await apiFetch(`/chats/${encodeURIComponent(name)}`, {method:'POST'});
                 if(!res.ok){
                     const err = await res.json().catch(()=>({detail:'Server error'}));
                     alert('Error: '+(err.detail||res.status));
@@ -815,7 +822,7 @@
             if(!state.currentChatId) return alert('Nothing to delete.');
             confirmDialog('Are you sure you want to delete this chat?', async ()=>{
                 try{
-                const res = await fetch(`/chat/${encodeURIComponent(state.currentChatId)}`, {method:'DELETE'});
+                const res = await apiFetch(`/chat/${encodeURIComponent(state.currentChatId)}`, {method:'DELETE'});
                 if(!res.ok){ if(res.status===404) throw new Error('Chat not found on server.'); else throw new Error('Unknown server error.'); }
                 await fetchChatList();
                 state.currentChatId = state.chats.length ? state.chats[0] : '';
@@ -834,7 +841,7 @@
                 if(trimmed === oldId) return;
                 if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
                 try{
-                    const res = await fetch(`/chat/${encodeURIComponent(oldId)}`, {
+                    const res = await apiFetch(`/chat/${encodeURIComponent(oldId)}`, {
                         method:'PUT',
                         headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({new_id: trimmed})
@@ -860,7 +867,7 @@
         async function deletePrompt(name){
             confirmDialog('Delete this prompt?', async ()=>{
                 try{
-                    const res = await fetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
+                    const res = await apiFetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
                     if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
                     await refreshGlobalPromptList();
                     if(state.currentPrompt===name){
@@ -877,7 +884,7 @@
                 if(trimmed.toLowerCase() !== oldName.trim().toLowerCase() && state.prompts.includes(trimmed))
                     return alert('That name\u2019s already taken.');
                 try{
-                    const res = await fetch(`/prompts/${encodeURIComponent(oldName)}/rename`, {
+                    const res = await apiFetch(`/prompts/${encodeURIComponent(oldName)}/rename`, {
                         method:'PUT',
                         headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({new_name: trimmed})
@@ -905,7 +912,7 @@
         async function editMessage(index, current){
             promptTextarea('Edit message:', current, async (text)=>{
                 try{
-                    const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {
+                    const res = await apiFetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {
                         method:'PUT',
                         headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({content:text})
@@ -919,7 +926,7 @@
         async function deleteMessage(index){
             confirmDialog('Delete this message?', async ()=>{
                 try{
-                    const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {method:'DELETE'});
+                    const res = await apiFetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {method:'DELETE'});
                     if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
                     await loadChat(state.currentChatId);
                 }catch(e){ alert('Failed to delete: '+e.message); }
@@ -986,7 +993,7 @@
 
         async function pollPromptStatus(){
             try{
-                const res = await fetch('/response_prompt_status');
+                const res = await apiFetch('/response_prompt_status');
                 if(res.ok){
                     const data = await res.json();
                     if(data.pending===0){
@@ -1018,7 +1025,7 @@
             updateBusyUI();
             abortController = new AbortController();
             try{
-                const response = await fetch('/chat/stream', {
+                const response = await apiFetch('/chat/stream', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({
@@ -1113,7 +1120,7 @@
             sendButton.disabled=true; sendOnlyButton.disabled=true;
             appendMessageToUI('user', text);
             try{
-                await fetch('/message', {
+                await apiFetch('/message', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: state.currentPrompt})
