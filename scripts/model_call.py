@@ -18,6 +18,16 @@ import re
 from typing import Dict, List, Optional
 
 
+def format_prompt(
+    system_prompt: str,
+    history: List[Dict[str, str]],
+    assistant_name: str = "assistant",
+) -> str:
+    """Return the LLaMA3 formatted prompt from raw history."""
+
+    return format_llama3(system_prompt, None, history, "", assistant_name)
+
+
 def _strip_junk(text: str) -> str:
     """Remove LM Studio tokens and metadata lines."""
     cleaned = re.sub(
@@ -25,9 +35,7 @@ def _strip_junk(text: str) -> str:
         "",
         text,
     )
-    cleaned = re.sub(
-        r"^Cutting Knowledge Date.*\n?", "", cleaned, flags=re.MULTILINE
-    )
+    cleaned = re.sub(r"^Cutting Knowledge Date.*\n?", "", cleaned, flags=re.MULTILINE)
     cleaned = re.sub(r"^Today Date.*\n?", "", cleaned, flags=re.MULTILINE)
     return cleaned.strip()
 

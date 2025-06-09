@@ -23,7 +23,7 @@ from .goals import (
 )
 
 # Prompt formatting utilities
-from .model_call import format_llama3
+from .model_call import format_prompt
 from . import model_launch
 
 app = FastAPI(title="Myth Forge Server")
@@ -70,8 +70,6 @@ MODEL_SETTINGS_PATH = model_launch.MODEL_SETTINGS_PATH
 MODEL_SETTINGS = model_launch.MODEL_SETTINGS
 GENERATION_CONFIG = model_launch.GENERATION_CONFIG
 DEFAULT_MAX_TOKENS = model_launch.DEFAULT_MAX_TOKENS
-SUMMARIZE_THRESHOLD = model_launch.SUMMARIZE_THRESHOLD
-SUMMARIZE_BATCH = model_launch.SUMMARIZE_BATCH
 call_llm = model_launch.call_llm
 
 
@@ -252,9 +250,7 @@ def fetch_prompt(name: str):
 @app.post("/prompts")
 def create_prompt(item: PromptItem):
     if os.path.exists(_prompt_path(item.name)):
-        raise HTTPException(
-            status_code=400, detail="Prompt name already exists"
-        )
+        raise HTTPException(status_code=400, detail="Prompt name already exists")
     save_global_prompt({"name": item.name, "content": item.content})
     return {
         "detail": "Created",
@@ -287,9 +283,7 @@ def rename_prompt(name: str, data: Dict[str, str]):
     if not os.path.exists(_prompt_path(name)):
         raise HTTPException(status_code=404, detail="Prompt not found")
     if os.path.exists(_prompt_path(new_name)) and new_name != name:
-        raise HTTPException(
-            status_code=400, detail="Prompt name already exists"
-        )
+        raise HTTPException(status_code=400, detail="Prompt name already exists")
 
     same_name = new_name == name
 
@@ -302,9 +296,7 @@ def rename_prompt(name: str, data: Dict[str, str]):
     data["name"] = new_name
     if not same_name:
         os.rename(old_path, new_path)
-    with open(
-        new_path if not same_name else old_path, "w", encoding="utf-8"
-    ) as f:
+    with open(new_path if not same_name else old_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     return {"detail": f"Renamed prompt '{name}' to '{new_name}'"}
 
@@ -317,105 +309,31 @@ def delete_prompt(name: str):
     return {"detail": f"Deleted prompt '{name}'"}
 
 
-# ========== Summarization & Trimming ==========
-def summarize_chunk(chunk):
-    history = []
-    for m in chunk:
-        role = "assistant" if m.get("role") == "bot" else m.get("role")
-        history.append({"role": role, "content": m.get("content", "")})
-
-    prompt = format_llama3(
-        "",
-        None,
-        history,
-        (
-            "You are summarizing a SPECIFIC SECTION of a roleplaying interaction. "
-            "Clearly summarize only this designated section.\n\n"
-            "Include:\n\n"
-            "[SECTION CHARACTER SUMMARIES]:\n"
-            "- Character Name: Brief motivation, behavior, actions during this section only.\n\n"
-            "[KEY SECTION EVENTS]:\n"
-            "- Short bullet points highlighting only major events, interactions, or turning points within this section.\n\n"
-            "[SECTION END STATE]:\n"
-            "- Describe briefly the emotional or situational state at the end of this specific section.\n\n"
-            "DO NOT include details or context outside the specified section. "
-            "No assumptions. Be direct and precise."
-        ),
-    )
-    # Use ``call_llm`` to ensure only supported kwargs are passed to the model
-    print("DEBUG raw_prompt:", prompt)
-    output = call_llm(prompt, max_tokens=150)
-    summary_text = output["choices"][0]["text"].strip()
-    wrapped = f"[Summery start]\n{summary_text}\n[Summery end]"
-    return {"type": "summary", "content": wrapped}
-
-
-def trim_context(chat_id):
-    trimmed_path = chat_file(chat_id, "trimmed.json")
-    history = load_json(trimmed_path)
-
-    # Collect indices of raw messages so we know where to insert summaries
-    raw_indices = [i for i, m in enumerate(history) if m.get("type") == "raw"]
-
-    if len(raw_indices) >= SUMMARIZE_THRESHOLD:
-        # Grab the earliest batch of raw messages to summarize
-        batch_indices = raw_indices[:SUMMARIZE_BATCH]
-        oldest_batch = [history[i] for i in batch_indices]
-
-        summary = summarize_chunk(oldest_batch)
-
-        # Remove the raw messages we just summarized
-        for i in reversed(batch_indices):
-            history.pop(i)
-
-        # Insert the summary at the position of the first removed message
-        history.insert(batch_indices[0], summary)
-
-        save_json(trimmed_path, history)
-
-    return history
-
-
 @log_function("state_writer_caller")
 def build_prompt(chat_id, user_message, global_prompt_name):
     """Construct the next prompt using the LLaMA3 header-token format."""
 
     ensure_chat_dir(chat_id)
-    trimmed_path = chat_file(chat_id, "trimmed.json")
     full_path = chat_file(chat_id, "full.json")
 
     # Append user message to history if it is not empty.  When generating with
     # an empty prompt, we do not want to record a blank user message.
     full_log = load_json(full_path)
-    context = load_json(trimmed_path)
     if user_message.strip():
         full_log.append({"role": "user", "content": user_message})
-        context.append(
-            {"type": "raw", "role": "user", "content": user_message}
-        )
         record_user_message(chat_id)
         chosen_content = get_global_prompt_content(global_prompt_name)
-        if (
-            chosen_content
-            and "**goals**" in chosen_content
-            and len(full_log) == 1
-        ):
+        if chosen_content and "**goals**" in chosen_content and len(full_log) == 1:
             init_state_from_prompt(chat_id, chosen_content, user_message)
         state = load_state(chat_id)
-        if (
-            goal_tracker.DEBUG_MODE
-            or state.get("messages_since_goal_eval", 0) >= 2
-        ):
+        if goal_tracker.DEBUG_MODE or state.get("messages_since_goal_eval", 0) >= 2:
             check_and_generate_goals(call_llm, chat_id)
     # Ensure history files exist even if no message was appended
     save_json(full_path, full_log)
-    save_json(trimmed_path, context)
 
     # Determine system prompt
     chosen_content = get_global_prompt_content(global_prompt_name)
-    system_prompt = (
-        chosen_content if chosen_content else "You are a helpful assistant."
-    )
+    system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
     assistant_name = "assistant"
 
     # Incorporate character state and goals if available
@@ -424,23 +342,13 @@ def build_prompt(chat_id, user_message, global_prompt_name):
     if fragment:
         system_prompt = system_prompt + "\n" + fragment
 
-    # Gather summaries and raw history for prompt formatting
-    summaries: List[str] = []
+    # Convert full history into role/content pairs
     history: List[Dict[str, str]] = []
-    for m in context:
-        if m.get("type") == "summary":
-            summaries.append(f"SUMMARY: {m['content']}")
-        else:
-            role = assistant_name if m.get("role") == "bot" else m.get("role")
-            history.append({"role": role, "content": m.get("content", "")})
+    for m in full_log:
+        role = assistant_name if m.get("role") == "bot" else m.get("role")
+        history.append({"role": role, "content": m.get("content", "")})
 
-    prompt_str = format_llama3(
-        system_prompt,
-        summaries,
-        history,
-        "",
-        assistant_name,
-    )
+    prompt_str = format_prompt(system_prompt, history, assistant_name)
     return prompt_str, assistant_name
 
 
@@ -449,9 +357,7 @@ def build_prompt(chat_id, user_message, global_prompt_name):
 def list_chats():
     os.makedirs(CHATS_DIR, exist_ok=True)
     chat_ids = [
-        d
-        for d in os.listdir(CHATS_DIR)
-        if os.path.isdir(os.path.join(CHATS_DIR, d))
+        d for d in os.listdir(CHATS_DIR) if os.path.isdir(os.path.join(CHATS_DIR, d))
     ]
     return {"chats": chat_ids}
 
@@ -464,7 +370,6 @@ def create_chat(chat_id: str):
         raise HTTPException(status_code=400, detail="Chat already exists")
     os.makedirs(chat_dir, exist_ok=True)
     save_json(chat_file(chat_id, "full.json"), [])
-    save_json(chat_file(chat_id, "trimmed.json"), [])
     return {"detail": f"Created chat '{chat_id}'"}
 
 
@@ -480,7 +385,6 @@ def get_history(chat_id: str):
 def edit_message(chat_id: str, index: int, data: Dict[str, str]):
     """Update the content of a message at ``index`` in ``chat_id``."""
     full_path = chat_file(chat_id, "full.json")
-    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="Chat not found")
     full = load_json(full_path)
@@ -489,15 +393,6 @@ def edit_message(chat_id: str, index: int, data: Dict[str, str]):
     full[index]["content"] = data.get("content", "")
     save_json(full_path, full)
 
-    trimmed = load_json(trimmed_path)
-    raw_idx = 0
-    for i, m in enumerate(trimmed):
-        if m.get("type") == "raw":
-            if raw_idx == index:
-                trimmed[i]["content"] = data.get("content", "")
-                break
-            raw_idx += 1
-    save_json(trimmed_path, trimmed)
     return {"detail": "Updated"}
 
 
@@ -505,7 +400,6 @@ def edit_message(chat_id: str, index: int, data: Dict[str, str]):
 def delete_message(chat_id: str, index: int):
     """Remove the message at ``index`` from ``chat_id``."""
     full_path = chat_file(chat_id, "full.json")
-    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="Chat not found")
     full = load_json(full_path)
@@ -514,15 +408,6 @@ def delete_message(chat_id: str, index: int):
     full.pop(index)
     save_json(full_path, full)
 
-    trimmed = load_json(trimmed_path)
-    raw_idx = 0
-    for i, m in enumerate(trimmed):
-        if m.get("type") == "raw":
-            if raw_idx == index:
-                trimmed.pop(i)
-                break
-            raw_idx += 1
-    save_json(trimmed_path, trimmed)
     return {"detail": "Deleted"}
 
 
@@ -574,10 +459,8 @@ def chat(req: ChatRequest):
 
     ensure_chat_dir(chat_id)
     full_path = chat_file(chat_id, "full.json")
-    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
-        save_json(trimmed_path, [])
 
     prompt, assistant_name = build_prompt(chat_id, user_message, global_prompt)
 
@@ -592,9 +475,7 @@ def chat(req: ChatRequest):
         config["min_p"] = req.min_p
     if req.repeat_penalty is not None:
         config["repeat_penalty"] = req.repeat_penalty
-    max_tokens = (
-        req.max_tokens if req.max_tokens is not None else DEFAULT_MAX_TOKENS
-    )
+    max_tokens = req.max_tokens if req.max_tokens is not None else DEFAULT_MAX_TOKENS
 
     print("DEBUG raw_prompt:", prompt)
     output = call_llm(prompt, max_tokens=max_tokens, **config)
@@ -606,9 +487,7 @@ def chat(req: ChatRequest):
     full_log.append({"role": "bot", "content": response_text})
     save_json(full_path, full_log)
     if record_assistant_message(chat_id):
-        enqueue_response_prompt(
-            lambda: evaluate_and_update_goals(call_llm, chat_id)
-        )
+        enqueue_response_prompt(lambda: evaluate_and_update_goals(call_llm, chat_id))
     if len(full_log) == 2:
         first_user = full_log[0].get("content", "") if full_log else ""
         gprompt_content = get_global_prompt_content(global_prompt) or ""
@@ -619,12 +498,6 @@ def chat(req: ChatRequest):
         )
         if "**goals**" in gprompt_content:
             check_and_generate_goals(call_llm, chat_id)
-
-    # Append bot to trimmed context
-    trimmed = load_json(trimmed_path)
-    trimmed.append({"type": "raw", "role": "bot", "content": response_text})
-    save_json(trimmed_path, trimmed)
-    enqueue_response_prompt(lambda: trim_context(chat_id))
 
     return ChatResponse(response=response_text, prompt_preview=prompt)
 
@@ -646,10 +519,8 @@ def chat_stream(req: ChatRequest):
 
     ensure_chat_dir(chat_id)
     full_path = chat_file(chat_id, "full.json")
-    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
-        save_json(trimmed_path, [])
 
     # 1) Build prompt
     prompt, assistant_name = build_prompt(chat_id, user_message, global_prompt)
@@ -682,9 +553,7 @@ def chat_stream(req: ChatRequest):
         if req.repeat_penalty is not None:
             config["repeat_penalty"] = req.repeat_penalty
         max_tokens = (
-            req.max_tokens
-            if req.max_tokens is not None
-            else DEFAULT_MAX_TOKENS
+            req.max_tokens if req.max_tokens is not None else DEFAULT_MAX_TOKENS
         )
 
         for output in call_llm(
@@ -728,9 +597,7 @@ def chat_stream(req: ChatRequest):
 
         # Goal initialization if this was the first exchange
         if len(full_history) == 2:
-            first_user = (
-                full_history[0].get("content", "") if full_history else ""
-            )
+            first_user = full_history[0].get("content", "") if full_history else ""
             gprompt_content = get_global_prompt_content(global_prompt) or ""
             enqueue_response_prompt(
                 lambda fu=first_user, gp=gprompt_content, rt=text_accumulator: ensure_initial_state(
@@ -740,15 +607,7 @@ def chat_stream(req: ChatRequest):
             if "**goals**" in gprompt_content:
                 check_and_generate_goals(call_llm, chat_id)
 
-        # (2) Trimmed context
-        trimmed = load_json(trimmed_path)
-        trimmed.append(
-            {"type": "raw", "role": "bot", "content": text_accumulator}
-        )
-        save_json(trimmed_path, trimmed)
-        enqueue_response_prompt(lambda: trim_context(chat_id))
-
-    return StreamingResponse(generate_and_stream(), media_type="text/plain")
+        return StreamingResponse(generate_and_stream(), media_type="text/plain")
 
 
 # ─── Endpoint: Log Message Without Generating ------------------------------
@@ -763,10 +622,8 @@ def log_message(req: ChatRequest):
 
     ensure_chat_dir(chat_id)
     full_path = chat_file(chat_id, "full.json")
-    trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
-        save_json(trimmed_path, [])
 
     # build_prompt appends the user message to history files
     build_prompt(chat_id, user_message, global_prompt)
