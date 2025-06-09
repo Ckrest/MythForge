@@ -416,23 +416,42 @@ def evaluate_and_update_goals(
             continue
 
         completed = state.get("completed_goals", [])
-        active = []
+        existing = {g.get("id"): g for g in state.get("goals", [])}
+        active: List[Dict[str, Any]] = []
         seen_ids = {g.get("id") for g in completed}
         seen_desc = {g.get("description", "").lower() for g in completed}
+        processed: set[str] = set()
 
         for g in model.goals:
-            status = (g.status or "in_progress").lower()
+            status = (g.status or existing.get(g.id, {}).get("status") or "in_progress").lower()
+            orig = existing.pop(g.id, None)
+            goal_data = orig if orig is not None else g.dict()
+            goal_data["status"] = status
+            desc_key = goal_data.get("description", "").lower()
+
             if status in ("completed", "abandoned"):
-                if g.id not in seen_ids:
-                    completed.append(g.dict())
-                    seen_ids.add(g.id)
-                    seen_desc.add(g.description.lower())
+                if goal_data["id"] not in seen_ids:
+                    completed.append(goal_data)
+                    seen_ids.add(goal_data["id"])
+                    seen_desc.add(desc_key)
+                processed.add(goal_data["id"])
                 continue
-            if g.id in seen_ids or g.description.lower() in seen_desc:
+
+            if goal_data["id"] in seen_ids or desc_key in seen_desc or goal_data["id"] in processed:
                 continue
-            active.append(g.dict())
-            seen_ids.add(g.id)
-            seen_desc.add(g.description.lower())
+
+            active.append(goal_data)
+            seen_ids.add(goal_data["id"])
+            seen_desc.add(desc_key)
+            processed.add(goal_data["id"])
+
+        for gid, g in existing.items():
+            desc_key = g.get("description", "").lower()
+            if gid in seen_ids or desc_key in seen_desc:
+                continue
+            active.append(g)
+            seen_ids.add(gid)
+            seen_desc.add(desc_key)
 
         state["completed_goals"] = completed
         state["goals"] = active
