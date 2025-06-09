@@ -49,6 +49,7 @@ def _get_function_details(fn):
 
 def log_entry(tag: str, func, args, kwargs, result) -> None:
     entry = {
+        "function_name": func.__name__,
         "time": datetime.datetime.now().isoformat(),
         "tag": tag,
         "function": _get_function_details(func),
@@ -62,7 +63,14 @@ def log_entry(tag: str, func, args, kwargs, result) -> None:
 
 
 def log_event(tag: str, data: Dict[str, Any]) -> None:
-    entry = {"time": datetime.datetime.now().isoformat(), "tag": tag, **data}
+    caller = inspect.currentframe().f_back
+    func_name = caller.f_code.co_name if caller else "<unknown>"
+    entry = {
+        "function_name": func_name,
+        "time": datetime.datetime.now().isoformat(),
+        "tag": tag,
+        **data,
+    }
     _log_data.append(entry)
     _flush()
 
