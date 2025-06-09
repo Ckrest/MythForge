@@ -277,9 +277,3 @@ def chat(req: ChatRequest):
 
 # ========== Static UI Mount ==========
 app.mount("/", StaticFiles(directory="ui", html=True), name="static")
-
-# Apply automatic logging to all functions in this module
-import sys
-from .disable import patch_module_functions
-
-patch_module_functions(sys.modules[__name__], "server")

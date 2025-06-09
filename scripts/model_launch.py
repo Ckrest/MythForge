@@ -9,15 +9,10 @@ from typing import Dict
 
 from llama_cpp import Llama
 
-from .disable import patch_module_functions, log_event
+from .disable import log_event
 
 MODELS_DIR = "models"
 MODEL_SETTINGS_PATH = "model_settings.json"
-
-# Match LM Studio defaults for a 4 GB VRAM setup
-DEFAULT_CTX_SIZE = 4096
-DEFAULT_N_BATCH = 512
-DEFAULT_N_THREADS = os.cpu_count() or 1
 
 
 def load_model_settings(path: str = MODEL_SETTINGS_PATH) -> Dict[str, object]:
@@ -33,25 +28,25 @@ def load_model_settings(path: str = MODEL_SETTINGS_PATH) -> Dict[str, object]:
 
 MODEL_SETTINGS = load_model_settings()
 
-# Generation settings matching LM Studio's defaults
+# ---------------------------------------------------------------------------
+# Default values
+# ---------------------------------------------------------------------------
+DEFAULT_CTX_SIZE = MODEL_SETTINGS.get("n_ctx", 4096)
+DEFAULT_N_BATCH = MODEL_SETTINGS.get("n_batch", 512)
+DEFAULT_N_THREADS = MODEL_SETTINGS.get("n_threads", os.cpu_count() or 1)
+DEFAULT_MAX_TOKENS = MODEL_SETTINGS.get("max_tokens", 250)
+SUMMARIZE_THRESHOLD = MODEL_SETTINGS.get("summarize_threshold", 20)
+SUMMARIZE_BATCH = MODEL_SETTINGS.get("summarize_batch", 12)
+
+# Generation settings
 GENERATION_CONFIG = {
     "temperature": MODEL_SETTINGS.get("temperature", 0.8),
     "top_k": MODEL_SETTINGS.get("top_k", 40),
     "top_p": MODEL_SETTINGS.get("top_p", 0.95),
     "min_p": MODEL_SETTINGS.get("min_p", 0.05),
     "repeat_penalty": MODEL_SETTINGS.get("repeat_penalty", 1.1),
-    # ``n_batch`` is set when ``Llama`` is instantiated. Passing it to
-    # ``Llama.__call__`` can break older ``llama_cpp`` versions, so it is
-    # intentionally omitted here.
-    # ``<|start_header_id|>`` is omitted from the default stop list to avoid
-    # the "prefix-match" warnings emitted by ``llama_cpp`` when the model
-    # begins generating the next header token.  ``<|eot_id|>`` alone is
-    # sufficient to mark the end of an assistant message.
     "stop": MODEL_SETTINGS.get("stop", ["<|eot_id|>"]),
 }
-DEFAULT_MAX_TOKENS = MODEL_SETTINGS.get("max_tokens", 250)
-SUMMARIZE_THRESHOLD = MODEL_SETTINGS.get("summarize_threshold", 20)
-SUMMARIZE_BATCH = MODEL_SETTINGS.get("summarize_batch", 12)
 
 
 # ---------------------------------------------------------------------------
@@ -133,8 +128,3 @@ def call_llm(prompt: str, **kwargs):
 
 
 call_llm._patched = True
-
-
-import sys
-
-patch_module_functions(sys.modules[__name__], "model_launch")
