@@ -367,7 +367,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         logger.debug("Character state incomplete", extra={"chat_id": chat_id})
         return
     instruction = (
-    "Given the character profile and scene context, determine if the character has any meaningful or natural goals. "
+    "Given the character profile and scene context, determine if the character has any NEW meaningful or natural goals. "
     f"If so, generate up to {MAX_GOALS} specific, actionable goals, each with a brief plan for how the character might pursue it. "
     "If no goals are currently appropriate, return an empty list. "
     "Respond ONLY in JSON format: {\"goals\": [{\"description\": \"...\", \"method\": \"...\"}]}."
