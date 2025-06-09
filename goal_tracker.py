@@ -200,6 +200,7 @@ def init_state_from_prompt(chat_id: str, global_prompt: str, first_user: str) ->
     if state.get("scene_context") is None:
         state["scene_context"] = first_user.strip()
     save_state(chat_id, state)
+    log_event("state_saved", {"path": _state_path(chat_id)})
 
 
 def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: str, first_assistant: str) -> None:
@@ -211,6 +212,7 @@ def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: 
     if state.get("character_profile") is None:
         state["character_profile"] = extract_character_profile(first_assistant)
     save_state(chat_id, state)
+    log_event("state_saved", {"path": _state_path(chat_id)})
 
 
 def parse_goals_from_response(
@@ -302,6 +304,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
             state["goals"] = goals
             state["messages_since_goal_eval"] = 0
             save_state(chat_id, state)
+            log_event("state_saved", {"path": _state_path(chat_id)})
             print(f"Goals updated for {chat_id}: {goals}")
             return
         else:
@@ -351,32 +354,21 @@ def build_prompt(convo: List[Dict[str, str]], instruction: str) -> str:
 
 
 
-def _error_path(chat_id: str) -> str:
-    """Return the path used for goal evaluation error logs."""
-    dir_path = os.path.join(CHATS_DIR, chat_id)
-    os.makedirs(dir_path, exist_ok=True)
-    return os.path.join(dir_path, "goal_eval_error.txt")
 
 
 def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListModel]:
     """Return a ``GoalsListModel`` parsed from ``text``.
 
     If ``text`` cannot be parsed or does not conform to the schema, the raw
-    value is written to an error file for troubleshooting and ``None`` is
-    returned.
+    value is logged for troubleshooting and ``None`` is returned.
     """
 
     model = _parse_json(text, GoalsListModel)
     if model is not None:
         return model
 
-    path = _error_path(chat_id)
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(text)
-        logger.warning("Wrote invalid goal evaluation output to %s", path)
-    except Exception as e:  # pragma: no cover - file write errors are rare
-        logger.warning("Failed to write goal evaluation error file '%s': %s", path, e)
+    logger.warning("Invalid goal evaluation output", extra={"chat_id": chat_id})
+    log_event("goal_eval_invalid_output", {"raw": text, "chat_id": chat_id})
     return None
 
 
@@ -492,11 +484,13 @@ def evaluate_and_update_goals(
             state["goals"] = active
 
         save_state(chat_id, state)
+        log_event("state_saved", {"path": _state_path(chat_id)})
         logger.debug("Goals updated: %s", active)
         return
 
     logger.warning("Goal evaluation failed after retries", extra={"chat_id": chat_id})
     save_state(chat_id, state)
+    log_event("state_saved", {"path": _state_path(chat_id)})
 
 
 def record_user_message(chat_id: str) -> None:
@@ -504,6 +498,7 @@ def record_user_message(chat_id: str) -> None:
     state = load_state(chat_id)
     state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
     save_state(chat_id, state)
+    log_event("state_saved", {"path": _state_path(chat_id)})
 
 
 def record_assistant_message(chat_id: str) -> bool:
@@ -511,6 +506,7 @@ def record_assistant_message(chat_id: str) -> bool:
     state = load_state(chat_id)
     state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
     save_state(chat_id, state)
+    log_event("state_saved", {"path": _state_path(chat_id)})
     return bool(state.get("goals")) and state["messages_since_goal_eval"] >= 4
 
 
