@@ -21,8 +21,8 @@ def _flush():
         return
     with open(_log_file, 'a', encoding='utf-8') as f:
         for entry in _log_data:
-            f.write(json.dumps(entry, ensure_ascii=False))
-            f.write("\n")
+            f.write(json.dumps(entry, ensure_ascii=False, indent=2))
+            f.write("\n\n")
     _log_data.clear()
 
 atexit.register(_flush)
