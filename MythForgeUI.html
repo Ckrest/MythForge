@@ -903,12 +903,21 @@
 
 
 
-        function updatePromptIndicator(){
-            const disabled = state.isGenerating || state.isProcessing;
-            sendButton.disabled = disabled;
-            sendOnlyButton.disabled = userInput.value.trim()==='' || disabled;
-            userInput.classList.toggle('blocked', disabled);
-            userInput.placeholder = state.isProcessing ? 'Thinking...' : 'Type a message...';
+        function updateBusyUI(){
+            const busy = state.isGenerating || state.isProcessing;
+            sendButton.disabled = busy;
+            sendOnlyButton.disabled = userInput.value.trim()==='' || busy;
+            userInput.classList.toggle('blocked', busy);
+            userInput.placeholder = busy ? 'Thinking...' : 'Type a message...';
+            if(state.isGenerating){
+                stopButton.style.display='inline';
+                sendButton.style.display='none';
+                sendOnlyButton.style.display='none';
+            }else{
+                stopButton.style.display='none';
+                sendButton.style.display='inline';
+                sendOnlyButton.style.display='inline';
+            }
             promptIndicator.style.display = 'none';
         }
 
@@ -919,7 +928,7 @@
                     const data = await res.json();
                     if(data.pending===0){
                         state.isProcessing = false;
-                        updatePromptIndicator();
+                        updateBusyUI();
                         promptCheckTimer = null;
                         return;
                     }
@@ -931,7 +940,7 @@
         function startPromptMonitor(){
             if(promptCheckTimer) return;
             state.isProcessing = true;
-            updatePromptIndicator();
+            updateBusyUI();
             pollPromptStatus();
         }
 
@@ -941,12 +950,9 @@
             if(text==='' && !allowEmpty) return;
             userInput.value=''; autoResize();
             sendButton.disabled=true; sendOnlyButton.disabled=true;
-            sendButton.style.display='none';
-            sendOnlyButton.style.display='none';
-            stopButton.style.display='inline';
             if(text!=='') appendMessageToUI('user', text);
             state.isGenerating=true;
-            updatePromptIndicator();
+            updateBusyUI();
             abortController = new AbortController();
             try{
                 const response = await fetch('/chat/stream', {
@@ -1031,10 +1037,7 @@
                     handleScroll = null;
                 }
                 state.isGenerating=false;
-                updatePromptIndicator();
-                stopButton.style.display='none';
-                sendButton.style.display='inline';
-                sendOnlyButton.style.display='inline';
+                updateBusyUI();
                 userInput.focus();
                 startPromptMonitor();
             }
@@ -1055,7 +1058,7 @@
             }catch(err){
                 console.error('Send only failed:', err);
             }finally{
-                updatePromptIndicator();
+                updateBusyUI();
                 userInput.focus();
             }
         }
@@ -1063,10 +1066,7 @@
         function stopGenerating(){
             if(abortController){ abortController.abort(); }
             state.isGenerating=false;
-            stopButton.style.display="none";
-            sendButton.style.display="inline";
-            sendOnlyButton.style.display="inline";
-            updatePromptIndicator();
+            updateBusyUI();
         }
 
         function setupEvents(){
@@ -1087,7 +1087,7 @@
             sendOnlyButton.addEventListener('click', sendMessageNoGen);
             stopButton.addEventListener('click', stopGenerating);
             userInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
-            userInput.addEventListener('input', ()=>{ autoResize(); updatePromptIndicator(); });
+            userInput.addEventListener('input', ()=>{ autoResize(); updateBusyUI(); });
             userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
             newChatButton.addEventListener('click', startNewChat);
             newPromptBtn.addEventListener('click', addNewPrompt);
@@ -1112,7 +1112,7 @@
             if(state.currentChatId) await loadChat(state.currentChatId);
             await loadServerSettings();
             autoResize();
-            updatePromptIndicator();
+            updateBusyUI();
         })();
     </script>
 </body>
