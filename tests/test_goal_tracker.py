@@ -109,7 +109,7 @@ def test_check_and_generate_goals_resets_counter(tmp_path, monkeypatch):
     with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
         json.dump(state, f)
 
-    def fake_call(_prompt, max_tokens=200):
+    def fake_call(_prompt, max_tokens=200, **kwargs):
         return {"choices": [{"text": '[{"description":"d","method":"plan"}]'}]}
 
     goal_tracker.check_and_generate_goals(fake_call, chat_id)
@@ -133,7 +133,7 @@ def test_check_and_generate_goals_retry_success(tmp_path, monkeypatch):
 
     calls = {"n": 0}
 
-    def fake_call(_prompt, max_tokens=200):
+    def fake_call(_prompt, max_tokens=200, **kwargs):
         calls["n"] += 1
         if calls["n"] < 2:
             return {"choices": [{"text": "[]"}]}
@@ -161,7 +161,7 @@ def test_check_and_generate_goals_retry_failure(tmp_path, monkeypatch):
 
     calls = {"n": 0}
 
-    def fake_call(_prompt, max_tokens=200):
+    def fake_call(_prompt, max_tokens=200, **kwargs):
         calls["n"] += 1
         return {"choices": [{"text": "[]"}]}
 

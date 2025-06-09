@@ -386,7 +386,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
     log_event("llm_final_prompt", {"prompt": prompt})
 
     for attempt in range(1, 3):
-        output = call_fn(prompt, max_tokens=200)
+        output = call_fn(prompt, max_tokens=200, temperature=0)
         text = output["choices"][0]["text"].strip()
         log_event("goals_llm_raw", {"raw": text})
         logger.debug(
