@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from threading import Thread, Lock
+from server_log import log_function
 from pydantic import BaseModel
 from typing import Dict, List
 
@@ -453,6 +454,7 @@ def trim_context(chat_id):
 
     return history
 
+@log_function("state_writer_caller")
 def build_prompt(chat_id, user_message, global_prompt_name):
     """Construct the next prompt using the LLaMA3 header-token format."""
 
@@ -623,6 +625,7 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
 @app.post("/chat")
+@log_function("state_writer_caller")
 def chat(req: ChatRequest):
     chat_id       = req.chat_id
     user_message  = req.message
@@ -684,6 +687,7 @@ def chat(req: ChatRequest):
 
 # ─── Streaming Chat Endpoint with Prompt JSON Prefix ────────────────────────
 @app.post("/chat/stream")
+@log_function("state_writer_caller")
 def chat_stream(req: ChatRequest):
     """
     Streams tokens as the model generates them.
@@ -712,6 +716,7 @@ def chat_stream(req: ChatRequest):
     # build_prompt() already saved the user's message to both history files,
     # so we can immediately begin streaming the model's response.
 
+    @log_function("state_writer_caller")
     def generate_and_stream():
         # First, send a single line of JSON with the prompt:
         meta = json.dumps({"prompt": prompt}, ensure_ascii=False)
@@ -799,6 +804,7 @@ def chat_stream(req: ChatRequest):
 
 # ─── Endpoint: Log Message Without Generating ------------------------------
 @app.post("/message")
+@log_function("state_writer_caller")
 def log_message(req: ChatRequest):
     """Record a user message without generating a response."""
 
