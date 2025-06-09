@@ -349,11 +349,17 @@ def _apply_goal_update(
     chat_id: str,
     state: Dict[str, Any],
     new_goals: List[Dict[str, Any]],
+    original_goals: List[Dict[str, Any]],
     remove_missing: bool = False,
 ) -> bool:
-    """Merge ``new_goals`` into ``state`` and log the changes."""
+    """Merge ``new_goals`` into ``state`` based on ``original_goals``.
 
-    merged, diff = _merge_goals(state.get("goals", []), new_goals, remove_missing)
+    ``original_goals`` should represent the goals as they were loaded from disk
+    before any in-memory modifications.  This ensures comparisons against the
+    persisted state rather than any mutated version currently in ``state``.
+    """
+
+    merged, diff = _merge_goals(original_goals, new_goals, remove_missing)
     if diff["added"] or diff["updated"] or diff["removed"]:
         state["goals"] = merged
         logger.debug(
@@ -380,6 +386,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
     """Generate goals if none exist using current state."""
     logger.info("Checking for missing goals", extra={"chat_id": chat_id})
     state = load_state(chat_id)
+    original_goals = state.get("goals", []).copy()
     if state.get("goals"):
         return
     fragment = state_as_prompt_fragment(state)
@@ -405,7 +412,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         )
         goals = parse_goals_from_response(text)
         if goals:
-            changed = _apply_goal_update(chat_id, state, goals)
+            changed = _apply_goal_update(chat_id, state, goals, original_goals)
             if changed:
                 state["messages_since_goal_eval"] = 0
                 if save_state(chat_id, state):
@@ -489,6 +496,7 @@ def evaluate_and_update_goals(
     """Evaluate progress on goals and replenish if needed."""
 
     state, convo = load_and_prepare_state(chat_id, history_window)
+    original_goals = state.get("goals", []).copy()
     goals = state.get("goals") or []
     if not goals:
         logger.info("No goals to evaluate", extra={"chat_id": chat_id})
@@ -584,7 +592,7 @@ def evaluate_and_update_goals(
             state["completed_goals"] = completed
             changed = True
 
-        active_changed = _apply_goal_update(chat_id, state, active, remove_missing=True)
+        active_changed = _apply_goal_update(chat_id, state, active, original_goals, remove_missing=True)
         changed = changed or active_changed
 
         state["messages_since_goal_eval"] = 0
@@ -609,7 +617,7 @@ def evaluate_and_update_goals(
                 seen_desc.add(desc)
                 if len([x for x in active if (x.get("status") or "in_progress").lower() == "in_progress"]) >= min_active:
                     break
-            active_changed = _apply_goal_update(chat_id, state, active, remove_missing=True) or active_changed
+            active_changed = _apply_goal_update(chat_id, state, active, original_goals, remove_missing=True) or active_changed
 
         if changed or active_changed:
             logger.debug("Goals updated: %s", state.get("goals"))
