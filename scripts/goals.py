@@ -1,7 +1,7 @@
 # Goal tracking utilities for Myth Forge
 import json
 import logging
-from server_log import log_function
+from .disable import log_function
 import os
 import re
 import time
@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, ValidationError
 
-from airoboros_prompter import format_llama3
+from .Format import format_llama3
 
 # ``CHATS_DIR`` mirrors the constant from ``MythForgeServer``.  Keeping a copy
 # here avoids circular imports.
@@ -740,6 +740,6 @@ def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
 
 # Apply automatic logging to all functions in this module
 import sys
-from server_log import patch_module_functions, log_event
+from .disable import patch_module_functions, log_event
 patch_module_functions(sys.modules[__name__], "goals system")
 

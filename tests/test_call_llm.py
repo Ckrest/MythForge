@@ -7,7 +7,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 # Provide a minimal stub for llama_cpp to avoid loading a real model
 sys.modules.setdefault("llama_cpp", types.SimpleNamespace(Llama=lambda **k: None))
 
-import MythForgeServer
+# Ensure a dummy model file exists so MythForgeServer's model discovery succeeds
+os.makedirs("models", exist_ok=True)
+with open("models/dummy.gguf", "w", encoding="utf-8") as f:
+    f.write("dummy")
+
+from scripts import MythForgeServer
 
 class Dummy:
     def __init__(self, outputs):

@@ -6,12 +6,12 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from threading import Thread, Lock
-from server_log import log_function
+from .disable import log_function
 from pydantic import BaseModel
 from typing import Dict, List
 
-import goal_tracker
-from goal_tracker import (
+from . import goals as goal_tracker
+from .goals import (
     load_state,
     ensure_initial_state,
     init_state_from_prompt,
@@ -24,7 +24,7 @@ from goal_tracker import (
 from llama_cpp import Llama
 
 # Prompt formatting utilities
-from airoboros_prompter import format_llama3
+from .Format import format_llama3
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -854,6 +854,6 @@ app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 # Apply automatic logging to all functions in this module
 import sys
-from server_log import patch_module_functions, log_event
+from .disable import patch_module_functions, log_event
 patch_module_functions(sys.modules[__name__], "server")
 
