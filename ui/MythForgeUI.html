@@ -132,7 +132,7 @@
             background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; margin-top: 5px; cursor: pointer; font-size: 14px;
         }
         .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;}
-        .modal-content{background:var(--bg-color);color:var(--text-color);padding:20px;border-radius:8px;min-width:250px;}
+        .modal-content{background:var(--bg-color);color:var(--text-color);padding:20px;border-radius:8px;min-width:250px;max-width:90vw;max-height:90vh;overflow-y:auto;}
         .modal-content label{display:block;margin-top:10px;}
         .modal-actions{text-align:right;margin-top:15px;}
         .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; }
@@ -279,9 +279,22 @@
     <div id="prompt-edit-modal" class="modal">
         <div class="modal-content">
             <h2 id="prompt-edit-title">Edit Prompt</h2>
+            <label>Name <input id="prompt-name-input" type="text"></label>
+            <label>Prompt</label>
             <textarea id="prompt-edit-input" rows="8" style="width:100%;"></textarea>
             <div class="modal-actions">
                 <button id="prompt-edit-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dialog-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="dialog-title"></h2>
+            <div id="dialog-body"></div>
+            <div class="modal-actions">
+                <button id="dialog-cancel-btn">Cancel</button>
+                <button id="dialog-ok-btn">OK</button>
             </div>
         </div>
     </div>
@@ -345,8 +358,14 @@
         const serverSettingsSaveBtn = document.getElementById('server-settings-save-btn');
         const promptModal      = document.getElementById('prompt-edit-modal');
         const promptModalTitle = document.getElementById('prompt-edit-title');
+        const promptNameInput  = document.getElementById('prompt-name-input');
         const promptInput      = document.getElementById('prompt-edit-input');
         const promptSaveBtn    = document.getElementById('prompt-edit-save-btn');
+        const dialogModal      = document.getElementById('dialog-modal');
+        const dialogTitle      = document.getElementById('dialog-title');
+        const dialogBody       = document.getElementById('dialog-body');
+        const dialogOkBtn      = document.getElementById('dialog-ok-btn');
+        const dialogCancelBtn  = document.getElementById('dialog-cancel-btn');
         const hideTab          = document.getElementById('hide-tab');
         const chatTab          = document.getElementById('chat-tab');
         const promptTab        = document.getElementById('prompt-tab');
@@ -458,6 +477,47 @@
         }
 
         function closeSettings(){ settingsModal.style.display='none'; }
+
+        function openDialog(opts){
+            dialogTitle.textContent = opts.title || '';
+            dialogBody.innerHTML = opts.body || '';
+            dialogOkBtn.textContent = opts.okText || 'OK';
+            dialogOkBtn.onclick = () => { closeDialog(); opts.onOk && opts.onOk(); };
+            dialogCancelBtn.onclick = closeDialog;
+            dialogModal.style.display = 'flex';
+        }
+
+        function closeDialog(){
+            dialogModal.style.display='none';
+            dialogBody.innerHTML='';
+            dialogOkBtn.onclick=null;
+        }
+
+        function promptText(title, value, cb){
+            openDialog({
+                title,
+                body:`<input id="dialog-input" type="text" style="width:100%;" value="${value||''}">`,
+                okText:'Save',
+                onOk:()=>{ const v=document.getElementById('dialog-input').value.trim(); if(!v){alert('Name cannot be empty.');return;} cb(v); }
+            });
+        }
+
+        function promptTextarea(title, value, cb){
+            openDialog({
+                title,
+                body:`<textarea id="dialog-area" rows="4" style="width:100%;">${value||''}</textarea>`,
+                okText:'Save',
+                onOk:()=>{ const v=document.getElementById('dialog-area').value; cb(v); }
+            });
+        }
+
+        function confirmDialog(message, cb){
+            openDialog({
+                title: message,
+                okText:'Confirm',
+                onOk:cb
+            });
+        }
 
         function updateAvatarDisplays(){
             document.querySelectorAll('.user-avatar').forEach(el=>{
@@ -659,6 +719,7 @@
             editingPromptName = name;
             editingPromptIsNew = isNew;
             promptModalTitle.textContent = `Edit Prompt \"${name}\"`;
+            promptNameInput.value = name;
             if(isNew){
                 promptInput.value = '';
                 promptModal.style.display = 'flex';
@@ -688,34 +749,35 @@
         }
 
         async function savePromptEdit(){
+            const nameTrim = promptNameInput.value.trim();
             const contTrim = promptInput.value.trim();
-            if(contTrim===''){
-                if(editingPromptIsNew){
-                    state.prompts = state.prompts.filter(p=>p!==editingPromptName);
-                    if(state.currentPrompt===editingPromptName){
-                        state.currentPrompt = '';
-                        localStorage.setItem('lastGlobalPrompt','');
-                    }
-                    renderPromptList();
-                    closePromptEditor();
-                    return;
-                }
-                return alert('Prompt content cannot be empty.');
-            }
+            if(!nameTrim) return alert('Name cannot be empty.');
+            if(contTrim==='') return alert('Prompt content cannot be empty.');
             try{
                 if(editingPromptIsNew){
                     const createRes = await fetch('/prompts', {
                         method:'POST',
                         headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({name: editingPromptName, content: contTrim})
+                        body: JSON.stringify({name: nameTrim, content: contTrim})
                     });
                     if(!createRes.ok){ const err=await createRes.json(); return alert('Error: '+err.detail); }
                     editingPromptIsNew = false;
+                    editingPromptName = nameTrim;
                 }else{
-                    const updateRes = await fetch(`/prompts/${encodeURIComponent(editingPromptName)}`, {
+                    if(nameTrim !== editingPromptName){
+                        const renameRes = await fetch(`/prompts/${encodeURIComponent(editingPromptName)}/rename`, {
+                            method:'PUT',
+                            headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({new_name: nameTrim})
+                        });
+                        if(!renameRes.ok){ const err=await renameRes.json(); return alert('Error: '+err.detail); }
+                        editingPromptName = nameTrim;
+                        state.currentPrompt = nameTrim;
+                    }
+                    const updateRes = await fetch(`/prompts/${encodeURIComponent(nameTrim)}`, {
                         method:'PUT',
                         headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({name: editingPromptName, content: contTrim})
+                        body: JSON.stringify({name: nameTrim, content: contTrim})
                     });
                     if(!updateRes.ok){ const err=await updateRes.json(); return alert('Error: '+err.detail); }
                 }
@@ -751,8 +813,8 @@
 
         async function deleteChat(){
             if(!state.currentChatId) return alert('Nothing to delete.');
-            if(!confirm('Are you sure you want to delete this chat?')) return;
-            try{
+            confirmDialog('Are you sure you want to delete this chat?', async ()=>{
+                try{
                 const res = await fetch(`/chat/${encodeURIComponent(state.currentChatId)}`, {method:'DELETE'});
                 if(!res.ok){ if(res.status===404) throw new Error('Chat not found on server.'); else throw new Error('Unknown server error.'); }
                 await fetchChatList();
@@ -763,29 +825,30 @@
                 systemPrompt.textContent = '';
                 systemToggle.style.display = 'none';
                 showChatTab();
-            }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
+                }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
+            });
         }
 
         async function renameChat(oldId){
-            const name = prompt('Enter new chat name:', oldId); if(name===null) return;
-            const trimmed = name.trim(); if(!trimmed) return alert('Name cannot be empty.');
-            if(trimmed === oldId) return;
-            if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
-            try{
-                const res = await fetch(`/chat/${encodeURIComponent(oldId)}`, {
-                    method:'PUT',
-                    headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({new_id: trimmed})
-                });
-                if(!res.ok){
-                    const err = await res.json().catch(()=>({detail:'Server error'}));
-                    throw new Error(err.detail||'Server error');
-                }
-                await fetchChatList();
-                state.currentChatId = trimmed;
-                localStorage.setItem('lastChatId', trimmed);
-                renderHistory();
-            }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); }
+            promptText('Enter new chat name:', oldId, async (trimmed)=>{
+                if(trimmed === oldId) return;
+                if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
+                try{
+                    const res = await fetch(`/chat/${encodeURIComponent(oldId)}`, {
+                        method:'PUT',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({new_id: trimmed})
+                    });
+                    if(!res.ok){
+                        const err = await res.json().catch(()=>({detail:'Server error'}));
+                        throw new Error(err.detail||'Server error');
+                    }
+                    await fetchChatList();
+                    state.currentChatId = trimmed;
+                    localStorage.setItem('lastChatId', trimmed);
+                    renderHistory();
+                }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); }
+            });
         }
 
         function selectPrompt(name){
@@ -795,39 +858,38 @@
         }
 
         async function deletePrompt(name){
-            if(!confirm('Delete this prompt?')) return;
-            try{
-                const res = await fetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
-                if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                await refreshGlobalPromptList();
-                if(state.currentPrompt===name){
-                    state.currentPrompt = state.prompts.length? state.prompts[0]:'';
-                    localStorage.setItem('lastGlobalPrompt', state.currentPrompt);
-                }
-                renderPromptList();
-            }catch(e){ alert('Failed to delete prompt: '+e.message); }
+            confirmDialog('Delete this prompt?', async ()=>{
+                try{
+                    const res = await fetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
+                    if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                    await refreshGlobalPromptList();
+                    if(state.currentPrompt===name){
+                        state.currentPrompt = state.prompts.length? state.prompts[0]:'';
+                        localStorage.setItem('lastGlobalPrompt', state.currentPrompt);
+                    }
+                    renderPromptList();
+                }catch(e){ alert('Failed to delete prompt: '+e.message); }
+            });
         }
 
         async function renamePrompt(oldName){
-            const newName = prompt('Enter new prompt name:', oldName);
-            if(newName===null) return;
-            const trimmed = newName.trim();
-            if(!trimmed) return alert('Name cannot be empty.');
-            if(trimmed.toLowerCase() !== oldName.trim().toLowerCase() && state.prompts.includes(trimmed))
-                return alert('That name\u2019s already taken.');
-            try{
-                const res = await fetch(`/prompts/${encodeURIComponent(oldName)}/rename`, {
-                    method:'PUT',
-                    headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({new_name: trimmed})
-                });
-                if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                await refreshGlobalPromptList();
-                state.currentPrompt = trimmed;
-                localStorage.setItem('lastGlobalPrompt', trimmed);
-                renderPromptList();
-                await openPromptEditor(trimmed);
-            }catch(e){ alert('Failed to rename prompt: '+e.message); }
+            promptText('Enter new prompt name:', oldName, async (trimmed)=>{
+                if(trimmed.toLowerCase() !== oldName.trim().toLowerCase() && state.prompts.includes(trimmed))
+                    return alert('That name\u2019s already taken.');
+                try{
+                    const res = await fetch(`/prompts/${encodeURIComponent(oldName)}/rename`, {
+                        method:'PUT',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({new_name: trimmed})
+                    });
+                    if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                    await refreshGlobalPromptList();
+                    state.currentPrompt = trimmed;
+                    localStorage.setItem('lastGlobalPrompt', trimmed);
+                    renderPromptList();
+                    await openPromptEditor(trimmed);
+                }catch(e){ alert('Failed to rename prompt: '+e.message); }
+            });
         }
 
         function autoResize(){ userInput.style.height='auto'; userInput.style.height=Math.min(userInput.scrollHeight,200)+'px'; }
@@ -841,26 +903,27 @@
         function closeMessageMenu(){ if(activeMenu){ activeMenu.remove(); activeMenu=null; } }
 
         async function editMessage(index, current){
-            const text = prompt('Edit message:', current);
-            if(text===null) return;
-            try{
-                const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {
-                    method:'PUT',
-                    headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({content:text})
-                });
-                if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                await loadChat(state.currentChatId);
-            }catch(e){ alert('Failed to edit: '+e.message); }
+            promptTextarea('Edit message:', current, async (text)=>{
+                try{
+                    const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {
+                        method:'PUT',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({content:text})
+                    });
+                    if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                    await loadChat(state.currentChatId);
+                }catch(e){ alert('Failed to edit: '+e.message); }
+            });
         }
 
         async function deleteMessage(index){
-            if(!confirm('Delete this message?')) return;
-            try{
-                const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {method:'DELETE'});
-                if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                await loadChat(state.currentChatId);
-            }catch(e){ alert('Failed to delete: '+e.message); }
+            confirmDialog('Delete this message?', async ()=>{
+                try{
+                    const res = await fetch(`/history/${encodeURIComponent(state.currentChatId)}/${index}`, {method:'DELETE'});
+                    if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                    await loadChat(state.currentChatId);
+                }catch(e){ alert('Failed to delete: '+e.message); }
+            });
         }
 
         function showMessageMenu(div){
@@ -1079,7 +1142,7 @@
             settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
             sendButton.addEventListener('click', () => {
                 if(userInput.value.trim()===''){
-                    if(confirm('Generate with no prompt?')) sendMessage(true);
+                    confirmDialog('Generate with no prompt?', () => sendMessage(true));
                 } else {
                     sendMessage();
                 }
@@ -1094,6 +1157,7 @@
             noPromptBtn.addEventListener('click', ()=>selectPrompt(''));
             promptSaveBtn.addEventListener('click', savePromptEdit);
             promptModal.addEventListener('click', e=>{ if(e.target===promptModal) closePromptEditor(); });
+            dialogModal.addEventListener('click', e=>{ if(e.target===dialogModal) closeDialog(); });
             systemToggle.addEventListener('click', toggleSystem);
             hideTab.addEventListener('click', hideSidebar);
             chatTab.addEventListener('click', showChatTab);
