@@ -322,7 +322,9 @@ def test_preserve_goal_details_on_completion(tmp_path, monkeypatch):
     evaluate_and_update_goals(fake_call, chat_id, min_active=1)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
     assert new_state["goals"] == []
-    assert new_state["completed_goals"] == [{"id": "1", "description": "orig", "method": "m", "status": "completed"}]
+    assert new_state["completed_goals"] == [
+        {"id": "1", "description": "changed", "method": "x", "status": "completed"}
+    ]
 
 
 def test_parse_goals_from_response_appends():
