@@ -67,7 +67,7 @@ def test_format_goal_eval_response_invalid(tmp_path, monkeypatch):
     result = format_goal_eval_response("not json", chat_id)
     assert result is None
 
-    data = json.loads(log_path.read_text())
+    data = [json.loads(line) for line in log_path.read_text().splitlines()]
     assert any(e.get("tag") == "goal_eval_invalid_output" and e.get("raw") == "not json" for e in data)
 
 
@@ -82,7 +82,7 @@ def test_format_goal_eval_response_valid(tmp_path, monkeypatch):
     result = format_goal_eval_response(text, chat_id)
     assert result is not None
 
-    data = json.loads(log_path.read_text())
+    data = [json.loads(line) for line in log_path.read_text().splitlines()]
     assert not any(e.get("tag") == "goal_eval_invalid_output" for e in data)
 
 
