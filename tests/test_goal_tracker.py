@@ -364,3 +364,40 @@ def test_parse_goals_from_response_appends():
         {"description": "b", "method": ""},
     ]
 
+
+def test_status_trailing_space(tmp_path, monkeypatch):
+    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    chat_id = "trail"
+    state = {
+        "completed_goals": [],
+        "goals": [{"id": "1", "description": "goal", "method": "", "status": "in_progress"}],
+        "messages_since_goal_eval": 4,
+        "character_profile": "c",
+        "scene_context": "s",
+    }
+    os.makedirs(tmp_path / chat_id, exist_ok=True)
+    with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
+        json.dump(state, f)
+    with open(tmp_path / chat_id / "trimmed.json", "w", encoding="utf-8") as f:
+        json.dump([], f)
+
+    def fake_call(_prompt, max_tokens=300):
+        return {
+            "choices": [
+                {
+                    "text": json.dumps({"goals": [
+                        {"id": "1", "description": "goal", "method": "", "status": "Completed "}
+                    ]})
+                }
+            ]
+        }
+
+    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
+
+    evaluate_and_update_goals(fake_call, chat_id, min_active=1)
+    new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
+    assert new_state["goals"] == []
+    assert new_state["completed_goals"] == [
+        {"id": "1", "description": "goal", "method": "", "status": "completed"}
+    ]
+
