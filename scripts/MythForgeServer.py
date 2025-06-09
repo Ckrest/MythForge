@@ -61,7 +61,7 @@ class PromptItem(BaseModel):
 MODELS_DIR         = "models"
 CHATS_DIR          = "chats"
 GLOBAL_PROMPTS_DIR = "global_prompts"
-SETTINGS_PATH      = "settings.json"
+MODEL_SETTINGS_PATH = "model_settings.json"
 
 # Helper utilities for per-chat directories
 def chat_file(chat_id: str, filename: str) -> str:
@@ -80,26 +80,26 @@ DEFAULT_N_BATCH    = 512
 DEFAULT_N_THREADS  = os.cpu_count() or 1
 
 
-def load_settings(path: str = SETTINGS_PATH) -> Dict[str, object]:
-    """Load the application settings from ``path`` if it exists."""
+def load_model_settings(path: str = MODEL_SETTINGS_PATH) -> Dict[str, object]:
+    """Load the model settings from ``path`` if it exists."""
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             try:
                 return json.load(f)
             except Exception as e:
-                print(f"Failed to load settings '{path}': {e}")
+                print(f"Failed to load model settings '{path}': {e}")
     return {}
 
 
-SETTINGS = load_settings()
+MODEL_SETTINGS = load_model_settings()
 
 # Generation settings matching LM Studio's defaults
 GENERATION_CONFIG = {
-    "temperature": SETTINGS.get("temperature", 0.8),
-    "top_k": SETTINGS.get("top_k", 40),
-    "top_p": SETTINGS.get("top_p", 0.95),
-    "min_p": SETTINGS.get("min_p", 0.05),
-    "repeat_penalty": SETTINGS.get("repeat_penalty", 1.1),
+    "temperature": MODEL_SETTINGS.get("temperature", 0.8),
+    "top_k": MODEL_SETTINGS.get("top_k", 40),
+    "top_p": MODEL_SETTINGS.get("top_p", 0.95),
+    "min_p": MODEL_SETTINGS.get("min_p", 0.05),
+    "repeat_penalty": MODEL_SETTINGS.get("repeat_penalty", 1.1),
     # ``n_batch`` is set when ``Llama`` is instantiated. Passing it to
     # ``Llama.__call__`` can break older ``llama_cpp`` versions, so it is
     # intentionally omitted here.
@@ -107,11 +107,11 @@ GENERATION_CONFIG = {
     # the "prefix-match" warnings emitted by ``llama_cpp`` when the model
     # begins generating the next header token.  ``<|eot_id|>`` alone is
     # sufficient to mark the end of an assistant message.
-    "stop": SETTINGS.get("stop", ["<|eot_id|>"]),
+    "stop": MODEL_SETTINGS.get("stop", ["<|eot_id|>"]),
 }
-DEFAULT_MAX_TOKENS = SETTINGS.get("max_tokens", 250)
-SUMMARIZE_THRESHOLD = SETTINGS.get("summarize_threshold", 20)
-SUMMARIZE_BATCH     = SETTINGS.get("summarize_batch", 12)
+DEFAULT_MAX_TOKENS = MODEL_SETTINGS.get("max_tokens", 250)
+SUMMARIZE_THRESHOLD = MODEL_SETTINGS.get("summarize_threshold", 20)
+SUMMARIZE_BATCH     = MODEL_SETTINGS.get("summarize_batch", 12)
 
 # ========== Model Loading ==========
 def discover_model_path():
@@ -136,16 +136,16 @@ def discover_model_path():
 
 
 _model_config = {
-    "model_path": SETTINGS.get("model_path") or discover_model_path(),
-    "n_ctx": SETTINGS.get("n_ctx", DEFAULT_CTX_SIZE),
-    "n_batch": SETTINGS.get("n_batch", DEFAULT_N_BATCH),
-    "n_threads": SETTINGS.get("n_threads") or DEFAULT_N_THREADS,
-    "prompt_template": SETTINGS.get("prompt_template", ""),
+    "model_path": MODEL_SETTINGS.get("model_path") or discover_model_path(),
+    "n_ctx": MODEL_SETTINGS.get("n_ctx", DEFAULT_CTX_SIZE),
+    "n_batch": MODEL_SETTINGS.get("n_batch", DEFAULT_N_BATCH),
+    "n_threads": MODEL_SETTINGS.get("n_threads") or DEFAULT_N_THREADS,
+    "prompt_template": MODEL_SETTINGS.get("prompt_template", ""),
 }
 
 for key in ("f16_kv", "use_mmap", "use_mlock", "n_gpu_layers", "main_memory_kv"):
-    if key in SETTINGS and SETTINGS[key] is not None:
-        _model_config[key] = SETTINGS[key]
+    if key in MODEL_SETTINGS and MODEL_SETTINGS[key] is not None:
+        _model_config[key] = MODEL_SETTINGS[key]
 
 # ``llama_cpp`` may automatically prepend ``<|begin_of_text|>`` when
 # tokenizing prompts. Our prompts already include this token, so we
@@ -827,19 +827,19 @@ def log_message(req: ChatRequest):
 # ========== Settings Endpoints ==========
 @app.get("/settings")
 def get_settings():
-    return SETTINGS
+    return MODEL_SETTINGS
 
 @app.put("/settings")
 def update_settings(data: Dict[str, object]):
-    """Update settings and persist them to ``settings.json``."""
-    SETTINGS.update(data)
-    save_json(SETTINGS_PATH, SETTINGS)
+    """Update settings and persist them to ``model_settings.json``."""
+    MODEL_SETTINGS.update(data)
+    save_json(MODEL_SETTINGS_PATH, MODEL_SETTINGS)
     for key in ("temperature", "top_k", "top_p", "min_p", "repeat_penalty", "stop"):
-        if key in SETTINGS:
-            GENERATION_CONFIG[key] = SETTINGS[key]
+        if key in MODEL_SETTINGS:
+            GENERATION_CONFIG[key] = MODEL_SETTINGS[key]
     global DEFAULT_MAX_TOKENS
-    DEFAULT_MAX_TOKENS = SETTINGS.get("max_tokens", DEFAULT_MAX_TOKENS)
-    return {"detail": "Updated", "settings": SETTINGS}
+    DEFAULT_MAX_TOKENS = MODEL_SETTINGS.get("max_tokens", DEFAULT_MAX_TOKENS)
+    return {"detail": "Updated", "settings": MODEL_SETTINGS}
 
 # ========== Response Prompt Status ==========
 @app.get("/response_prompt_status")
@@ -850,7 +850,7 @@ def response_prompt_status():
     return {"pending": pending}
 
 # ========== Static UI Mount ==========
-app.mount("/", StaticFiles(directory=".", html=True), name="static")
+app.mount("/", StaticFiles(directory="ui", html=True), name="static")
 
 # Apply automatic logging to all functions in this module
 import sys
