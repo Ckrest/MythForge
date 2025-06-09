@@ -184,15 +184,18 @@ def call_llm(prompt: str, **kwargs):
         filtered = kwargs
 
     if filtered.get("stream"):
-        for chunk in llm(prompt, **filtered):
-            text = chunk["choices"][0]["text"]
-            log_event("llm_raw_output", {"raw": text})
-            yield chunk
-    else:
-        res = llm(prompt, **filtered)
-        text = res["choices"][0]["text"]
-        log_event("llm_raw_output", {"raw": text})
-        return res
+        def _stream():
+            for chunk in llm(prompt, **filtered):
+                text = chunk["choices"][0]["text"]
+                log_event("llm_raw_output", {"raw": text})
+                yield chunk
+
+        return _stream()
+
+    res = llm(prompt, **filtered)
+    text = res["choices"][0]["text"]
+    log_event("llm_raw_output", {"raw": text})
+    return res
 
 call_llm._patched = True
 
