@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import uuid
 import atexit
 import functools
 import inspect
@@ -10,7 +11,8 @@ LOG_DIR = "server_logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
 _log_data = []
-_log_file = os.path.join(LOG_DIR, f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+_session_id = os.environ.get("MF_SESSION_ID") or uuid.uuid4().hex
+_log_file = os.path.join(LOG_DIR, f"{_session_id}.json")
 
 
 def _flush():
@@ -47,6 +49,7 @@ def _get_function_details(fn):
 
 def log_entry(tag: str, func, args, kwargs, result) -> None:
     entry = {
+        "function_name": func.__name__,
         "time": datetime.datetime.now().isoformat(),
         "tag": tag,
         "function": _get_function_details(func),
@@ -60,7 +63,14 @@ def log_entry(tag: str, func, args, kwargs, result) -> None:
 
 
 def log_event(tag: str, data: Dict[str, Any]) -> None:
-    entry = {"time": datetime.datetime.now().isoformat(), "tag": tag, **data}
+    caller = inspect.currentframe().f_back
+    func_name = caller.f_code.co_name if caller else "<unknown>"
+    entry = {
+        "function_name": func_name,
+        "time": datetime.datetime.now().isoformat(),
+        "tag": tag,
+        **data,
+    }
     _log_data.append(entry)
     _flush()
 

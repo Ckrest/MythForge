@@ -47,7 +47,7 @@ def test_duplicate_ids(tmp_path, monkeypatch):
             ]
         }
 
-    monkeypatch.setattr("goal_tracker.generate_goals", lambda *a, **k: [])
+    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
     evaluate_and_update_goals(fake_call, chat_id, min_active=2)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
     ids = {g["id"] for g in new_state["goals"]}
@@ -197,7 +197,7 @@ def test_evaluate_and_update_goals_backoff(tmp_path, monkeypatch):
 
     sleeps = []
     monkeypatch.setattr(time, "sleep", lambda t: sleeps.append(t))
-    monkeypatch.setattr("goal_tracker.generate_goals", lambda *a, **k: [])
+    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
 
     evaluate_and_update_goals(fake_call, chat_id, max_retries=3)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
@@ -235,13 +235,14 @@ def test_evaluate_and_update_goals_regenerates(tmp_path, monkeypatch):
             }]
         }
 
-    monkeypatch.setattr(
-        "goal_tracker.generate_goals",
-        lambda *a, **k: [
+    def fake_gen(call_fn, cid):
+        state = goal_tracker.load_state(cid)
+        state["goals"].extend([
             {"id": "3", "description": "c", "method": ""},
             {"id": "4", "description": "d", "method": ""},
-        ],
-    )
+        ])
+        goal_tracker.save_state(cid, state)
+    monkeypatch.setattr("goal_tracker.check_and_generate_goals", fake_gen)
 
     evaluate_and_update_goals(fake_call, chat_id, min_active=2)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
@@ -276,13 +277,14 @@ def test_case_insensitive_dedup(tmp_path, monkeypatch):
             }]
         }
 
-    monkeypatch.setattr(
-        "goal_tracker.generate_goals",
-        lambda *a, **k: [
+    def fake_gen2(call_fn, cid):
+        state = goal_tracker.load_state(cid)
+        state["goals"].extend([
             {"id": "2", "description": "GOAL", "method": ""},
             {"id": "3", "description": "unique", "method": ""},
-        ],
-    )
+        ])
+        goal_tracker.save_state(cid, state)
+    monkeypatch.setattr("goal_tracker.check_and_generate_goals", fake_gen2)
 
     evaluate_and_update_goals(fake_call, chat_id, min_active=2)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
@@ -317,7 +319,7 @@ def test_preserve_goal_details_on_completion(tmp_path, monkeypatch):
             }]
         }
 
-    monkeypatch.setattr("goal_tracker.generate_goals", lambda *a, **k: [])
+    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
 
     evaluate_and_update_goals(fake_call, chat_id, min_active=1)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
