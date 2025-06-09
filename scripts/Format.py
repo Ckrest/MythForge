@@ -106,7 +106,7 @@ def main() -> None:
 
 # Apply automatic logging to all functions in this module
 import sys
-from server_log import patch_module_functions
+from .disable import patch_module_functions
 patch_module_functions(sys.modules[__name__], "formatting")
 
 

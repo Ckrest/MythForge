@@ -15,21 +15,21 @@ _session_id = os.environ.get("MF_SESSION_ID") or uuid.uuid4().hex
 _log_file = os.path.join(LOG_DIR, f"{_session_id}.json")
 
 
-def _flush():
-    """Append buffered log entries to the log file in JSONL format."""
+def _flush() -> None:
+    """Write buffered log entries to disk."""
     if not _log_data:
         return
-    with open(_log_file, 'a', encoding='utf-8') as f:
+    with open(_log_file, "a", encoding="utf-8") as f:
         for entry in _log_data:
             f.write(json.dumps(entry, ensure_ascii=False, indent=2))
             f.write("\n\n")
     _log_data.clear()
 
+
 atexit.register(_flush)
 
 
 def _get_function_details(fn):
-    """Return a detailed description of the function for logging."""
     try:
         file = inspect.getsourcefile(fn) or ""
         line = inspect.getsourcelines(fn)[1]
@@ -58,7 +58,6 @@ def log_entry(tag: str, func, args, kwargs, result) -> None:
         "result": repr(result),
     }
     _log_data.append(entry)
-    # Persist immediately so the file exists even if the process runs long.
     _flush()
 
 
@@ -83,11 +82,12 @@ def log_function(tag: str):
                 res = fn(*args, **kwargs)
                 log_entry(tag, fn, args, kwargs, res)
                 return res
-            except Exception as e:
+            except Exception as e:  # pragma: no cover - passthrough
                 log_entry(tag, fn, args, kwargs, f"ERROR: {e}")
                 raise
         wrapper._patched = True
         return wrapper
+
     return decorator
 
 
@@ -102,3 +102,21 @@ def patch_module_functions(module, tag: str) -> None:
 
 def get_log_path() -> str:
     return _log_file
+
+
+# ----- simple generation state -----
+_GENERATING = False
+
+
+def start_generation() -> None:
+    global _GENERATING
+    _GENERATING = True
+
+
+def stop_generation() -> None:
+    global _GENERATING
+    _GENERATING = False
+
+
+def is_generating() -> bool:
+    return _GENERATING

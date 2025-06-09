@@ -1,6 +1,6 @@
 import json
 import os
-import server_log
+from scripts import disable as server_log
 
 
 def test_log_event_includes_function_name(tmp_path, monkeypatch):

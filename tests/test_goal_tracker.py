@@ -3,9 +3,9 @@ import os
 import time
 import json
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import goal_tracker
-import server_log
-from goal_tracker import (
+from scripts import goals as goal_tracker
+from scripts import disable as server_log
+from scripts.goals import (
     GoalsListModel,
     format_goal_eval_response,
     CHATS_DIR,
@@ -15,7 +15,7 @@ from goal_tracker import (
 )
 
 def test_duplicate_ids(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "dup"
     state = {
         "completed_goals": [{"id": "1", "description": "done", "method": "", "status": "completed"}],
@@ -47,7 +47,7 @@ def test_duplicate_ids(tmp_path, monkeypatch):
             ]
         }
 
-    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
+    monkeypatch.setattr("scripts.goals.check_and_generate_goals", lambda *a, **k: None)
     evaluate_and_update_goals(fake_call, chat_id, min_active=2)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
     ids = {g["id"] for g in new_state["goals"]}
@@ -58,7 +58,7 @@ def test_duplicate_ids(tmp_path, monkeypatch):
 
 
 def test_format_goal_eval_response_invalid(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     log_path = tmp_path / "log.json"
     monkeypatch.setattr(server_log, "_log_file", str(log_path))
     server_log._log_data.clear()
@@ -72,7 +72,7 @@ def test_format_goal_eval_response_invalid(tmp_path, monkeypatch):
 
 
 def test_format_goal_eval_response_valid(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     log_path = tmp_path / "log.json"
     monkeypatch.setattr(server_log, "_log_file", str(log_path))
     server_log._log_data.clear()
@@ -87,7 +87,7 @@ def test_format_goal_eval_response_valid(tmp_path, monkeypatch):
 
 
 def test_init_state_from_prompt(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "init"
     goal_tracker.init_state_from_prompt(chat_id, "profile", "scene")
     path = tmp_path / chat_id / "state.json"
@@ -97,7 +97,7 @@ def test_init_state_from_prompt(tmp_path, monkeypatch):
 
 
 def test_check_and_generate_goals_resets_counter(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "gen"
     state = {
         "character_profile": "p",
@@ -119,7 +119,7 @@ def test_check_and_generate_goals_resets_counter(tmp_path, monkeypatch):
 
 
 def test_check_and_generate_goals_retry_success(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "retry_success"
     state = {
         "character_profile": "p",
@@ -147,7 +147,7 @@ def test_check_and_generate_goals_retry_success(tmp_path, monkeypatch):
 
 
 def test_check_and_generate_goals_retry_failure(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "retry_fail"
     state = {
         "character_profile": "p",
@@ -173,7 +173,7 @@ def test_check_and_generate_goals_retry_failure(tmp_path, monkeypatch):
 
 
 def test_goal_similarity_check_runs(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "similar"
     state = {
         "character_profile": "p",
@@ -198,7 +198,7 @@ def test_goal_similarity_check_runs(tmp_path, monkeypatch):
 
 
 def test_check_and_generate_goals_dedup(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "gen_dedup"
     state = {
         "character_profile": "p",
@@ -220,7 +220,7 @@ def test_check_and_generate_goals_dedup(tmp_path, monkeypatch):
 
 
 def test_evaluate_and_update_goals_backoff(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "backoff"
     state = {
         "completed_goals": [],
@@ -244,7 +244,7 @@ def test_evaluate_and_update_goals_backoff(tmp_path, monkeypatch):
 
     sleeps = []
     monkeypatch.setattr(time, "sleep", lambda t: sleeps.append(t))
-    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
+    monkeypatch.setattr("scripts.goals.check_and_generate_goals", lambda *a, **k: None)
 
     evaluate_and_update_goals(fake_call, chat_id, max_retries=3)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
@@ -254,7 +254,7 @@ def test_evaluate_and_update_goals_backoff(tmp_path, monkeypatch):
 
 
 def test_evaluate_and_update_goals_regenerates(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "regen"
     state = {
         "completed_goals": [],
@@ -289,7 +289,7 @@ def test_evaluate_and_update_goals_regenerates(tmp_path, monkeypatch):
             {"id": "4", "description": "d", "method": ""},
         ])
         goal_tracker.save_state(cid, state)
-    monkeypatch.setattr("goal_tracker.check_and_generate_goals", fake_gen)
+    monkeypatch.setattr("scripts.goals.check_and_generate_goals", fake_gen)
 
     evaluate_and_update_goals(fake_call, chat_id, min_active=2)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
@@ -300,7 +300,7 @@ def test_evaluate_and_update_goals_regenerates(tmp_path, monkeypatch):
 
 
 def test_case_insensitive_dedup(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "dedup"
     state = {
         "completed_goals": [],
@@ -331,7 +331,7 @@ def test_case_insensitive_dedup(tmp_path, monkeypatch):
             {"id": "3", "description": "unique", "method": ""},
         ])
         goal_tracker.save_state(cid, state)
-    monkeypatch.setattr("goal_tracker.check_and_generate_goals", fake_gen2)
+    monkeypatch.setattr("scripts.goals.check_and_generate_goals", fake_gen2)
 
     evaluate_and_update_goals(fake_call, chat_id, min_active=2)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
@@ -340,7 +340,7 @@ def test_case_insensitive_dedup(tmp_path, monkeypatch):
 
 
 def test_preserve_goal_details_on_completion(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "preserve"
     state = {
         "completed_goals": [],
@@ -366,7 +366,7 @@ def test_preserve_goal_details_on_completion(tmp_path, monkeypatch):
             }]
         }
 
-    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
+    monkeypatch.setattr("scripts.goals.check_and_generate_goals", lambda *a, **k: None)
 
     evaluate_and_update_goals(fake_call, chat_id, min_active=1)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
@@ -388,7 +388,7 @@ def test_parse_goals_from_response_appends():
 
 
 def test_status_trailing_space(tmp_path, monkeypatch):
-    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    monkeypatch.setattr("scripts.goals.CHATS_DIR", tmp_path)
     chat_id = "trail"
     state = {
         "completed_goals": [],
@@ -414,7 +414,7 @@ def test_status_trailing_space(tmp_path, monkeypatch):
             ]
         }
 
-    monkeypatch.setattr("goal_tracker.check_and_generate_goals", lambda *a, **k: None)
+    monkeypatch.setattr("scripts.goals.check_and_generate_goals", lambda *a, **k: None)
 
     evaluate_and_update_goals(fake_call, chat_id, min_active=1)
     new_state = json.loads((tmp_path / chat_id / "state.json").read_text())

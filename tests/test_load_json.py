@@ -14,8 +14,8 @@ os.makedirs("models", exist_ok=True)
 with open("models/dummy.gguf", "w", encoding="utf-8") as f:
     f.write("dummy")
 
-from MythForgeServer import load_json
-from goal_tracker import _load_json
+from scripts.MythForgeServer import load_json
+from scripts.goals import _load_json
 
 
 def test_load_json_empty_file(tmp_path):
