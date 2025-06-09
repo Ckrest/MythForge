@@ -1,15 +1,25 @@
 import os
 import json
-from fastapi import FastAPI, HTTPException
+from typing import Dict, List
 
-# Prompt formatting utilities
-from .model_call import llm_call
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 app = FastAPI(title="Myth Forge Server")
 
 # ========== Configuration ==========
 CHATS_DIR = "chats"
 GLOBAL_PROMPTS_DIR = "global_prompts"
+
+
+class ChatRequest(BaseModel):
+    """Request model for chat-related endpoints."""
+
+    chat_id: str
+    message: str
+    global_prompt: str | None = None
+
 
 # ========== Helpers ==========
 def load_json(path):
@@ -26,6 +36,7 @@ def load_json(path):
             print(f"Failed to load JSON from '{path}': {e}")
     return []
 
+
 def chat_file(chat_id: str, filename: str) -> str:
     """Return the path for ``filename`` within ``chat_id``'s directory."""
     return os.path.join(CHATS_DIR, chat_id, filename)
@@ -36,6 +47,7 @@ def ensure_chat_dir(chat_id: str) -> str:
     path = os.path.join(CHATS_DIR, chat_id)
     os.makedirs(path, exist_ok=True)
     return path
+
 
 def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
@@ -126,7 +138,9 @@ def delete_global_prompt(name: str):
 def list_chats():
     os.makedirs(CHATS_DIR, exist_ok=True)
     chat_ids = [
-        d for d in os.listdir(CHATS_DIR) if os.path.isdir(os.path.join(CHATS_DIR, d))
+        d
+        for d in os.listdir(CHATS_DIR)
+        if os.path.isdir(os.path.join(CHATS_DIR, d))
     ]
     return {"chats": chat_ids}
 
@@ -219,13 +233,45 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
 
+@app.post("/message")
+def save_message(req: ChatRequest):
+    """Store ``req.message`` in ``req.chat_id`` without generating a reply."""
+
+    ensure_chat_dir(req.chat_id)
+    path = chat_file(req.chat_id, "full.json")
+    history = load_json(path)
+    history.append({"role": "user", "content": req.message})
+    save_json(path, history)
+
+    return {"detail": "Message stored"}
+
+
+@app.post("/chat/stream")
+def chat_stream(req: ChatRequest):
+    """Return a streamed placeholder assistant response."""
+
+    ensure_chat_dir(req.chat_id)
+    path = chat_file(req.chat_id, "full.json")
+    history = load_json(path)
+    history.append({"role": "user", "content": req.message})
+    assistant_reply = "[Model call disabled]"
+    history.append({"role": "assistant", "content": assistant_reply})
+    save_json(path, history)
+
+    def generate():
+        meta = {"prompt": req.global_prompt or ""}
+        yield json.dumps(meta) + "\n"
+        for line in assistant_reply.splitlines():
+            yield line + "\n"
+
+    return StreamingResponse(generate(), media_type="text/plain")
+
+
 @app.post("/chat")
 def chat(req: ChatRequest):
-    chat_id = req.chat_id
-    user_message = req.message
-    global_prompt = req.global_prompt or ""
-    return
-# *** this will be the command that triggers every time a chat is sent
+    """Compatibility endpoint that returns a simple message."""
+
+    return {"detail": "Model call disabled"}
 
 
 # ========== Static UI Mount ==========
