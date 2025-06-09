@@ -4,6 +4,7 @@ import time
 import json
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import goal_tracker
+import server_log
 from goal_tracker import (
     GoalsListModel,
     format_goal_eval_response,
@@ -58,21 +59,31 @@ def test_duplicate_ids(tmp_path, monkeypatch):
 
 def test_format_goal_eval_response_invalid(tmp_path, monkeypatch):
     monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    log_path = tmp_path / "log.json"
+    monkeypatch.setattr(server_log, "_log_file", str(log_path))
+    server_log._log_data.clear()
+
     chat_id = "abc"
     result = format_goal_eval_response("not json", chat_id)
     assert result is None
-    error_path = tmp_path / chat_id / "goal_eval_error.txt"
-    assert error_path.exists()
-    assert error_path.read_text() == "not json"
+
+    data = json.loads(log_path.read_text())
+    assert any(e.get("tag") == "goal_eval_invalid_output" and e.get("raw") == "not json" for e in data)
 
 
 def test_format_goal_eval_response_valid(tmp_path, monkeypatch):
     monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    log_path = tmp_path / "log.json"
+    monkeypatch.setattr(server_log, "_log_file", str(log_path))
+    server_log._log_data.clear()
+
     chat_id = "good"
     text = '{"goals": [{"id": "1", "description": "d", "method": "", "status": "completed"}]}'
     result = format_goal_eval_response(text, chat_id)
     assert result is not None
-    assert not (tmp_path / chat_id / "goal_eval_error.txt").exists()
+
+    data = json.loads(log_path.read_text())
+    assert not any(e.get("tag") == "goal_eval_invalid_output" for e in data)
 
 
 def test_init_state_from_prompt(tmp_path, monkeypatch):

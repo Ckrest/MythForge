@@ -351,32 +351,21 @@ def build_prompt(convo: List[Dict[str, str]], instruction: str) -> str:
 
 
 
-def _error_path(chat_id: str) -> str:
-    """Return the path used for goal evaluation error logs."""
-    dir_path = os.path.join(CHATS_DIR, chat_id)
-    os.makedirs(dir_path, exist_ok=True)
-    return os.path.join(dir_path, "goal_eval_error.txt")
 
 
 def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListModel]:
     """Return a ``GoalsListModel`` parsed from ``text``.
 
     If ``text`` cannot be parsed or does not conform to the schema, the raw
-    value is written to an error file for troubleshooting and ``None`` is
-    returned.
+    value is logged for troubleshooting and ``None`` is returned.
     """
 
     model = _parse_json(text, GoalsListModel)
     if model is not None:
         return model
 
-    path = _error_path(chat_id)
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(text)
-        logger.warning("Wrote invalid goal evaluation output to %s", path)
-    except Exception as e:  # pragma: no cover - file write errors are rare
-        logger.warning("Failed to write goal evaluation error file '%s': %s", path, e)
+    logger.warning("Invalid goal evaluation output", extra={"chat_id": chat_id})
+    log_event("goal_eval_invalid_output", {"raw": text, "chat_id": chat_id})
     return None
 
 
