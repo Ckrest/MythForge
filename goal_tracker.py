@@ -247,6 +247,21 @@ def parse_goals_from_response(
     return goals
 
 
+def _dedupe_new_goals(
+    new_goals: List[Dict[str, Any]], existing: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Return ``new_goals`` excluding duplicates by description."""
+
+    seen = {g.get("description", "").strip().lower() for g in existing}
+    result: List[Dict[str, Any]] = []
+    for g in new_goals:
+        desc = g.get("description", "").strip().lower()
+        if desc and desc not in seen:
+            result.append(g)
+            seen.add(desc)
+    return result
+
+
 def prepare_goals_for_state(
     goals: List[Dict[str, Any]], existing: Optional[List[Dict[str, Any]]] = None
 ) -> List[Dict[str, Any]]:
@@ -436,6 +451,9 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         )
         goals = parse_goals_from_response(text)
         if goals:
+            goals = _dedupe_new_goals(goals, state.get("goals", []))
+            if not goals:
+                continue
             prepared = prepare_goals_for_state(goals, state.get("goals"))
             changed = _apply_goal_update(chat_id, state, prepared, original_goals)
             if changed:
