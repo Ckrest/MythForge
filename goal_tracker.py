@@ -21,6 +21,7 @@ STATE_NAME = "state.json"
 HISTORY_WINDOW = int(os.environ.get("MF_HISTORY_WINDOW", 8))
 MIN_ACTIVE_GOALS = int(os.environ.get("MF_MIN_ACTIVE_GOALS", 3))
 DEBUG_MODE = os.environ.get("MF_DEBUG", "0") in ("1", "true", "yes")
+MAX_GOALS = 3
 
 logger = logging.getLogger("goal_tracker")
 
@@ -129,80 +130,6 @@ def save_state(chat_id: str, state: Dict[str, Any]) -> bool:
     return True
 
 
-def generate_initial_state(call_fn, global_prompt: str, user_msg: str, assistant_msg: str) -> Dict[str, Any]:
-    """Use the language model to create an initial state for the character."""
-    logger.info("Generating initial state")
-    instruction = (
-        "Analyze the global prompt, the user's first message, and the assistant's first reply. "
-        "Return JSON with keys 'character_profile', 'scene_context', and 'goals'. "
-        "'character_profile' must contain: name, personality, background, current_location, "
-        "known_conflicts, relationships. 'scene_context' must contain: scene_description, "
-        "setting_details, known_events. 'goals' is a list of 2-3 short term goals with id, "
-        "description and method."
-    )
-    messages = [
-        {"role": "system", "content": instruction},
-        {
-            "role": "user",
-            "content": (
-                f"GLOBAL PROMPT:\n{global_prompt}\n\n"
-                f"FIRST USER MESSAGE:\n{user_msg}\n\n"
-                f"FIRST ASSISTANT MESSAGE:\n{assistant_msg}"
-            ),
-        },
-    ]
-    prompt = format_llama3("", None, messages, "")
-    logger.debug("Initial state prompt:\n%s", prompt)
-    logger.debug("Final LLM prompt:\n%s", prompt)
-    log_event("llm_final_prompt", {"prompt": prompt})
-    output = call_fn(prompt, max_tokens=400)
-    text = output["choices"][0]["text"].strip()
-    logger.debug("Initial state raw output:\n%s", text)
-    model = _parse_json(text, InitialStateModel)
-    if model is None:
-        logger.warning("Failed to parse initial state")
-        return {"character_profile": None, "scene_context": None, "goals": []}
-    data = model.dict()
-    logger.debug("Parsed initial state: %s", data)
-    return data
-
-
-def generate_goals(call_fn, character_profile: Dict[str, Any], scene_context: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Generate new goals using the language model."""
-    logger.info("Generating goals")
-    instruction = (
-        "Based on the character profile and scene context, generate 2 to 3 specific, "
-        "actionable goals for the character. Return JSON list of goal objects with id, "
-        "description and method."
-    )
-    messages = [
-        {"role": "system", "content": instruction},
-        {
-            "role": "user",
-            "content": json.dumps({"character_profile": character_profile, "scene_context": scene_context}, ensure_ascii=False),
-        },
-    ]
-    prompt = format_llama3("", None, messages, "")
-    logger.debug("Goals prompt:\n%s", prompt)
-    logger.debug("Final LLM prompt:\n%s", prompt)
-    log_event("llm_final_prompt", {"prompt": prompt})
-    output = call_fn(prompt, max_tokens=200)
-    text = output["choices"][0]["text"].strip()
-    logger.debug("Goals raw output:\n%s", text)
-    try:
-        data = json.loads(_extract_json(text))
-    except Exception as e:
-        logger.warning("Failed to parse goals: %s", e)
-        return []
-    if isinstance(data, list):
-        result = []
-        for g in data:
-            if isinstance(g, dict) and "id" in g and "description" in g:
-                result.append(g)
-        logger.debug("Parsed goals: %s", result)
-        return result
-    logger.warning("Goal generation returned invalid format")
-    return []
 
 
 def extract_scene_context(text: str) -> str:
@@ -260,39 +187,35 @@ def parse_goals_from_response(
     extracted = _extract_json(text)
     try:
         data = json.loads(extracted)
-        # Handle {"goals": [...]} structure
-        if isinstance(data, dict) and "goals" in data and isinstance(data["goals"], list):
-            for g in data["goals"]:
-                if isinstance(g, dict):
-                    goals.append(g)
-                elif isinstance(g, str):
-                    goals.append({"text": g})
-            return goals
-        # Handle top-level list
+        if isinstance(data, dict) and "goals" in data:
+            data = data["goals"]
         if isinstance(data, list):
-            for g in data:
-                if isinstance(g, dict):
-                    goals.append(g)
-                elif isinstance(g, str):
-                    goals.append({"text": g})
+            for item in data:
+                if isinstance(item, dict):
+                    g = {
+                        "id": item.get("id") or f"g{len(goals)+1}",
+                        "description": item.get("description") or item.get("text", ""),
+                        "method": item.get("method", ""),
+                    }
+                    if item.get("status") is not None:
+                        g["status"] = item["status"]
+                    if g["description"]:
+                        goals.append(g)
+                elif isinstance(item, str):
+                    goals.append({"id": f"g{len(goals)+1}", "description": item.strip(), "method": ""})
             return goals
     except json.JSONDecodeError:
         pass
 
     # 3. Fallback: numbered/bulleted lists
     numbered = re.findall(r'^\s*\d+[\.)]\s*(.+)$', text, flags=re.MULTILINE)
-    if numbered:
-        goals.extend({"text": item.strip()} for item in numbered)
-        return goals
-
     bullets = re.findall(r'^\s*[-\*•]\s*(.+)$', text, flags=re.MULTILINE)
-    if bullets:
-        goals.extend({"text": item.strip()} for item in bullets)
-        return goals
+    lines = numbered if numbered else bullets
+    if not lines:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
 
-    # 4. Fallback: each non-empty line
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    goals.extend({"text": line} for line in lines)
+    for line in lines:
+        goals.append({"id": f"g{len(goals)+1}", "description": line.strip(), "method": ""})
     return goals
 
 
@@ -391,17 +314,25 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
     logger.info("Checking for missing goals", extra={"chat_id": chat_id})
     state = load_state(chat_id)
     original_goals = state.get("goals", []).copy()
-    if state.get("goals"):
+    if len(state.get("goals", [])) >= MAX_GOALS:
         return
-    fragment = state_as_prompt_fragment(state)
-    if not fragment:
+    if not state.get("character_profile") or not state.get("scene_context"):
         logger.debug("Character state incomplete", extra={"chat_id": chat_id})
         return
-    prompt = (
-        f"{fragment}\n\nBased on the above, identify 2–3 actionable goals for the character."
+    instruction = (
+        "Based on the character profile and scene context, generate 2 to 3 specific, "
+        "actionable goals for the character. Return JSON list of goal objects with id, "
+        "description and method."
     )
+    messages = [
+        {"role": "system", "content": instruction},
+        {
+            "role": "user",
+            "content": json.dumps({"character_profile": state["character_profile"], "scene_context": state["scene_context"]}, ensure_ascii=False),
+        },
+    ]
+    prompt = format_llama3("", None, messages, "")
     logger.debug("Goal generation prompt:\n%s", prompt, extra={"chat_id": chat_id})
-    # Log full prompt for debugging before sending to the LLM
     logger.info("LLM goal prompt", extra={"chat_id": chat_id, "prompt": prompt})
     logger.debug("Final LLM prompt:\n%s", prompt)
     log_event("llm_final_prompt", {"prompt": prompt})
@@ -619,18 +550,10 @@ def evaluate_and_update_goals(
             and state.get("character_profile")
             and state.get("scene_context")
         ):
-            new_goals = generate_goals(call_fn, state["character_profile"], state["scene_context"])
-            for g in new_goals:
-                gid = g.get("id")
-                desc = g.get("description", "").lower()
-                if gid in seen_ids or desc in seen_desc:
-                    continue
-                active.append(g)
-                seen_ids.add(gid)
-                seen_desc.add(desc)
-                if len([x for x in active if (x.get("status") or "in_progress").lower() == "in_progress"]) >= min_active:
-                    break
-            active_changed = _apply_goal_update(chat_id, state, active, original_goals, remove_missing=True) or active_changed
+            if save_state(chat_id, state):
+                log_event("state_saved", {"path": _state_path(chat_id)})
+            check_and_generate_goals(call_fn, chat_id)
+            return
 
         if changed or active_changed:
             logger.debug("Goals updated: %s", state.get("goals"))
