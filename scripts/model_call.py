@@ -25,7 +25,9 @@ def _strip_junk(text: str) -> str:
         "",
         text,
     )
-    cleaned = re.sub(r"^Cutting Knowledge Date.*\n?", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(
+        r"^Cutting Knowledge Date.*\n?", "", cleaned, flags=re.MULTILINE
+    )
     cleaned = re.sub(r"^Today Date.*\n?", "", cleaned, flags=re.MULTILINE)
     return cleaned.strip()
 
@@ -87,7 +89,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Format a chat session in LLaMA3 header-token style"
     )
-    parser.add_argument("json_file", help="Path to JSON file containing the session data")
+    parser.add_argument(
+        "json_file", help="Path to JSON file containing the session data"
+    )
     args = parser.parse_args()
 
     with open(args.json_file, "r", encoding="utf-8") as f:
@@ -107,6 +111,7 @@ def main() -> None:
 # Apply automatic logging to all functions in this module
 import sys
 from .disable import patch_module_functions
+
 patch_module_functions(sys.modules[__name__], "formatting")
 
 

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, ValidationError
 
-from .Format import format_llama3
+from .model_call import format_llama3
 
 # ``CHATS_DIR`` mirrors the constant from ``MythForgeServer``.  Keeping a copy
 # here avoids circular imports.
@@ -132,8 +132,6 @@ def save_state(chat_id: str, state: Dict[str, Any]) -> bool:
     return True
 
 
-
-
 def extract_scene_context(text: str) -> str:
     """Return a basic scene context extracted from ``text``."""
     return text.strip()
@@ -145,7 +143,9 @@ def extract_character_profile(text: str) -> str:
 
 
 @log_function("state_writer")
-def init_state_from_prompt(chat_id: str, global_prompt: str, first_user: str) -> None:
+def init_state_from_prompt(
+    chat_id: str, global_prompt: str, first_user: str
+) -> None:
     """Initialize state using ``global_prompt`` and ``first_user`` if unset."""
     logger.info("Initializing state from prompt", extra={"chat_id": chat_id})
     state = load_state(chat_id)
@@ -158,7 +158,13 @@ def init_state_from_prompt(chat_id: str, global_prompt: str, first_user: str) ->
 
 
 @log_function("state_writer")
-def ensure_initial_state(call_fn, chat_id: str, global_prompt: str, first_user: str, first_assistant: str) -> None:
+def ensure_initial_state(
+    call_fn,
+    chat_id: str,
+    global_prompt: str,
+    first_user: str,
+    first_assistant: str,
+) -> None:
     """Populate ``scene_context`` and ``character_profile`` from the first exchange."""
     logger.info("Ensuring initial state", extra={"chat_id": chat_id})
     state = load_state(chat_id)
@@ -202,12 +208,14 @@ def _parse_goal_items(text: str) -> List[Dict[str, Any]]:
                     if goal["description"] or goal["id"]:
                         items.append(goal)
                 elif isinstance(entry, str):
-                    items.append({
-                        "id": None,
-                        "description": entry.strip(),
-                        "method": "",
-                        "status": None,
-                    })
+                    items.append(
+                        {
+                            "id": None,
+                            "description": entry.strip(),
+                            "method": "",
+                            "status": None,
+                        }
+                    )
             return items
     except json.JSONDecodeError:
         pass
@@ -219,12 +227,14 @@ def _parse_goal_items(text: str) -> List[Dict[str, Any]]:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
 
     for line in lines:
-        items.append({
-            "id": None,
-            "description": line.strip(),
-            "method": "",
-            "status": None,
-        })
+        items.append(
+            {
+                "id": None,
+                "description": line.strip(),
+                "method": "",
+                "status": None,
+            }
+        )
 
     return items
 
@@ -398,14 +408,16 @@ def _check_goal_similarity(
     payload = {"current": existing, "new": updated}
     instruction = (
         "If any of the new goals are too similar to the current goals, return "
-        "ONLY JSON like {\"duplicates\": true}. Otherwise return {\"duplicates\": false}."
+        'ONLY JSON like {"duplicates": true}. Otherwise return {"duplicates": false}.'
     )
     messages = [
         {"role": "system", "content": instruction},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
     prompt = format_llama3("", None, messages, "")
-    logger.debug("Goal similarity prompt:\n%s", prompt, extra={"chat_id": chat_id})
+    logger.debug(
+        "Goal similarity prompt:\n%s", prompt, extra={"chat_id": chat_id}
+    )
     output = call_fn(prompt, max_tokens=50, temperature=0)
     text = output["choices"][0]["text"].strip()
     log_event("goal_similarity_raw", {"raw": text})
@@ -418,10 +430,13 @@ def _check_goal_similarity(
         return dup
     except Exception as e:
         logger.warning(
-            "Failed to parse goal similarity response: %s", e, extra={"chat_id": chat_id}
+            "Failed to parse goal similarity response: %s",
+            e,
+            extra={"chat_id": chat_id},
         )
         log_event("goal_similarity_parse_failed", {"raw": text})
     return False
+
 
 @log_function("state_writer")
 def check_and_generate_goals(call_fn, chat_id: str) -> None:
@@ -435,21 +450,31 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
         logger.debug("Character state incomplete", extra={"chat_id": chat_id})
         return
     instruction = (
-    "Given the character profile and scene context, determine if the character has any NEW meaningful or natural goals. "
-    f"If so, generate up to {MAX_GOALS} specific, actionable goals, each with a brief plan for how the character might pursue it. "
-    "If no goals are currently appropriate, return an empty list. "
-    "Respond ONLY in JSON format: {\"goals\": [{\"description\": \"...\", \"method\": \"...\"}]}."
+        "Given the character profile and scene context, determine if the character has any NEW meaningful or natural goals. "
+        f"If so, generate up to {MAX_GOALS} specific, actionable goals, each with a brief plan for how the character might pursue it. "
+        "If no goals are currently appropriate, return an empty list. "
+        'Respond ONLY in JSON format: {"goals": [{"description": "...", "method": "..."}]}.'
     )
     messages = [
         {"role": "system", "content": instruction},
         {
             "role": "user",
-            "content": json.dumps({"character_profile": state["character_profile"], "scene_context": state["scene_context"]}, ensure_ascii=False),
+            "content": json.dumps(
+                {
+                    "character_profile": state["character_profile"],
+                    "scene_context": state["scene_context"],
+                },
+                ensure_ascii=False,
+            ),
         },
     ]
     prompt = format_llama3("", None, messages, "")
-    logger.debug("Goal generation prompt:\n%s", prompt, extra={"chat_id": chat_id})
-    logger.info("LLM goal prompt", extra={"chat_id": chat_id, "prompt": prompt})
+    logger.debug(
+        "Goal generation prompt:\n%s", prompt, extra={"chat_id": chat_id}
+    )
+    logger.info(
+        "LLM goal prompt", extra={"chat_id": chat_id, "prompt": prompt}
+    )
     logger.debug("Final LLM prompt:\n%s", prompt)
     log_event("llm_final_prompt", {"prompt": prompt})
 
@@ -473,11 +498,18 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
                 state.get("goals"),
                 state.get("completed_goals"),
             )
-            changed = _apply_goal_update(chat_id, state, prepared, original_goals)
+            changed = _apply_goal_update(
+                chat_id, state, prepared, original_goals
+            )
             if changed:
                 state["messages_since_goal_eval"] = 0
                 if original_goals:
-                    _check_goal_similarity(call_fn, chat_id, original_goals, state.get("goals", []))
+                    _check_goal_similarity(
+                        call_fn,
+                        chat_id,
+                        original_goals,
+                        state.get("goals", []),
+                    )
                 if save_state(chat_id, state):
                     log_event("state_saved", {"path": _state_path(chat_id)})
                 logger.info(
@@ -497,8 +529,7 @@ def check_and_generate_goals(call_fn, chat_id: str) -> None:
             )
 
     logger.warning(
-        "Goal generation failed after 2 attempts",
-        extra={"chat_id": chat_id}
+        "Goal generation failed after 2 attempts", extra={"chat_id": chat_id}
     )
 
 
@@ -522,9 +553,15 @@ def load_and_prepare_state(chat_id: str, history_window: int = HISTORY_WINDOW):
     convo: List[Dict[str, str]] = []
     for m in history[-history_window:]:
         if m.get("type") == "summary":
-            convo.append({"role": "system", "content": f"SUMMARY: {m['content']}"})
+            convo.append(
+                {"role": "system", "content": f"SUMMARY: {m['content']}"}
+            )
         else:
-            role = "assistant" if m.get("role") == "bot" else m.get("role", "user")
+            role = (
+                "assistant"
+                if m.get("role") == "bot"
+                else m.get("role", "user")
+            )
             convo.append({"role": role, "content": m.get("content", "")})
     return state, convo
 
@@ -533,11 +570,9 @@ def build_prompt(convo: List[Dict[str, str]], instruction: str) -> str:
     return format_llama3("", None, convo, instruction)
 
 
-
-
-
-
-def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListModel]:
+def format_goal_eval_response(
+    text: str, chat_id: str
+) -> Optional[GoalsListModel]:
     """Return a ``GoalsListModel`` parsed from ``text``.
 
     If ``text`` cannot be parsed or does not conform to the schema, the raw
@@ -551,11 +586,15 @@ def format_goal_eval_response(text: str, chat_id: str) -> Optional[GoalsListMode
     fallback_items = _parse_goal_items(text)
     if fallback_items:
         try:
-            return GoalsListModel(goals=[GoalModel(**item) for item in fallback_items])
+            return GoalsListModel(
+                goals=[GoalModel(**item) for item in fallback_items]
+            )
         except ValidationError:
             pass
 
-    logger.warning("Invalid goal evaluation output", extra={"chat_id": chat_id})
+    logger.warning(
+        "Invalid goal evaluation output", extra={"chat_id": chat_id}
+    )
     log_event("goal_eval_invalid_output", {"raw": text, "chat_id": chat_id})
     return None
 
@@ -593,7 +632,9 @@ def evaluate_and_update_goals(
         convo.pop(0)
         prompt = build_prompt(convo, instruction)
     if len(prompt.split()) > 3500:
-        logger.warning("Context truncated for goal evaluation", extra={"chat_id": chat_id})
+        logger.warning(
+            "Context truncated for goal evaluation", extra={"chat_id": chat_id}
+        )
 
     logger.debug("Final LLM prompt:\n%s", prompt)
     log_event("llm_final_prompt", {"prompt": prompt})
@@ -606,7 +647,9 @@ def evaluate_and_update_goals(
         model = format_goal_eval_response(text, chat_id)
         if model is None:
             logger.warning(
-                "Goal evaluation attempt %s returned invalid json", attempt + 1, extra={"chat_id": chat_id}
+                "Goal evaluation attempt %s returned invalid json",
+                attempt + 1,
+                extra={"chat_id": chat_id},
             )
             time.sleep(backoff)
             backoff *= 2
@@ -631,7 +674,9 @@ def evaluate_and_update_goals(
                     goal_data[field] = ""
 
             status = (
-                (g.status or goal_data.get("status") or "in_progress").strip().lower()
+                (g.status or goal_data.get("status") or "in_progress")
+                .strip()
+                .lower()
             )
             goal_data["status"] = status
 
@@ -645,7 +690,11 @@ def evaluate_and_update_goals(
                 processed.add(goal_data["id"])
                 continue
 
-            if goal_data["id"] in seen_ids or desc_key in seen_desc or goal_data["id"] in processed:
+            if (
+                goal_data["id"] in seen_ids
+                or desc_key in seen_desc
+                or goal_data["id"] in processed
+            ):
                 continue
 
             active.append(goal_data)
@@ -667,13 +716,17 @@ def evaluate_and_update_goals(
             state["completed_goals"] = completed
             changed = True
 
-        active_changed = _apply_goal_update(chat_id, state, active, original_goals, remove_missing=True)
+        active_changed = _apply_goal_update(
+            chat_id, state, active, original_goals, remove_missing=True
+        )
         changed = changed or active_changed
 
         state["messages_since_goal_eval"] = 0
 
         in_progress_count = sum(
-            1 for g in active if (g.get("status") or "in_progress").lower() == "in_progress"
+            1
+            for g in active
+            if (g.get("status") or "in_progress").lower() == "in_progress"
         )
 
         if (
@@ -689,13 +742,17 @@ def evaluate_and_update_goals(
         if changed or active_changed:
             logger.debug("Goals updated: %s", state.get("goals"))
         else:
-            logger.debug("Goals evaluated with no changes", extra={"chat_id": chat_id})
+            logger.debug(
+                "Goals evaluated with no changes", extra={"chat_id": chat_id}
+            )
 
         if save_state(chat_id, state):
             log_event("state_saved", {"path": _state_path(chat_id)})
         return
 
-    logger.warning("Goal evaluation failed after retries", extra={"chat_id": chat_id})
+    logger.warning(
+        "Goal evaluation failed after retries", extra={"chat_id": chat_id}
+    )
     if save_state(chat_id, state):
         log_event("state_saved", {"path": _state_path(chat_id)})
 
@@ -704,7 +761,9 @@ def evaluate_and_update_goals(
 def record_user_message(chat_id: str) -> None:
     """Increment the message counter for ``chat_id``."""
     state = load_state(chat_id)
-    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    state["messages_since_goal_eval"] = (
+        state.get("messages_since_goal_eval", 0) + 1
+    )
     if save_state(chat_id, state):
         log_event("state_saved", {"path": _state_path(chat_id)})
 
@@ -713,7 +772,9 @@ def record_user_message(chat_id: str) -> None:
 def record_assistant_message(chat_id: str) -> bool:
     """Increment the counter and return True when goal evaluation should run."""
     state = load_state(chat_id)
-    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    state["messages_since_goal_eval"] = (
+        state.get("messages_since_goal_eval", 0) + 1
+    )
     if save_state(chat_id, state):
         log_event("state_saved", {"path": _state_path(chat_id)})
     return bool(state.get("goals")) and state["messages_since_goal_eval"] >= 4
@@ -734,12 +795,15 @@ def state_as_prompt_fragment(state: Dict[str, Any]) -> str:
     if not scene_context and not character_profile:
         return ""
 
-    parts = [f"Scene Context:\n{scene_context if scene_context else '[missing]'}"]
+    parts = [
+        f"Scene Context:\n{scene_context if scene_context else '[missing]'}"
+    ]
 
     return "\n\n".join(parts)
+
 
 # Apply automatic logging to all functions in this module
 import sys
 from .disable import patch_module_functions, log_event
-patch_module_functions(sys.modules[__name__], "goals system")
 
+patch_module_functions(sys.modules[__name__], "goals system")

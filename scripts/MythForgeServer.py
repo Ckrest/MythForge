@@ -24,7 +24,7 @@ from .goals import (
 from llama_cpp import Llama
 
 # Prompt formatting utilities
-from .Format import format_llama3
+from .model_call import format_llama3
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -36,6 +36,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # ========== Data Models ==========
 class ChatRequest(BaseModel):
@@ -49,24 +50,29 @@ class ChatRequest(BaseModel):
     min_p: float | None = None
     repeat_penalty: float | None = None
 
+
 class ChatResponse(BaseModel):
     response: str
     prompt_preview: str
+
 
 class PromptItem(BaseModel):
     name: str
     content: str
 
+
 # ========== Configuration ==========
-MODELS_DIR         = "models"
-CHATS_DIR          = "chats"
+MODELS_DIR = "models"
+CHATS_DIR = "chats"
 GLOBAL_PROMPTS_DIR = "global_prompts"
 MODEL_SETTINGS_PATH = "model_settings.json"
+
 
 # Helper utilities for per-chat directories
 def chat_file(chat_id: str, filename: str) -> str:
     """Return the path for ``filename`` within ``chat_id``'s directory."""
     return os.path.join(CHATS_DIR, chat_id, filename)
+
 
 def ensure_chat_dir(chat_id: str) -> str:
     """Create and return the directory path for ``chat_id``."""
@@ -74,10 +80,11 @@ def ensure_chat_dir(chat_id: str) -> str:
     os.makedirs(path, exist_ok=True)
     return path
 
+
 # Match LM Studio defaults for a 4 GB VRAM setup
-DEFAULT_CTX_SIZE   = 4096
-DEFAULT_N_BATCH    = 512
-DEFAULT_N_THREADS  = os.cpu_count() or 1
+DEFAULT_CTX_SIZE = 4096
+DEFAULT_N_BATCH = 512
+DEFAULT_N_THREADS = os.cpu_count() or 1
 
 
 def load_model_settings(path: str = MODEL_SETTINGS_PATH) -> Dict[str, object]:
@@ -111,7 +118,8 @@ GENERATION_CONFIG = {
 }
 DEFAULT_MAX_TOKENS = MODEL_SETTINGS.get("max_tokens", 250)
 SUMMARIZE_THRESHOLD = MODEL_SETTINGS.get("summarize_threshold", 20)
-SUMMARIZE_BATCH     = MODEL_SETTINGS.get("summarize_batch", 12)
+SUMMARIZE_BATCH = MODEL_SETTINGS.get("summarize_batch", 12)
+
 
 # ========== Model Loading ==========
 def discover_model_path():
@@ -143,7 +151,13 @@ _model_config = {
     "prompt_template": MODEL_SETTINGS.get("prompt_template", ""),
 }
 
-for key in ("f16_kv", "use_mmap", "use_mlock", "n_gpu_layers", "main_memory_kv"):
+for key in (
+    "f16_kv",
+    "use_mmap",
+    "use_mlock",
+    "n_gpu_layers",
+    "main_memory_kv",
+):
     if key in MODEL_SETTINGS and MODEL_SETTINGS[key] is not None:
         _model_config[key] = MODEL_SETTINGS[key]
 
@@ -185,6 +199,7 @@ def call_llm(prompt: str, **kwargs):
         filtered = kwargs
 
     if filtered.get("stream"):
+
         def _stream():
             for chunk in llm(prompt, **filtered):
                 text = chunk["choices"][0]["text"]
@@ -197,6 +212,7 @@ def call_llm(prompt: str, **kwargs):
     text = res["choices"][0]["text"]
     log_event("llm_raw_output", {"raw": text})
     return res
+
 
 call_llm._patched = True
 
@@ -222,7 +238,7 @@ def _response_prompt_worker() -> None:
             print(f"[response_prompt_queue] task failed: {e}")
         finally:
             with _RESP_LOCK:
-                globals()['_RESP_PENDING'] = max(0, _RESP_PENDING - 1)
+                globals()["_RESP_PENDING"] = max(0, _RESP_PENDING - 1)
             RESPONSE_PROMPT_QUEUE.task_done()
 
 
@@ -233,14 +249,15 @@ _RESPONSE_PROMPT_THREAD.start()
 def enqueue_response_prompt(fn) -> None:
     """Add ``fn`` to the post-response processing queue."""
     with _RESP_LOCK:
-        globals()['_RESP_PENDING'] += 1
+        globals()["_RESP_PENDING"] += 1
     RESPONSE_PROMPT_QUEUE.put(fn)
+
 
 # ========== Helpers ==========
 def load_json(path):
     if os.path.exists(path):
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 content = f.read().strip()
                 if not content:
                     return []
@@ -251,17 +268,20 @@ def load_json(path):
             print(f"Failed to load JSON from '{path}': {e}")
     return []
 
+
 def save_json(path, data):
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
 
 def strip_leading_tag(text: str, tag: str) -> str:
     """Remove a leading ``tag:`` from ``text`` if present."""
     text = text.lstrip()
     prefix = f"{tag}:"
     if text.lower().startswith(prefix.lower()):
-        return text[len(prefix):].lstrip()
+        return text[len(prefix) :].lstrip()
     return text
+
 
 # ─── Global Prompts CRUD ─────────────────────────────────────────────────
 def _prompt_path(name: str) -> str:
@@ -290,6 +310,7 @@ def load_global_prompts():
             print(f"Ignoring invalid global prompt file: {fname}")
     return prompts
 
+
 def list_prompt_names() -> List[str]:
     """Return only the names of available global prompts."""
     os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
@@ -307,6 +328,7 @@ def list_prompt_names() -> List[str]:
         if isinstance(data, dict) and "name" in data:
             names.append(data["name"])
     return names
+
 
 def get_global_prompt_content(name: str) -> str | None:
     """Return the content string for a prompt ``name`` if it exists."""
@@ -326,7 +348,12 @@ def save_global_prompt(prompt: Dict[str, str]):
     os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
     path = _prompt_path(prompt["name"])
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"name": prompt["name"], "content": prompt["content"]}, f, indent=2, ensure_ascii=False)
+        json.dump(
+            {"name": prompt["name"], "content": prompt["content"]},
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
 
 
 def delete_global_prompt(name: str):
@@ -334,11 +361,13 @@ def delete_global_prompt(name: str):
     if os.path.exists(path):
         os.remove(path)
 
+
 @app.get("/prompts")
 def list_prompts(names_only: bool = False):
     if names_only:
         return {"prompts": list_prompt_names()}
     return {"prompts": load_global_prompts()}
+
 
 @app.get("/prompts/{name}")
 def fetch_prompt(name: str):
@@ -347,21 +376,34 @@ def fetch_prompt(name: str):
         raise HTTPException(status_code=404, detail="Prompt not found")
     return {"name": name, "content": content}
 
+
 @app.post("/prompts")
 def create_prompt(item: PromptItem):
     if os.path.exists(_prompt_path(item.name)):
-        raise HTTPException(status_code=400, detail="Prompt name already exists")
+        raise HTTPException(
+            status_code=400, detail="Prompt name already exists"
+        )
     save_global_prompt({"name": item.name, "content": item.content})
-    return {"detail": "Created", "prompt": {"name": item.name, "content": item.content}}
+    return {
+        "detail": "Created",
+        "prompt": {"name": item.name, "content": item.content},
+    }
+
 
 @app.put("/prompts/{name}")
 def update_prompt(name: str, item: PromptItem):
     if item.name != name:
-        raise HTTPException(status_code=400, detail="Cannot rename prompt; delete & recreate instead")
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot rename prompt; delete & recreate instead",
+        )
     if not os.path.exists(_prompt_path(name)):
         raise HTTPException(status_code=404, detail="Prompt not found")
     save_global_prompt({"name": name, "content": item.content})
-    return {"detail": "Updated", "prompt": {"name": name, "content": item.content}}
+    return {
+        "detail": "Updated",
+        "prompt": {"name": name, "content": item.content},
+    }
 
 
 @app.put("/prompts/{name}/rename")
@@ -373,7 +415,9 @@ def rename_prompt(name: str, data: Dict[str, str]):
     if not os.path.exists(_prompt_path(name)):
         raise HTTPException(status_code=404, detail="Prompt not found")
     if os.path.exists(_prompt_path(new_name)) and new_name != name:
-        raise HTTPException(status_code=400, detail="Prompt name already exists")
+        raise HTTPException(
+            status_code=400, detail="Prompt name already exists"
+        )
 
     same_name = new_name == name
 
@@ -386,9 +430,12 @@ def rename_prompt(name: str, data: Dict[str, str]):
     data["name"] = new_name
     if not same_name:
         os.rename(old_path, new_path)
-    with open(new_path if not same_name else old_path, "w", encoding="utf-8") as f:
+    with open(
+        new_path if not same_name else old_path, "w", encoding="utf-8"
+    ) as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     return {"detail": f"Renamed prompt '{name}' to '{new_name}'"}
+
 
 @app.delete("/prompts/{name}")
 def delete_prompt(name: str):
@@ -396,6 +443,7 @@ def delete_prompt(name: str):
         raise HTTPException(status_code=404, detail="Prompt not found")
     delete_global_prompt(name)
     return {"detail": f"Deleted prompt '{name}'"}
+
 
 # ========== Summarization & Trimming ==========
 def summarize_chunk(chunk):
@@ -429,6 +477,7 @@ def summarize_chunk(chunk):
     wrapped = f"[Summery start]\n{summary_text}\n[Summery end]"
     return {"type": "summary", "content": wrapped}
 
+
 def trim_context(chat_id):
     trimmed_path = chat_file(chat_id, "trimmed.json")
     history = load_json(trimmed_path)
@@ -454,6 +503,7 @@ def trim_context(chat_id):
 
     return history
 
+
 @log_function("state_writer_caller")
 def build_prompt(chat_id, user_message, global_prompt_name):
     """Construct the next prompt using the LLaMA3 header-token format."""
@@ -468,7 +518,9 @@ def build_prompt(chat_id, user_message, global_prompt_name):
     context = load_json(trimmed_path)
     if user_message.strip():
         full_log.append({"role": "user", "content": user_message})
-        context.append({"type": "raw", "role": "user", "content": user_message})
+        context.append(
+            {"type": "raw", "role": "user", "content": user_message}
+        )
         record_user_message(chat_id)
         chosen_content = get_global_prompt_content(global_prompt_name)
         if (
@@ -478,7 +530,10 @@ def build_prompt(chat_id, user_message, global_prompt_name):
         ):
             init_state_from_prompt(chat_id, chosen_content, user_message)
         state = load_state(chat_id)
-        if goal_tracker.DEBUG_MODE or state.get("messages_since_goal_eval", 0) >= 2:
+        if (
+            goal_tracker.DEBUG_MODE
+            or state.get("messages_since_goal_eval", 0) >= 2
+        ):
             check_and_generate_goals(call_llm, chat_id)
     # Ensure history files exist even if no message was appended
     save_json(full_path, full_log)
@@ -486,7 +541,9 @@ def build_prompt(chat_id, user_message, global_prompt_name):
 
     # Determine system prompt
     chosen_content = get_global_prompt_content(global_prompt_name)
-    system_prompt = chosen_content if chosen_content else "You are a helpful assistant."
+    system_prompt = (
+        chosen_content if chosen_content else "You are a helpful assistant."
+    )
     assistant_name = "assistant"
 
     # Incorporate character state and goals if available
@@ -514,12 +571,18 @@ def build_prompt(chat_id, user_message, global_prompt_name):
     )
     return prompt_str, assistant_name
 
+
 # ========== Standard Chat Endpoints ==========
 @app.get("/chats")
 def list_chats():
     os.makedirs(CHATS_DIR, exist_ok=True)
-    chat_ids = [d for d in os.listdir(CHATS_DIR) if os.path.isdir(os.path.join(CHATS_DIR, d))]
+    chat_ids = [
+        d
+        for d in os.listdir(CHATS_DIR)
+        if os.path.isdir(os.path.join(CHATS_DIR, d))
+    ]
     return {"chats": chat_ids}
+
 
 @app.post("/chats/{chat_id}")
 def create_chat(chat_id: str):
@@ -532,12 +595,14 @@ def create_chat(chat_id: str):
     save_json(chat_file(chat_id, "trimmed.json"), [])
     return {"detail": f"Created chat '{chat_id}'"}
 
+
 @app.get("/history/{chat_id}")
 def get_history(chat_id: str):
     path = chat_file(chat_id, "full.json")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Chat not found")
     return load_json(path)
+
 
 @app.put("/history/{chat_id}/{index}")
 def edit_message(chat_id: str, index: int, data: Dict[str, str]):
@@ -563,6 +628,7 @@ def edit_message(chat_id: str, index: int, data: Dict[str, str]):
     save_json(trimmed_path, trimmed)
     return {"detail": "Updated"}
 
+
 @app.delete("/history/{chat_id}/{index}")
 def delete_message(chat_id: str, index: int):
     """Remove the message at ``index`` from ``chat_id``."""
@@ -587,6 +653,7 @@ def delete_message(chat_id: str, index: int):
     save_json(trimmed_path, trimmed)
     return {"detail": "Deleted"}
 
+
 @app.delete("/chat/{chat_id}")
 def delete_chat(chat_id: str):
     chat_dir = os.path.join(CHATS_DIR, chat_id)
@@ -596,6 +663,7 @@ def delete_chat(chat_id: str):
         os.remove(os.path.join(chat_dir, fname))
     os.rmdir(chat_dir)
     return {"detail": f"Deleted chat '{chat_id}'"}
+
 
 @app.put("/chat/{chat_id}")
 def rename_chat(chat_id: str, data: Dict[str, str]):
@@ -624,23 +692,22 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
 
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
+
 @app.post("/chat")
 @log_function("state_writer_caller")
 def chat(req: ChatRequest):
-    chat_id       = req.chat_id
-    user_message  = req.message
+    chat_id = req.chat_id
+    user_message = req.message
     global_prompt = req.global_prompt or ""
 
     ensure_chat_dir(chat_id)
-    full_path    = chat_file(chat_id, "full.json")
+    full_path = chat_file(chat_id, "full.json")
     trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
         save_json(trimmed_path, [])
 
-    prompt, assistant_name = build_prompt(
-        chat_id, user_message, global_prompt
-    )
+    prompt, assistant_name = build_prompt(chat_id, user_message, global_prompt)
 
     config = GENERATION_CONFIG.copy()
     if req.temperature is not None:
@@ -653,7 +720,9 @@ def chat(req: ChatRequest):
         config["min_p"] = req.min_p
     if req.repeat_penalty is not None:
         config["repeat_penalty"] = req.repeat_penalty
-    max_tokens = req.max_tokens if req.max_tokens is not None else DEFAULT_MAX_TOKENS
+    max_tokens = (
+        req.max_tokens if req.max_tokens is not None else DEFAULT_MAX_TOKENS
+    )
 
     print("DEBUG raw_prompt:", prompt)
     output = call_llm(prompt, max_tokens=max_tokens, **config)
@@ -665,7 +734,9 @@ def chat(req: ChatRequest):
     full_log.append({"role": "bot", "content": response_text})
     save_json(full_path, full_log)
     if record_assistant_message(chat_id):
-        enqueue_response_prompt(lambda: evaluate_and_update_goals(call_llm, chat_id))
+        enqueue_response_prompt(
+            lambda: evaluate_and_update_goals(call_llm, chat_id)
+        )
     if len(full_log) == 2:
         first_user = full_log[0].get("content", "") if full_log else ""
         gprompt_content = get_global_prompt_content(global_prompt) or ""
@@ -685,6 +756,7 @@ def chat(req: ChatRequest):
 
     return ChatResponse(response=response_text, prompt_preview=prompt)
 
+
 # ─── Streaming Chat Endpoint with Prompt JSON Prefix ────────────────────────
 @app.post("/chat/stream")
 @log_function("state_writer_caller")
@@ -696,22 +768,19 @@ def chat_stream(req: ChatRequest):
     The first line sent to the client is a JSON object with the prompt text.
     All subsequent data are token chunks from the model.
     """
-    chat_id       = req.chat_id
-    user_message  = req.message
+    chat_id = req.chat_id
+    user_message = req.message
     global_prompt = req.global_prompt or ""
 
     ensure_chat_dir(chat_id)
-    full_path    = chat_file(chat_id, "full.json")
+    full_path = chat_file(chat_id, "full.json")
     trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
         save_json(trimmed_path, [])
 
     # 1) Build prompt
-    prompt, assistant_name = build_prompt(
-        chat_id, user_message, global_prompt
-    )
-
+    prompt, assistant_name = build_prompt(chat_id, user_message, global_prompt)
 
     # build_prompt() already saved the user's message to both history files,
     # so we can immediately begin streaming the model's response.
@@ -740,7 +809,11 @@ def chat_stream(req: ChatRequest):
             config["min_p"] = req.min_p
         if req.repeat_penalty is not None:
             config["repeat_penalty"] = req.repeat_penalty
-        max_tokens = req.max_tokens if req.max_tokens is not None else DEFAULT_MAX_TOKENS
+        max_tokens = (
+            req.max_tokens
+            if req.max_tokens is not None
+            else DEFAULT_MAX_TOKENS
+        )
 
         for output in call_llm(
             prompt,
@@ -777,11 +850,15 @@ def chat_stream(req: ChatRequest):
         full_history.append({"role": "bot", "content": text_accumulator})
         save_json(full_path, full_history)
         if record_assistant_message(chat_id):
-            enqueue_response_prompt(lambda: evaluate_and_update_goals(call_llm, chat_id))
+            enqueue_response_prompt(
+                lambda: evaluate_and_update_goals(call_llm, chat_id)
+            )
 
         # Goal initialization if this was the first exchange
         if len(full_history) == 2:
-            first_user = full_history[0].get("content", "") if full_history else ""
+            first_user = (
+                full_history[0].get("content", "") if full_history else ""
+            )
             gprompt_content = get_global_prompt_content(global_prompt) or ""
             enqueue_response_prompt(
                 lambda fu=first_user, gp=gprompt_content, rt=text_accumulator: ensure_initial_state(
@@ -793,14 +870,14 @@ def chat_stream(req: ChatRequest):
 
         # (2) Trimmed context
         trimmed = load_json(trimmed_path)
-        trimmed.append({"type": "raw", "role": "bot", "content": text_accumulator})
+        trimmed.append(
+            {"type": "raw", "role": "bot", "content": text_accumulator}
+        )
         save_json(trimmed_path, trimmed)
         enqueue_response_prompt(lambda: trim_context(chat_id))
 
-    return StreamingResponse(
-        generate_and_stream(),
-        media_type="text/plain"
-    )
+    return StreamingResponse(generate_and_stream(), media_type="text/plain")
+
 
 # ─── Endpoint: Log Message Without Generating ------------------------------
 @app.post("/message")
@@ -808,12 +885,12 @@ def chat_stream(req: ChatRequest):
 def log_message(req: ChatRequest):
     """Record a user message without generating a response."""
 
-    chat_id       = req.chat_id
-    user_message  = req.message
+    chat_id = req.chat_id
+    user_message = req.message
     global_prompt = req.global_prompt or ""
 
     ensure_chat_dir(chat_id)
-    full_path    = chat_file(chat_id, "full.json")
+    full_path = chat_file(chat_id, "full.json")
     trimmed_path = chat_file(chat_id, "trimmed.json")
     if not os.path.exists(full_path):
         save_json(full_path, [])
@@ -824,22 +901,32 @@ def log_message(req: ChatRequest):
 
     return {"detail": "Message recorded"}
 
+
 # ========== Settings Endpoints ==========
 @app.get("/settings")
 def get_settings():
     return MODEL_SETTINGS
+
 
 @app.put("/settings")
 def update_settings(data: Dict[str, object]):
     """Update settings and persist them to ``model_settings.json``."""
     MODEL_SETTINGS.update(data)
     save_json(MODEL_SETTINGS_PATH, MODEL_SETTINGS)
-    for key in ("temperature", "top_k", "top_p", "min_p", "repeat_penalty", "stop"):
+    for key in (
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p",
+        "repeat_penalty",
+        "stop",
+    ):
         if key in MODEL_SETTINGS:
             GENERATION_CONFIG[key] = MODEL_SETTINGS[key]
     global DEFAULT_MAX_TOKENS
     DEFAULT_MAX_TOKENS = MODEL_SETTINGS.get("max_tokens", DEFAULT_MAX_TOKENS)
     return {"detail": "Updated", "settings": MODEL_SETTINGS}
+
 
 # ========== Response Prompt Status ==========
 @app.get("/response_prompt_status")
@@ -849,11 +936,12 @@ def response_prompt_status():
         pending = _RESP_PENDING
     return {"pending": pending}
 
+
 # ========== Static UI Mount ==========
 app.mount("/", StaticFiles(directory="ui", html=True), name="static")
 
 # Apply automatic logging to all functions in this module
 import sys
 from .disable import patch_module_functions, log_event
-patch_module_functions(sys.modules[__name__], "server")
 
+patch_module_functions(sys.modules[__name__], "server")
