@@ -197,6 +197,28 @@ def test_goal_similarity_check_runs(tmp_path, monkeypatch):
     assert calls == [200, 50]
 
 
+def test_check_and_generate_goals_dedup(tmp_path, monkeypatch):
+    monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
+    chat_id = "gen_dedup"
+    state = {
+        "character_profile": "p",
+        "scene_context": "s",
+        "goals": [{"id": "g1", "description": "old", "method": ""}],
+        "messages_since_goal_eval": 5,
+    }
+    os.makedirs(tmp_path / chat_id, exist_ok=True)
+    with open(tmp_path / chat_id / "state.json", "w", encoding="utf-8") as f:
+        json.dump(state, f)
+
+    def fake_call(_prompt, max_tokens=200, **kwargs):
+        return {"choices": [{"text": '[{"description":"OLD","method":""}, {"description":"new","method":""}]'}]}
+
+    goal_tracker.check_and_generate_goals(fake_call, chat_id)
+    new_state = json.loads((tmp_path / chat_id / "state.json").read_text())
+    descs = {g["description"].lower() for g in new_state["goals"]}
+    assert descs == {"old", "new"}
+
+
 def test_evaluate_and_update_goals_backoff(tmp_path, monkeypatch):
     monkeypatch.setattr("goal_tracker.CHATS_DIR", tmp_path)
     chat_id = "backoff"
