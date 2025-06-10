@@ -6,6 +6,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .server_log import myth_log
+
 from . import model_launch, model_call
 
 app = FastAPI(title="Myth Forge Server")
@@ -69,7 +71,10 @@ def goals_path(chat_id: str) -> str:
 def goals_exists(chat_id: str) -> bool:
     """Return ``True`` if goals are enabled for ``chat_id``."""
 
-    return os.path.exists(goals_path(chat_id))
+    path = goals_path(chat_id)
+    exists = os.path.exists(path)
+    myth_log("goals_check", chat_id=chat_id, exists=exists)
+    return exists
 
 
 def import_message_data(req: ChatRequest) -> ChatRequest:
@@ -102,12 +107,30 @@ def write_text_file(path: str, text: str) -> None:
 
 
 def make_model_call(system_text: str, user_text: str, call_type: str):
-    """Return a model call based on ``call_type``."""
+    """Return a model call based on ``call_type`` with logging."""
 
     prompt = model_call.model_call(system_text, user_text, call_type)
+    myth_log("model_input", prompt=prompt)
     kwargs = model_launch.GENERATION_CONFIG.copy()
     kwargs["stream"] = call_type == "standard_chat"
-    return model_launch.call_llm(prompt, **kwargs)
+    result = model_launch.call_llm(prompt, **kwargs)
+
+    if kwargs["stream"]:
+
+        def _stream():
+            parts = []
+            for chunk in result:
+                text = chunk["choices"][0]["text"]
+                parts.append(text)
+                yield chunk
+            myth_log("model_output", raw="".join(parts))
+
+        return _stream()
+
+    if isinstance(result, dict):
+        text = result.get("choices", [{}])[0].get("text", "")
+        myth_log("model_output", raw=text)
+    return result
 
 
 # --- Global prompt utilities ----------------------------------------------
