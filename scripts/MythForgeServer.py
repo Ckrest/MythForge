@@ -73,9 +73,13 @@ def goals_exists(chat_id: str) -> bool:
 
 
 def import_message_data(req: ChatRequest) -> ChatRequest:
-    """Return ``req`` with a default ``call_type`` of ``user_message``."""
+    """Return ``req`` with resolved prompt content and default ``call_type``."""
 
     req.call_type = req.call_type or "user_message"
+    if req.global_prompt:
+        content = get_global_prompt_content(req.global_prompt)
+        if content is not None:
+            req.global_prompt = content
     return req
 
 
@@ -550,6 +554,7 @@ def chat_received(req: ChatRequest):
 def chat(req: ChatRequest):
     """Return a standard model-generated reply."""
 
+    req = import_message_data(req)
     return model_call.chat(req)
 
 
