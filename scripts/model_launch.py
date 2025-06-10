@@ -85,6 +85,10 @@ for key in (
     if key in MODEL_SETTINGS and MODEL_SETTINGS[key] is not None:
         _model_config[key] = MODEL_SETTINGS[key]
 
+# Default to full GPU utilization when not specified
+if "n_gpu_layers" not in _model_config:
+    _model_config["n_gpu_layers"] = -1
+
 try:
     sig = inspect.signature(Llama)
     if "add_bos" in sig.parameters:
