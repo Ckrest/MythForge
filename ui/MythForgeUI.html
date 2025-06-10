@@ -144,7 +144,8 @@
             overflow-y:auto;
         }
         .modal-content label{display:block;margin-top:10px;}
-        .modal-actions{text-align:right;margin-top:15px;}
+        .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px;}
+        .modal-actions .left-actions{margin-right:auto;}
         .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; }
         .top-controls { padding: 10px; border-bottom: 1px solid var(--border-color); background: var(--bg-color); display: flex; gap: 0.5em; align-items: center; }
         .chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; background-color: var(--chat-bg);  -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
@@ -305,6 +306,7 @@
             <h2 id="dialog-title"></h2>
             <div id="dialog-body"></div>
             <div class="modal-actions">
+                <div id="dialog-left" class="left-actions"></div>
                 <button id="dialog-cancel-btn">Cancel</button>
                 <button id="dialog-ok-btn">OK</button>
             </div>
@@ -386,6 +388,7 @@
         const dialogBody       = document.getElementById('dialog-body');
         const dialogOkBtn      = document.getElementById('dialog-ok-btn');
         const dialogCancelBtn  = document.getElementById('dialog-cancel-btn');
+        const dialogLeft       = document.getElementById('dialog-left');
         const hideTab          = document.getElementById('hide-tab');
         const chatTab          = document.getElementById('chat-tab');
         const promptTab        = document.getElementById('prompt-tab');
@@ -513,6 +516,7 @@
        function openDialog(opts){
             dialogTitle.textContent = opts.title || '';
             dialogBody.innerHTML = opts.body || '';
+            dialogLeft.innerHTML  = opts.extraLeft || '';
             dialogOkBtn.textContent = opts.okText || 'OK';
             dialogOkBtn.onclick = () => {
                 if (opts.onOk) opts.onOk();
@@ -543,6 +547,7 @@
             }
             dialogModal.style.display='none';
             dialogBody.innerHTML='';
+            dialogLeft.innerHTML='';
             dialogOkBtn.onclick=null;
         }
 
@@ -885,24 +890,64 @@
         }
 
         async function renameChat(oldId){
-            promptText('Enter new chat name:', oldId, async (trimmed)=>{
-                if(trimmed === oldId) return;
-                if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
-                try{
-                    const res = await apiFetch(`/chat/${encodeURIComponent(oldId)}`, {
-                        method:'PUT',
-                        headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({new_id: trimmed})
-                    });
-                    if(!res.ok){
-                        const err = await res.json().catch(()=>({detail:'Server error'}));
-                        throw new Error(err.detail||'Server error');
+            openDialog({
+                title: 'Edit Chat',
+                body:`<input id="dialog-input" type="text" style="width:100%;" value="${oldId}">`+
+                     `<div id="goals-context" style="display:none;margin-top:10px;">`+
+                     `<textarea id="character-input" rows="5" placeholder="Character"></textarea>`+
+                     `<textarea id="setting-input" rows="5" placeholder="Setting" style="margin-top:10px;"></textarea>`+
+                     `</div>`,
+                okText:'Save',
+                extraLeft:`<button id="goals-toggle-btn">Enable Goals</button>`,
+                onOk: async ()=>{
+                    const trimmed = document.getElementById('dialog-input').value.trim();
+                    if(!trimmed){ alert('Name cannot be empty.'); return; }
+                    if(trimmed !== oldId){
+                        if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
+                        try{
+                            const res = await apiFetch(`/chat/${encodeURIComponent(oldId)}`, {
+                                method:'PUT',
+                                headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({new_id: trimmed})
+                            });
+                            if(!res.ok){
+                                const err = await res.json().catch(()=>({detail:'Server error'}));
+                                throw new Error(err.detail||'Server error');
+                            }
+                        }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); return; }
+                        await fetchChatList();
+                        state.currentChatId = trimmed;
+                        localStorage.setItem('lastChatId', trimmed);
+                        renderHistory();
                     }
-                    await fetchChatList();
-                    state.currentChatId = trimmed;
-                    localStorage.setItem('lastChatId', trimmed);
-                    renderHistory();
-                }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); }
+                    if(document.getElementById('goals-context').style.display!=='none'){
+                        const character = document.getElementById('character-input').value;
+                        const setting = document.getElementById('setting-input').value;
+                        try{
+                            await apiFetch(`/chat/${encodeURIComponent(trimmed)}/context`, {
+                                method:'PUT',
+                                headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({character, setting})
+                            });
+                        }catch(e){ console.error('Failed to save context:', e); }
+                    }
+                }
+            });
+            const toggleBtn = document.getElementById('goals-toggle-btn');
+            const contextDiv = document.getElementById('goals-context');
+            toggleBtn.addEventListener('click', async ()=>{
+                if(contextDiv.style.display==='none'){
+                    try{
+                        await apiFetch(`/chat/${encodeURIComponent(oldId)}/goals`, {
+                            method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:''})
+                        });
+                    }catch(e){ console.error('Failed to create goals:', e); }
+                    contextDiv.style.display='block';
+                    toggleBtn.textContent='Disable Goals';
+                }else{
+                    contextDiv.style.display='none';
+                    toggleBtn.textContent='Enable Goals';
+                }
             });
         }
 
