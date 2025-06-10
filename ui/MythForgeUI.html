@@ -508,6 +508,8 @@
 
         function closeSettings(){ settingsModal.style.display='none'; }
 
+       let dialogInputListener = null;
+
        function openDialog(opts){
             dialogTitle.textContent = opts.title || '';
             dialogBody.innerHTML = opts.body || '';
@@ -519,9 +521,26 @@
             dialogCancelBtn.onclick = closeDialog;
             resizeModal(dialogModal);
             dialogModal.style.display = 'flex';
+            const field = dialogBody.querySelector('input, textarea');
+            if(field){
+                field.focus();
+                if(field.select) field.select();
+                dialogInputListener = (e)=>{
+                    if(e.key==='Enter' && !e.shiftKey){
+                        e.preventDefault();
+                        dialogOkBtn.click();
+                    }
+                };
+                field.addEventListener('keydown', dialogInputListener);
+            }
         }
 
         function closeDialog(){
+            if(dialogInputListener){
+                const field = dialogBody.querySelector('input, textarea');
+                if(field) field.removeEventListener('keydown', dialogInputListener);
+                dialogInputListener = null;
+            }
             dialogModal.style.display='none';
             dialogBody.innerHTML='';
             dialogOkBtn.onclick=null;
