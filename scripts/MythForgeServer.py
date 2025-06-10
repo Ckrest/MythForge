@@ -59,6 +59,24 @@ def ensure_chat_dir(chat_id: str) -> str:
     return path
 
 
+def make_user_model_call(system_text: str, user_text: str):
+    """Return a streaming model call using ``system_text`` and ``user_text``."""
+
+    prompt = model_call.user_model_call(system_text, user_text)
+    kwargs = model_launch.GENERATION_CONFIG.copy()
+    kwargs["stream"] = True
+    return model_launch.call_llm(prompt, **kwargs)
+
+
+def make_helper_model_call(system_text: str, user_text: str):
+    """Return a non-streaming model call using ``system_text`` and ``user_text``."""
+
+    prompt = model_call.helper_model_call(system_text, user_text)
+    kwargs = model_launch.GENERATION_CONFIG.copy()
+    kwargs["stream"] = False
+    return model_launch.call_llm(prompt, **kwargs)
+
+
 # --- Global prompt utilities ----------------------------------------------
 
 
@@ -191,9 +209,7 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(
-                    status_code=400, detail="Chat name already exists"
-                )
+                raise HTTPException(status_code=400, detail="Chat name already exists")
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -216,17 +232,13 @@ def save_item(
             os.rename(old_path, new_path)
             return
         if data is None:
-            raise HTTPException(
-                status_code=400, detail="No prompt data provided"
-            )
+            raise HTTPException(status_code=400, detail="No prompt data provided")
         save_global_prompt({"name": name, "content": str(data)})
         return
 
     if kind == "settings" and isinstance(data, dict):
         model_launch.MODEL_SETTINGS.update(data)
-        save_json(
-            model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS
-        )
+        save_json(model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS)
         for key in (
             "temperature",
             "top_k",
@@ -236,9 +248,7 @@ def save_item(
             "stop",
         ):
             if key in model_launch.MODEL_SETTINGS:
-                model_launch.GENERATION_CONFIG[key] = (
-                    model_launch.MODEL_SETTINGS[key]
-                )
+                model_launch.GENERATION_CONFIG[key] = model_launch.MODEL_SETTINGS[key]
         model_launch.DEFAULT_MAX_TOKENS = model_launch.MODEL_SETTINGS.get(
             "max_tokens", model_launch.DEFAULT_MAX_TOKENS
         )
