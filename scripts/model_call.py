@@ -2,56 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, TYPE_CHECKING
+from typing import Iterable, List, TYPE_CHECKING
 
 import json
 from fastapi.responses import StreamingResponse
 
-from . import model_launch, model_response
+
+from . import model_response
 
 if TYPE_CHECKING:
     from .MythForgeServer import ChatRequest
 
 
-def build_prompt(
-    messages: List[Dict[str, str]], global_prompt: str | None = None
-) -> str:
-    """Return a prompt string for the model."""
+def format_for_model(system_text: str, user_text: str) -> str:
+    """Return ``system_text`` and ``user_text`` formatted for the model."""
 
-    parts: List[str] = []
-    if global_prompt:
-        parts.append(global_prompt.strip())
-    for msg in messages:
-        role = msg.get("role", "user").upper()
-        content = msg.get("content", "").strip()
-        parts.append(f"{role}: {content}")
-    parts.append("ASSISTANT:")
-    return "\n".join(parts)
-
-
-def call_model(
-    messages: List[Dict[str, str]],
-    *,
-    global_prompt: str | None = None,
-    stream: bool | None = None,
-) -> Iterable[Dict[str, object]]:
-    """Build a prompt and send it to the model via ``call_llm``."""
-
-    prompt = build_prompt(messages, global_prompt)
-    kwargs: Dict[str, object] = model_launch.GENERATION_CONFIG.copy()
-    if stream is not None:
-        kwargs["stream"] = stream
-    else:
-        kwargs["stream"] = model_launch.MODEL_SETTINGS.get("stream", False)
-    return model_launch.call_llm(prompt, **kwargs)
-
-
-def call_tagged(
-    system_text: str, user_text: str, *, stream: bool | None = None
-) -> Iterable[Dict[str, object]]:
-    """Call the model using the header-tagged prompt format."""
-
-    prompt = (
+    return (
         "<|start_header_id|>system<|end_header_id|>\n"
         f"{system_text}\n"
         "<|eot_id|>\n"
@@ -60,24 +26,35 @@ def call_tagged(
         "<|eot_id|>\n"
         "<|start_header_id|>assistant<|end_header_id|>\n"
     )
-    kwargs: Dict[str, object] = model_launch.GENERATION_CONFIG.copy()
-    if stream is not None:
-        kwargs["stream"] = stream
-    else:
-        kwargs["stream"] = model_launch.MODEL_SETTINGS.get("stream", False)
-    return model_launch.call_llm(prompt, **kwargs)
+
+
+def user_model_call(system_text: str, user_text: str) -> str:
+    """Return a prompt for a streaming model call."""
+
+    return format_for_model(system_text, user_text)
+
+
+def helper_model_call(system_text: str, user_text: str) -> str:
+    """Return a prompt for a standard model call."""
+
+    return format_for_model(system_text, user_text)
 
 
 def chat_stream(req: "ChatRequest"):
     """Stream a reply from the model and store it in chat history."""
 
-    from .MythForgeServer import ensure_chat_dir, load_item, save_item
+    from .MythForgeServer import (
+        ensure_chat_dir,
+        load_item,
+        save_item,
+        make_user_model_call,
+    )
 
     ensure_chat_dir(req.chat_id)
     history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
 
-    chunks = call_tagged(req.global_prompt or "", req.message, stream=True)
+    chunks = make_user_model_call(req.global_prompt or "", req.message)
     parts: List[str] = []
 
     def generate():
@@ -96,12 +73,17 @@ def chat_stream(req: "ChatRequest"):
 def chat(req: "ChatRequest"):
     """Return a standard model reply and store it in chat history."""
 
-    from .MythForgeServer import ensure_chat_dir, load_item, save_item
+    from .MythForgeServer import (
+        ensure_chat_dir,
+        load_item,
+        save_item,
+        make_helper_model_call,
+    )
 
     ensure_chat_dir(req.chat_id)
     history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
-    output = call_tagged(req.global_prompt or "", req.message, stream=False)
+    output = make_helper_model_call(req.global_prompt or "", req.message)
     if isinstance(output, Iterable):
         output = next(iter(output), {})
     assistant_reply = model_response.parse_response(output)
