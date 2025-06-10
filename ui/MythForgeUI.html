@@ -164,6 +164,7 @@
         textarea { width: 100%; padding: 12px 110px 12px 12px; border: 1px solid var(--border-color); border-radius: 6px; resize: none; min-height: 24px; max-height: 200px; overflow-y: auto; font-family: inherit; font-size: var(--message-font-size); line-height: 1.4; background-color: var(--input-bg); color: var(--text-color); }
         textarea.blocked { border: 2px solid var(--primary); }
         textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--shadow-color); }
+        .modal-content textarea { max-height: calc(90vh - 160px); padding: 12px; box-sizing: border-box; }
         .input-area { border-top: 1px solid var(--border-color); padding: 20px; background-color: var(--bg-color); position: relative; }
         .input-container { display: flex; width: 100%; max-width: none; margin: 0; position: relative; }
         .send-button { position: absolute; right: 8px; bottom: 8px; background: none; border: none; cursor: pointer; color: var(--primary); padding: 5px; border-radius: 4px; }
