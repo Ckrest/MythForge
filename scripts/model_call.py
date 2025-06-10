@@ -12,19 +12,18 @@ if TYPE_CHECKING:
     from .MythForgeServer import ChatRequest
 
 
-def clean_text(text: str) -> str:
-    """Return ``text`` with tokens removed while preserving spaces."""
+def clean_text(text: str, *, trim: bool = False) -> str:
+    """Return ``text`` with tokens removed and optional trimming."""
 
     cleaned = text.replace("<|eot_id|>", "")
-    cleaned = text.replace("<|eot_id|>", "").strip()
-    return cleaned
+    return cleaned.strip() if trim else cleaned
 
 
 def parse_response(output: dict) -> str:
     """Extract and clean the text portion from a model call result."""
 
     text = output.get("choices", [{}])[0].get("text", "")
-    return clean_text(text)
+    return clean_text(text, trim=True)
 
 
 def stream_parsed(chunks: Iterable[dict]) -> Iterator[str]:
