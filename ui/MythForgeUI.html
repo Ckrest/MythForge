@@ -1134,7 +1134,7 @@
             updateBusyUI();
             abortController = new AbortController();
             try{
-                const response = await apiFetch('/chat/stream', {
+                const response = await apiFetch('/chat/received', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({
