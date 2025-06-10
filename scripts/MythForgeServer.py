@@ -59,6 +59,24 @@ def ensure_chat_dir(chat_id: str) -> str:
     return path
 
 
+def read_text_file(path: str) -> str:
+    """Return the contents of ``path`` as a string."""
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            print(f"Failed to read text from '{path}': {e}")
+    return ""
+
+
+def write_text_file(path: str, text: str) -> None:
+    """Write ``text`` to ``path`` creating directories as needed."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
 def make_model_call(system_text: str, user_text: str, call_type: str):
     """Return a model call based on ``call_type``."""
 
@@ -391,6 +409,50 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
 
     save_item("chat_history", chat_id, new_name=new_id)
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
+
+
+@app.get("/chat/{chat_id}/goals")
+def get_goals(chat_id: str):
+    """Return the text content of ``goals`` for ``chat_id``."""
+    return {"content": read_text_file(chat_file(chat_id, "goals"))}
+
+
+@app.put("/chat/{chat_id}/goals")
+def save_goals(chat_id: str, data: Dict[str, str]):
+    """Save ``data['text']`` into the chat's ``goals`` file."""
+    write_text_file(chat_file(chat_id, "goals"), data.get("text", ""))
+    return {"detail": "Saved"}
+
+
+@app.get("/chat/{chat_id}/context")
+def get_context_file(chat_id: str):
+    """Return the character/setting context for ``chat_id``."""
+    path = chat_file(chat_id, "context")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return {
+                    "character": data.get("character", ""),
+                    "setting": data.get("setting", ""),
+                }
+        except Exception as e:
+            print(f"Failed to load context for '{chat_id}': {e}")
+    return {"character": "", "setting": ""}
+
+
+@app.put("/chat/{chat_id}/context")
+def save_context_file(chat_id: str, data: Dict[str, str]):
+    """Save character/setting context for ``chat_id``."""
+    ensure_chat_dir(chat_id)
+    obj = {
+        "character": data.get("character", ""),
+        "setting": data.get("setting", ""),
+    }
+    with open(chat_file(chat_id, "context"), "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2, ensure_ascii=False)
+    return {"detail": "Saved"}
 
 
 @app.post("/message")
