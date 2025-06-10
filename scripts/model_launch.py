@@ -104,7 +104,9 @@ except Exception:  # pragma: no cover
 
 
 def call_llm(prompt: str, **kwargs):
-    """Call the ``llm`` object and log all raw text outputs."""
+    """Call the ``llm`` object and log the prompt and raw output."""
+
+    myth_log("llm_prompt", prompt=prompt)
 
     if _CALL_KWARGS:
         filtered = {k: v for k, v in kwargs.items() if k in _CALL_KWARGS}
@@ -114,10 +116,12 @@ def call_llm(prompt: str, **kwargs):
     if filtered.get("stream"):
 
         def _stream():
+            parts = []
             for chunk in llm(prompt, **filtered):
                 text = chunk["choices"][0]["text"]
-                myth_log("llm_raw_output", raw=text)
+                parts.append(text)
                 yield chunk
+            myth_log("llm_raw_output", raw="".join(parts))
 
         return _stream()
 
