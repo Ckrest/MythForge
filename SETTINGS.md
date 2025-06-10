@@ -9,6 +9,8 @@ This document lists available server settings that can be changed from the **Mor
 - **Top P** – nucleus sampling cutoff.
 - **Min P** – minimum probability for nucleus sampling.
 - **Repeat Penalty** – discourages repeating text.
+- **GPU Layers** – number of layers to offload to GPU.
+  Default: `-1` for maximum utilization.
 
 ## Goals
 - **Goal Refresh Rate** – how often new goals are generated. Default: `1`.
