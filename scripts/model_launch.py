@@ -7,7 +7,7 @@ import json
 import os
 from typing import Dict
 
-from llama_cpp import Llama
+from llama_cpp import Llama, llama_print_system_info
 
 
 MODELS_DIR = "models"
@@ -99,6 +99,19 @@ except Exception:
     pass
 
 llm = Llama(**_model_config)
+
+
+def show_system_info() -> None:
+    """Print llama.cpp system info for debugging GPU usage."""
+
+    try:
+        info = llama_print_system_info()
+        print(info)
+    except Exception as exc:  # pragma: no cover - best effort
+        print(f"Failed to get system info: {exc}")
+
+
+show_system_info()
 
 try:
     _CALL_KWARGS = set(inspect.signature(llm.__call__).parameters)
