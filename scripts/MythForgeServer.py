@@ -467,10 +467,10 @@ def save_goals(chat_id: str, data: Dict[str, str]):
 
 @app.post("/chat/{chat_id}/goals/disable")
 def disable_goals(chat_id: str):
-    """Disable goals for ``chat_id`` by renaming the file."""
+    """Disable goals for ``chat_id`` by renaming the JSON file."""
 
     path = goals_path(chat_id)
-    disabled = chat_file(chat_id, "goals_disabled")
+    disabled = chat_file(chat_id, "goals_disabled.json")
     if os.path.exists(path):
         os.rename(path, disabled)
     return {"detail": "Disabled"}
@@ -478,10 +478,10 @@ def disable_goals(chat_id: str):
 
 @app.post("/chat/{chat_id}/goals/enable")
 def enable_goals(chat_id: str):
-    """Re-enable goals for ``chat_id`` if a disabled file exists."""
+    """Re-enable goals for ``chat_id`` if a disabled JSON file exists."""
 
     path = goals_path(chat_id)
-    disabled = chat_file(chat_id, "goals_disabled")
+    disabled = chat_file(chat_id, "goals_disabled.json")
     if os.path.exists(disabled):
         os.rename(disabled, path)
     return {"detail": "Enabled"}
