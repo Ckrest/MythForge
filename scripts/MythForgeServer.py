@@ -460,7 +460,7 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
 
 @app.get("/chat/{chat_id}/goals")
 def get_goals(chat_id: str):
-    """Return character and setting goals for ``chat_id``."""
+    """Return goals data for ``chat_id`` including progress lists."""
 
     path = goals_path(chat_id)
     if os.path.exists(path):
@@ -472,20 +472,30 @@ def get_goals(chat_id: str):
                     "exists": True,
                     "character": data.get("character", ""),
                     "setting": data.get("setting", ""),
+                    "in_progress": data.get("in_progress", []),
+                    "completed": data.get("completed", []),
                 }
         except Exception as e:
             print(f"Failed to load goals for '{chat_id}': {e}")
-    return {"exists": False, "character": "", "setting": ""}
+    return {
+        "exists": False,
+        "character": "",
+        "setting": "",
+        "in_progress": [],
+        "completed": [],
+    }
 
 
 @app.put("/chat/{chat_id}/goals")
-def save_goals(chat_id: str, data: Dict[str, str]):
-    """Save character and setting goals for ``chat_id``."""
+def save_goals(chat_id: str, data: Dict[str, object]):
+    """Save goals for ``chat_id`` including progress tracking."""
 
     ensure_chat_dir(chat_id)
     obj = {
         "character": data.get("character", ""),
         "setting": data.get("setting", ""),
+        "in_progress": data.get("in_progress", []),
+        "completed": data.get("completed", []),
     }
     with open(goals_path(chat_id), "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
@@ -542,14 +552,25 @@ def get_context_file(chat_id: str):
 
 @app.put("/chat/{chat_id}/context")
 def save_context_file(chat_id: str, data: Dict[str, str]):
-    """Save character/setting context for ``chat_id``."""
+    """Save character/setting context for ``chat_id`` preserving progress."""
 
     ensure_chat_dir(chat_id)
     obj = {
         "character": data.get("character", ""),
         "setting": data.get("setting", ""),
     }
-    with open(goals_path(chat_id), "w", encoding="utf-8") as f:
+    # Preserve goal progress if file already exists
+    path = goals_path(chat_id)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+            if isinstance(existing, dict):
+                obj["in_progress"] = existing.get("in_progress", [])
+                obj["completed"] = existing.get("completed", [])
+        except Exception as e:
+            print(f"Failed to load existing goals for '{chat_id}': {e}")
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
     return {"detail": "Saved"}
 
