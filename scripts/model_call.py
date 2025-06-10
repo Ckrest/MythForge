@@ -9,6 +9,7 @@ import os
 from .server_log import myth_log
 
 import json
+import re
 from fastapi.responses import StreamingResponse
 
 
@@ -172,24 +173,78 @@ def _save_goal_state(chat_id: str, state: Dict[str, object]) -> None:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
 
+def _find_json_chunk(text: str) -> str | None:
+    """Return the first valid JSON substring found in ``text``."""
+
+    braces = ("{", "}")
+    start = text.find(braces[0])
+    end = text.rfind(braces[1])
+    if 0 <= start < end:
+        chunk = text[start : end + 1]
+        try:
+            json.loads(chunk)
+            return chunk
+        except Exception:
+            pass
+
+    brackets = ("[", "]")
+    start = text.find(brackets[0])
+    end = text.rfind(brackets[1])
+    if 0 <= start < end:
+        chunk = text[start : end + 1]
+        try:
+            json.loads(chunk)
+            return chunk
+        except Exception:
+            pass
+    return None
+
+
 def _parse_goals_from_response(text: str) -> List[Dict[str, str]]:
     """Return a goal list parsed from ``text`` if possible."""
 
+    data: object | None = None
     try:
         data = json.loads(text)
-        if isinstance(data, dict) and isinstance(data.get("goals"), list):
-            goals = []
-            for item in data["goals"]:
-                if not isinstance(item, dict):
-                    continue
+    except Exception:
+        json_chunk = _find_json_chunk(text)
+        if json_chunk is not None:
+            try:
+                data = json.loads(json_chunk)
+            except Exception:
+                data = None
+
+    goals: List[Dict[str, str]] = []
+    items: list | None = None
+    if isinstance(data, dict) and isinstance(data.get("goals"), list):
+        items = data["goals"]
+    elif isinstance(data, list):
+        items = data
+
+    if items is not None:
+        for item in items:
+            if isinstance(item, dict):
                 desc = str(item.get("description", "")).strip()
                 method = str(item.get("method", "")).strip()
-                if desc:
-                    goals.append({"description": desc, "method": method})
-            return goals
-    except Exception:
-        pass
-    return []
+                if not desc and isinstance(item.get("text"), str):
+                    desc = item["text"].strip()
+            else:
+                desc = str(item).strip()
+                method = ""
+            if desc:
+                goals.append({"description": desc, "method": method})
+        return goals
+
+    for line in text.splitlines():
+        line = line.strip(" -*\t")
+        if not line:
+            continue
+        parts = re.split(r"\s*-\s*|:\s*", line, maxsplit=1)
+        desc = parts[0].lstrip("0123456789. ").strip()
+        method = parts[1].strip() if len(parts) > 1 else ""
+        if desc:
+            goals.append({"description": desc, "method": method})
+    return goals
 
 
 def _dedupe_new_goals(
@@ -224,7 +279,9 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
         return
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    state["messages_since_goal_eval"] = (
+        state.get("messages_since_goal_eval", 0) + 1
+    )
 
     refresh = model_launch.MODEL_SETTINGS.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
