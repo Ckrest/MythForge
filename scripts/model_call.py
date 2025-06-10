@@ -13,10 +13,12 @@ if TYPE_CHECKING:
 
 
 def clean_text(text: str) -> str:
-    """Return ``text`` with tokens removed while preserving spaces."""
+    """Return ``text`` with known tokens removed while preserving spaces."""
 
-    cleaned = text.replace("<|eot_id|>", "").strip()
-    return cleaned
+    cleaned = text
+    for token in ("<|eot_id|>", "<|start_header_id|>", "<|end_header_id|>"):
+        cleaned = cleaned.replace(token, "")
+    return cleaned.strip()
 
 
 def parse_response(output: dict) -> str:
