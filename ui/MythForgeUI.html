@@ -970,7 +970,7 @@
             editBtn.onclick=(e)=>{ e.stopPropagation(); closeMessageMenu(); editMessage(idx,current); };
             const delBtn=document.createElement('button');
             delBtn.textContent='Delete';
-            delBtn.onclick=(e)=>{ e.stopPropagation(); closeMessageMenu(); deleteMessage(idx); };
+            delBtn.onclick=(e)=>{ e.stopPropagation(); deleteMessage(idx); closeMessageMenu(); };
             menu.appendChild(editBtn); menu.appendChild(delBtn);
             div.appendChild(menu);
             activeMenu = menu;
