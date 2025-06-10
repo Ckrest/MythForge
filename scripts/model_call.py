@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 def clean_text(text: str) -> str:
     """Return ``text`` with tokens removed while preserving spaces."""
 
-    cleaned = text.replace("<|eot_id|>", "")
+    cleaned = text.replace("<|eot_id|>", "").strip()
     return cleaned
 
 
