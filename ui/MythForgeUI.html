@@ -890,15 +890,20 @@
         }
 
         async function renameChat(oldId){
+            let goalsData = {exists:false, character:'', setting:''};
+            try{
+                const res = await apiFetch(`/chat/${encodeURIComponent(oldId)}/goals`);
+                if(res.ok) goalsData = await res.json();
+            }catch(e){ console.error('Failed to load goals:', e); }
             openDialog({
                 title: 'Edit Chat',
                 body:`<input id="dialog-input" type="text" style="width:100%;" value="${oldId}">`+
-                     `<div id="goals-context" style="display:none;margin-top:10px;">`+
-                     `<textarea id="character-input" rows="5" placeholder="Character"></textarea>`+
-                     `<textarea id="setting-input" rows="5" placeholder="Setting" style="margin-top:10px;"></textarea>`+
+                     `<div id="goals-context" style="display:${goalsData.exists?'block':'none'};margin-top:10px;">`+
+                     `<textarea id="character-input" rows="5" placeholder="Character">${goalsData.character||''}</textarea>`+
+                     `<textarea id="setting-input" rows="5" placeholder="Setting" style="margin-top:10px;">${goalsData.setting||''}</textarea>`+
                      `</div>`,
                 okText:'Save',
-                extraLeft:`<button id="goals-toggle-btn">Enable Goals</button>`,
+                extraLeft:`<button id="goals-toggle-btn">${goalsData.exists?'Disable Goals':'Enable Goals'}</button>`,
                 onOk: async ()=>{
                     const trimmed = document.getElementById('dialog-input').value.trim();
                     if(!trimmed){ alert('Name cannot be empty.'); return; }
@@ -924,12 +929,12 @@
                         const character = document.getElementById('character-input').value;
                         const setting = document.getElementById('setting-input').value;
                         try{
-                            await apiFetch(`/chat/${encodeURIComponent(trimmed)}/context`, {
+                            await apiFetch(`/chat/${encodeURIComponent(trimmed)}/goals`, {
                                 method:'PUT',
                                 headers:{'Content-Type':'application/json'},
                                 body: JSON.stringify({character, setting})
                             });
-                        }catch(e){ console.error('Failed to save context:', e); }
+                        }catch(e){ console.error('Failed to save goals:', e); }
                     }
                 }
             });
@@ -937,14 +942,11 @@
             const contextDiv = document.getElementById('goals-context');
             toggleBtn.addEventListener('click', async ()=>{
                 if(contextDiv.style.display==='none'){
-                    try{
-                        await apiFetch(`/chat/${encodeURIComponent(oldId)}/goals`, {
-                            method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:''})
-                        });
-                    }catch(e){ console.error('Failed to create goals:', e); }
+                    try{ await apiFetch(`/chat/${encodeURIComponent(oldId)}/goals/enable`, {method:'POST'}); }catch(e){ console.error('Enable goals failed:', e); }
                     contextDiv.style.display='block';
                     toggleBtn.textContent='Disable Goals';
                 }else{
+                    try{ await apiFetch(`/chat/${encodeURIComponent(oldId)}/goals/disable`, {method:'POST'}); }catch(e){ console.error('Disable goals failed:', e); }
                     contextDiv.style.display='none';
                     toggleBtn.textContent='Enable Goals';
                 }

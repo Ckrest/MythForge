@@ -59,6 +59,18 @@ def ensure_chat_dir(chat_id: str) -> str:
     return path
 
 
+def goals_path(chat_id: str) -> str:
+    """Return the path to ``chat_id``'s goals JSON file."""
+
+    return chat_file(chat_id, "goals.json")
+
+
+def goals_exists(chat_id: str) -> bool:
+    """Return ``True`` if goals are enabled for ``chat_id``."""
+
+    return os.path.exists(goals_path(chat_id))
+
+
 def read_text_file(path: str) -> str:
     """Return the contents of ``path`` as a string."""
     if os.path.exists(path):
@@ -218,7 +230,9 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(status_code=400, detail="Chat name already exists")
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -241,13 +255,17 @@ def save_item(
             os.rename(old_path, new_path)
             return
         if data is None:
-            raise HTTPException(status_code=400, detail="No prompt data provided")
+            raise HTTPException(
+                status_code=400, detail="No prompt data provided"
+            )
         save_global_prompt({"name": name, "content": str(data)})
         return
 
     if kind == "settings" and isinstance(data, dict):
         model_launch.MODEL_SETTINGS.update(data)
-        save_json(model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS)
+        save_json(
+            model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS
+        )
         for key in (
             "temperature",
             "top_k",
@@ -257,7 +275,9 @@ def save_item(
             "stop",
         ):
             if key in model_launch.MODEL_SETTINGS:
-                model_launch.GENERATION_CONFIG[key] = model_launch.MODEL_SETTINGS[key]
+                model_launch.GENERATION_CONFIG[key] = (
+                    model_launch.MODEL_SETTINGS[key]
+                )
         model_launch.DEFAULT_MAX_TOKENS = model_launch.MODEL_SETTINGS.get(
             "max_tokens", model_launch.DEFAULT_MAX_TOKENS
         )
@@ -413,21 +433,72 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
 
 @app.get("/chat/{chat_id}/goals")
 def get_goals(chat_id: str):
-    """Return the text content of ``goals`` for ``chat_id``."""
-    return {"content": read_text_file(chat_file(chat_id, "goals"))}
+    """Return character and setting goals for ``chat_id``."""
+
+    path = goals_path(chat_id)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return {
+                    "exists": True,
+                    "character": data.get("character", ""),
+                    "setting": data.get("setting", ""),
+                }
+        except Exception as e:
+            print(f"Failed to load goals for '{chat_id}': {e}")
+    return {"exists": False, "character": "", "setting": ""}
 
 
 @app.put("/chat/{chat_id}/goals")
 def save_goals(chat_id: str, data: Dict[str, str]):
-    """Save ``data['text']`` into the chat's ``goals`` file."""
-    write_text_file(chat_file(chat_id, "goals"), data.get("text", ""))
+    """Save character and setting goals for ``chat_id``."""
+
+    ensure_chat_dir(chat_id)
+    obj = {
+        "character": data.get("character", ""),
+        "setting": data.get("setting", ""),
+    }
+    with open(goals_path(chat_id), "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2, ensure_ascii=False)
     return {"detail": "Saved"}
+
+
+@app.post("/chat/{chat_id}/goals/disable")
+def disable_goals(chat_id: str):
+    """Disable goals for ``chat_id`` by renaming the file."""
+
+    path = goals_path(chat_id)
+    disabled = chat_file(chat_id, "goals_disabled")
+    if os.path.exists(path):
+        os.rename(path, disabled)
+    return {"detail": "Disabled"}
+
+
+@app.post("/chat/{chat_id}/goals/enable")
+def enable_goals(chat_id: str):
+    """Re-enable goals for ``chat_id`` if a disabled file exists."""
+
+    path = goals_path(chat_id)
+    disabled = chat_file(chat_id, "goals_disabled")
+    if os.path.exists(disabled):
+        os.rename(disabled, path)
+    return {"detail": "Enabled"}
+
+
+@app.get("/chat/{chat_id}/goals_enabled")
+def goals_enabled_endpoint(chat_id: str):
+    """Return whether goals exist for ``chat_id``."""
+
+    return {"enabled": goals_exists(chat_id)}
 
 
 @app.get("/chat/{chat_id}/context")
 def get_context_file(chat_id: str):
     """Return the character/setting context for ``chat_id``."""
-    path = chat_file(chat_id, "context")
+
+    path = goals_path(chat_id)
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -445,12 +516,13 @@ def get_context_file(chat_id: str):
 @app.put("/chat/{chat_id}/context")
 def save_context_file(chat_id: str, data: Dict[str, str]):
     """Save character/setting context for ``chat_id``."""
+
     ensure_chat_dir(chat_id)
     obj = {
         "character": data.get("character", ""),
         "setting": data.get("setting", ""),
     }
-    with open(chat_file(chat_id, "context"), "w", encoding="utf-8") as f:
+    with open(goals_path(chat_id), "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
     return {"detail": "Saved"}
 
