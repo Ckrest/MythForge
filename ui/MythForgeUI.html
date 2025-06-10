@@ -900,9 +900,9 @@
             openDialog({
                 title: 'Edit Chat',
                 body:`<input id="dialog-input" type="text" style="width:100%;" value="${oldId}">`+
-                     `<div id="goals-context" style="display:none;margin-top:10px;">`+
-                     `<textarea id="character-input" rows="15" placeholder="Character"></textarea>`+
-                     `<textarea id="setting-input" rows="15" placeholder="Setting" style="margin-top:10px;"></textarea>`+
+                     `<div id="goals-context" style="display:${goalsData.exists?'block':'none'};margin-top:10px;">`+
+                     `<textarea id="character-input" rows="15" placeholder="Character">${goalsData.character||''}</textarea>`+
+                     `<textarea id="setting-input" rows="15" placeholder="Setting" style="margin-top:10px;">${goalsData.setting||''}</textarea>`+
                      `</div>`,
                 okText:'Save',
                 extraLeft:`<button id="goals-toggle-btn">${goalsData.exists?'Disable Goals':'Enable Goals'}</button>`,
