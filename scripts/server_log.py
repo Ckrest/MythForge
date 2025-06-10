@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import inspect as _inspect
-import json
 import os
 from datetime import datetime
 
@@ -27,5 +26,12 @@ def myth_log(*args, **kwargs) -> None:
 
     os.makedirs(LOG_DIR, exist_ok=True)
     path = os.path.join(LOG_DIR, f"{now.date()}.log")
+
+    lines = [f"[{entry['timestamp']}] {entry['caller']}"]
+    lines.extend(entry["args"])
+    for k, v in entry["kwargs"].items():
+        lines.append(f"{k}: {v}")
+    lines.append("")
+
     with open(path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(entry) + "\n")
+        fh.write("\n".join(lines))
