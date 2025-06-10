@@ -906,23 +906,7 @@
         }
 
         async function renamePrompt(oldName){
-            promptText('Enter new prompt name:', oldName, async (trimmed)=>{
-                if(trimmed.toLowerCase() !== oldName.trim().toLowerCase() && state.prompts.includes(trimmed))
-                    return alert('That name\u2019s already taken.');
-                try{
-                    const res = await apiFetch(`/prompts/${encodeURIComponent(oldName)}/rename`, {
-                        method:'PUT',
-                        headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({new_name: trimmed})
-                    });
-                    if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                    await refreshGlobalPromptList();
-                    state.currentPrompt = trimmed;
-                    localStorage.setItem('lastGlobalPrompt', trimmed);
-                    renderPromptList();
-                    await openPromptEditor(trimmed);
-                }catch(e){ alert('Failed to rename prompt: '+e.message); }
-            });
+            await openPromptEditor(oldName);
         }
 
         function autoResize(){ userInput.style.height='auto'; userInput.style.height=Math.min(userInput.scrollHeight,200)+'px'; }
