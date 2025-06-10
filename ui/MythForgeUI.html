@@ -139,7 +139,7 @@
             border-radius:8px;
             min-width:250px;
             width:90vw;
-            max-width:600px;
+            max-width:1000px;
             max-height:90vh;
             overflow-y:auto;
         }
@@ -291,7 +291,7 @@
             <h2 id="prompt-edit-title">Edit Prompt</h2>
             <label>Name <input id="prompt-name-input" type="text"></label>
             <label>Prompt</label>
-            <textarea id="prompt-edit-input" rows="8" style="width:100%;"></textarea>
+            <textarea id="prompt-edit-input" rows="20" style="width:100%;"></textarea>
             <div class="modal-actions">
                 <button id="prompt-edit-save-btn">Save</button>
             </div>
@@ -489,7 +489,7 @@
             if(!content) return;
             const vw = window.innerWidth;
             const vh = window.innerHeight;
-            content.style.maxWidth = Math.min(600, Math.round(vw * 0.9)) + 'px';
+            content.style.maxWidth = Math.min(1000, Math.round(vw * 0.9)) + 'px';
             content.style.maxHeight = Math.round(vh * 0.9) + 'px';
         }
 
@@ -536,7 +536,7 @@
         function promptTextarea(title, value, cb){
             openDialog({
                 title,
-                body:`<textarea id="dialog-area" rows="4" style="width:100%;">${value||''}</textarea>`,
+                body:`<textarea id="dialog-area" rows="20" style="width:100%;">${value||''}</textarea>`,
                 okText:'Save',
                 onOk:()=>{ const v=document.getElementById('dialog-area').value; cb(v); }
             });
