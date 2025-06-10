@@ -1,13 +1,12 @@
 import json
 import os
-from typing import Dict, List, Iterable
+from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import model_launch, model_call, model_response
+from . import model_launch, model_call
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -408,48 +407,14 @@ def save_message(req: ChatRequest):
 def chat_stream(req: ChatRequest):
     """Stream a model-generated reply and store it in chat history."""
 
-    ensure_chat_dir(req.chat_id)
-    history = load_item("chat_history", req.chat_id)
-    history.append({"role": "user", "content": req.message})
-
-    chunks = model_call.call_tagged(
-        req.global_prompt or "",
-        req.message,
-        stream=True,
-    )
-    parts: List[str] = []
-
-    def generate():
-        meta = {"prompt": req.global_prompt or ""}
-        yield json.dumps(meta) + "\n"
-        for text in model_response.stream_parsed(chunks):
-            parts.append(text)
-            yield text
-        assistant_reply = "".join(parts).strip()
-        history.append({"role": "assistant", "content": assistant_reply})
-        save_item("chat_history", req.chat_id, data=history)
-
-    return StreamingResponse(generate(), media_type="text/plain")
+    return model_call.chat_stream(req)
 
 
 @app.post("/chat")
 def chat(req: ChatRequest):
     """Return a standard model-generated reply."""
 
-    ensure_chat_dir(req.chat_id)
-    history = load_item("chat_history", req.chat_id)
-    history.append({"role": "user", "content": req.message})
-    output = model_call.call_tagged(
-        req.global_prompt or "",
-        req.message,
-        stream=False,
-    )
-    if isinstance(output, Iterable):
-        output = next(iter(output), {})
-    assistant_reply = model_response.parse_response(output)
-    history.append({"role": "assistant", "content": assistant_reply})
-    save_item("chat_history", req.chat_id, data=history)
-    return {"detail": assistant_reply}
+    return model_call.chat(req)
 
 
 # --- Static UI Mount ------------------------------------------------------
