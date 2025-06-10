@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from .server_log import myth_log
 
-from . import model_launch, model_call
+from . import model_launch, model_call, call_types
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -107,30 +107,37 @@ def write_text_file(path: str, text: str) -> None:
 
 
 def make_model_call(system_text: str, user_text: str, call_type: str):
-    """Return a model call based on ``call_type`` with logging."""
+    """Build prompt, call the model, and process the result."""
 
-    prompt = model_call.model_call(system_text, user_text, call_type)
+    build = getattr(
+        call_types, f"{call_type}_prompt", call_types.default_prompt
+    )
+    respond = getattr(
+        call_types, f"{call_type}_response", call_types.default_response
+    )
+
+    prompt = build(system_text, user_text)
     myth_log("model_input", prompt=prompt)
+
     kwargs = model_launch.GENERATION_CONFIG.copy()
     kwargs["stream"] = call_type == "standard_chat"
-    result = model_launch.call_llm(prompt, **kwargs)
+    raw = model_launch.call_llm(prompt, **kwargs)
+
+    output = respond(raw)
 
     if kwargs["stream"]:
 
         def _stream():
             parts = []
-            for chunk in result:
-                text = chunk["choices"][0]["text"]
+            for text in output:
                 parts.append(text)
-                yield chunk
+                yield text
             myth_log("model_output", raw="".join(parts))
 
         return _stream()
 
-    if isinstance(result, dict):
-        text = result.get("choices", [{}])[0].get("text", "")
-        myth_log("model_output", raw=text)
-    return result
+    myth_log("model_output", raw=str(output))
+    return output
 
 
 # --- Global prompt utilities ----------------------------------------------
@@ -265,7 +272,9 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(status_code=400, detail="Chat name already exists")
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -288,13 +297,17 @@ def save_item(
             os.rename(old_path, new_path)
             return
         if data is None:
-            raise HTTPException(status_code=400, detail="No prompt data provided")
+            raise HTTPException(
+                status_code=400, detail="No prompt data provided"
+            )
         save_global_prompt({"name": name, "content": str(data)})
         return
 
     if kind == "settings" and isinstance(data, dict):
         model_launch.MODEL_SETTINGS.update(data)
-        save_json(model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS)
+        save_json(
+            model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS
+        )
         for key in (
             "temperature",
             "top_k",
@@ -304,7 +317,9 @@ def save_item(
             "stop",
         ):
             if key in model_launch.MODEL_SETTINGS:
-                model_launch.GENERATION_CONFIG[key] = model_launch.MODEL_SETTINGS[key]
+                model_launch.GENERATION_CONFIG[key] = (
+                    model_launch.MODEL_SETTINGS[key]
+                )
         model_launch.DEFAULT_MAX_TOKENS = model_launch.MODEL_SETTINGS.get(
             "max_tokens", model_launch.DEFAULT_MAX_TOKENS
         )
