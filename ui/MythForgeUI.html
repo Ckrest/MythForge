@@ -489,7 +489,10 @@
             dialogTitle.textContent = opts.title || '';
             dialogBody.innerHTML = opts.body || '';
             dialogOkBtn.textContent = opts.okText || 'OK';
-            dialogOkBtn.onclick = () => { closeDialog(); opts.onOk && opts.onOk(); };
+            dialogOkBtn.onclick = () => {
+                if (opts.onOk) opts.onOk();
+                closeDialog();
+            };
             dialogCancelBtn.onclick = closeDialog;
             dialogModal.style.display = 'flex';
         }
