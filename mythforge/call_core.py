@@ -1,41 +1,53 @@
-"""Utilities for formatting prompts and calling the language model."""
-
 from __future__ import annotations
 
-from typing import Iterable, Iterator, List, TYPE_CHECKING, Dict
-
-import os
-
-from .server_log import myth_log
-
 import json
+import os
 import re
+from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING
+
 from fastapi.responses import StreamingResponse
 
+from .model import GENERATION_CONFIG, call_llm
+from .utils import (
+    CHATS_DIR,
+    chat_file,
+    ensure_chat_dir,
+    goals_exists,
+    goals_path,
+    load_json,
+    myth_log,
+    save_json,
+)
 
-if TYPE_CHECKING:
-    from .MythForgeServer import ChatRequest
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    from .main import ChatRequest
+
+
+# ---------------------------------------------------------------------------
+# Text helpers
+# ---------------------------------------------------------------------------
 
 
 def clean_text(text: str, *, trim: bool = False) -> str:
-    """Return ``text`` with tokens removed and optional trimming."""
+    """Return ``text`` with special tokens removed."""
 
     cleaned = text.replace("<|eot_id|>", "")
     return cleaned.strip() if trim else cleaned
 
 
-def parse_response(output: dict) -> str:
-    """Extract and clean the text portion from a model call result."""
+def parse_response(output: Dict[str, Any]) -> str:
+    """Extract and clean text from a model response chunk."""
+
     myth_log("pre_parse", raw=str(output))
     text = output.get("choices", [{}])[0].get("text", "")
     return clean_text(text, trim=True)
 
 
-def stream_parsed(chunks: Iterable[dict]) -> Iterator[str]:
-    """Yield cleaned text from a streaming model call."""
+def stream_parsed(chunks: Iterable[Dict[str, Any]]) -> Iterator[str]:
+    """Yield cleaned text from streaming model output."""
 
     for chunk in chunks:
-        yield clean_text(chunk.get("choices", [{}])[0].get("text", ""))
+        yield clean_text(chunk.get("choices", [{}]).get("text", ""))
 
 
 def format_for_model(system_text: str, user_text: str, call_type: str) -> str:
@@ -52,103 +64,16 @@ def format_for_model(system_text: str, user_text: str, call_type: str) -> str:
     )
 
 
-def model_call(system_text: str, user_text: str, call_type: str) -> str:
-    """Return a prompt for a model call based on ``call_type``."""
-
-    return format_for_model(system_text, user_text, call_type)
-
-
-def chat_stream(req: "ChatRequest"):
-    """Stream a reply from the model and store it in chat history."""
-
-    from .MythForgeServer import (
-        ensure_chat_dir,
-        load_item,
-        save_item,
-        make_model_call,
-        goals_exists,
-        goals_path,
-    )
-
-    ensure_chat_dir(req.chat_id)
-    history = load_item("chat_history", req.chat_id)
-    history.append({"role": "user", "content": req.message})
-
-    call_type = req.call_type or "user_message"
-
-    if call_type == "user_message":
-        system_parts = [req.global_prompt or ""]
-        if goals_exists(req.chat_id):
-            try:
-                with open(goals_path(req.chat_id), "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    if data.get("character"):
-                        system_parts.append(data["character"])
-                    if data.get("setting"):
-                        system_parts.append(data["setting"])
-            except Exception as e:  # pragma: no cover - best effort
-                print(f"Failed to load goals for '{req.chat_id}': {e}")
-        system_text = "\n".join(p for p in system_parts if p)
-        user_text = "\n".join(m["content"] for m in history)
-        stream = make_model_call(system_text, user_text, "standard_chat")
-    else:
-        stream = make_model_call(
-            req.global_prompt or "",
-            req.message,
-            "standard_chat",
-        )
-    parts: List[str] = []
-
-    def generate():
-        meta = {"prompt": req.global_prompt or ""}
-        yield json.dumps(meta) + "\n"
-        for text in stream:
-            parts.append(text)
-            yield text
-        assistant_reply = "".join(parts).strip()
-        history.append({"role": "assistant", "content": assistant_reply})
-        save_item("chat_history", req.chat_id, data=history)
-        _maybe_generate_goals(req.chat_id, req.global_prompt or "")
-
-    return StreamingResponse(generate(), media_type="text/plain")
-
-
-def chat(req: "ChatRequest"):
-    """Return a standard model reply and store it in chat history."""
-
-    from .MythForgeServer import (
-        ensure_chat_dir,
-        load_item,
-        save_item,
-        make_model_call,
-    )
-
-    ensure_chat_dir(req.chat_id)
-    history = load_item("chat_history", req.chat_id)
-    history.append({"role": "user", "content": req.message})
-    assistant_reply = make_model_call(
-        req.global_prompt or "",
-        req.message,
-        "helper",
-    )
-    history.append({"role": "assistant", "content": assistant_reply})
-    save_item("chat_history", req.chat_id, data=history)
-    _maybe_generate_goals(req.chat_id, req.global_prompt or "")
-    return {"detail": assistant_reply}
+# ---------------------------------------------------------------------------
+# Core chat handling
+# ---------------------------------------------------------------------------
 
 
 def _state_path(chat_id: str) -> str:
-    """Return the path to ``chat_id``'s goal state file."""
-
-    from .MythForgeServer import CHATS_DIR
-
     return os.path.join(CHATS_DIR, chat_id, "goal_state.json")
 
 
-def _load_goal_state(chat_id: str) -> Dict[str, object]:
-    """Return the goal state for ``chat_id``."""
-
+def _load_goal_state(chat_id: str) -> Dict[str, Any]:
     path = _state_path(chat_id)
     if os.path.exists(path):
         try:
@@ -161,9 +86,7 @@ def _load_goal_state(chat_id: str) -> Dict[str, object]:
     return {"goals": [], "completed_goals": [], "messages_since_goal_eval": 0}
 
 
-def _save_goal_state(chat_id: str, state: Dict[str, object]) -> None:
-    """Save ``state`` for ``chat_id``."""
-
+def _save_goal_state(chat_id: str, state: Dict[str, Any]) -> None:
     path = _state_path(chat_id)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -171,8 +94,6 @@ def _save_goal_state(chat_id: str, state: Dict[str, object]) -> None:
 
 
 def _find_json_chunk(text: str) -> str | None:
-    """Return the first valid JSON substring found in ``text``."""
-
     braces = ("{", "}")
     start = text.find(braces[0])
     end = text.rfind(braces[1])
@@ -198,16 +119,14 @@ def _find_json_chunk(text: str) -> str | None:
 
 
 def _parse_goals_from_response(text: str) -> List[Dict[str, str]]:
-    """Return a goal list parsed from ``text`` if possible."""
-
-    data: object | None = None
+    data: Any | None = None
     try:
         data = json.loads(text)
     except Exception:
-        json_chunk = _find_json_chunk(text)
-        if json_chunk is not None:
+        chunk = _find_json_chunk(text)
+        if chunk is not None:
             try:
-                data = json.loads(json_chunk)
+                data = json.loads(chunk)
             except Exception:
                 data = None
 
@@ -247,26 +166,15 @@ def _parse_goals_from_response(text: str) -> List[Dict[str, str]]:
 def _dedupe_new_goals(
     new: List[Dict[str, str]], existing: List[Dict[str, str]]
 ) -> List[Dict[str, str]]:
-    """Return ``new`` without goals already in ``existing``."""
-
     existing_desc = {g.get("description", "") for g in existing}
     return [g for g in new if g.get("description", "") not in existing_desc]
 
 
 def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
-    """Generate new goals for ``chat_id`` if the refresh rate is met."""
-
-    from .MythForgeServer import (
-        load_item,
-        make_model_call,
-        goals_exists,
-        goals_path,
-    )
-    from . import model_launch
+    from .call_types import CALL_HANDLERS
 
     if not goals_exists(chat_id):
         return
-
     try:
         with open(goals_path(chat_id), "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -280,14 +188,14 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
         state.get("messages_since_goal_eval", 0) + 1
     )
 
-    refresh = model_launch.MODEL_SETTINGS.get("goal_refresh_rate", 1)
+    refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
         _save_goal_state(chat_id, state)
         return
 
-    goal_limit = model_launch.MODEL_SETTINGS.get("goal_limit", 3)
+    goal_limit = GENERATION_CONFIG.get("goal_limit", 3)
 
-    history = load_item("chat_history", chat_id)
+    history = load_json(chat_file(chat_id, "full.json"))
     user_text = "\n".join(m.get("content", "") for m in history)
 
     system_parts = [p for p in (global_prompt, character, setting) if p]
@@ -299,7 +207,13 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
     )
     system_text = "\n".join(system_parts)
 
-    text = make_model_call(system_text, user_text, "goal_generation")
+    from .call_types import CALL_HANDLERS
+
+    handler = CALL_HANDLERS["goal_generation"]
+    prompt = handler.prompt(system_text, user_text)
+    raw = call_llm(prompt, **GENERATION_CONFIG)
+    text = handler.response(raw)
+
     goals = _parse_goals_from_response(text)
     if not goals:
         _save_goal_state(chat_id, state)
@@ -314,3 +228,67 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
     state["goals"] = combined[:goal_limit]
     state["messages_since_goal_eval"] = 0
     _save_goal_state(chat_id, state)
+
+
+# ---------------------------------------------------------------------------
+
+
+def handle_chat(req: "ChatRequest", stream: bool = False):
+    """Process ``req`` and return a model reply."""
+
+    from .call_types import CALL_HANDLERS
+
+    ensure_chat_dir(req.chat_id)
+    history = load_json(chat_file(req.chat_id, "full.json"))
+    history.append({"role": "user", "content": req.message})
+
+    call_type = req.call_type or "standard_chat"
+    handler = CALL_HANDLERS.get(call_type, CALL_HANDLERS["default"])
+
+    if call_type in ("standard_chat", "user_message"):
+        system_parts = [req.global_prompt or ""]
+        if goals_exists(req.chat_id):
+            try:
+                with open(goals_path(req.chat_id), "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    if data.get("character"):
+                        system_parts.append(data["character"])
+                    if data.get("setting"):
+                        system_parts.append(data["setting"])
+            except Exception as e:
+                print(f"Failed to load goals for '{req.chat_id}': {e}")
+        system_text = "\n".join(p for p in system_parts if p)
+        user_text = "\n".join(m["content"] for m in history)
+    else:
+        system_text = req.global_prompt or ""
+        user_text = req.message
+
+    prompt = handler.prompt(system_text, user_text)
+    myth_log("model_input", prompt=prompt)
+    kwargs = GENERATION_CONFIG.copy()
+    kwargs["stream"] = stream
+    raw = call_llm(prompt, **kwargs)
+    processed = handler.response(raw)
+
+    if stream:
+
+        def _generate():
+            parts = []
+            for text in processed:
+                parts.append(text)
+                yield text
+            assistant_reply = "".join(parts).strip()
+            history.append({"role": "assistant", "content": assistant_reply})
+            save_json(chat_file(req.chat_id, "full.json"), history)
+            _maybe_generate_goals(req.chat_id, req.global_prompt or "")
+
+        return StreamingResponse(_generate(), media_type="text/plain")
+
+    assistant_reply = (
+        processed if isinstance(processed, str) else str(processed)
+    )
+    history.append({"role": "assistant", "content": assistant_reply})
+    save_json(chat_file(req.chat_id, "full.json"), history)
+    _maybe_generate_goals(req.chat_id, req.global_prompt or "")
+    return {"detail": assistant_reply}
