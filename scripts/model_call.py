@@ -38,3 +38,25 @@ def call_model(
     else:
         kwargs["stream"] = model_launch.MODEL_SETTINGS.get("stream", False)
     return model_launch.call_llm(prompt, **kwargs)
+
+
+def call_tagged(
+    system_text: str, user_text: str, *, stream: bool | None = None
+) -> Iterable[Dict[str, object]]:
+    """Call the model using the header-tagged prompt format."""
+
+    prompt = (
+        "<|start_header_id|>system<|end_header_id|>\n"
+        f"{system_text}\n"
+        "<|eot_id|>\n"
+        "<|start_header_id|>user<|end_header_id|>\n"
+        f"{user_text}\n"
+        "<|eot_id|>\n"
+        "<|start_header_id|>assistant<|end_header_id|>\n"
+    )
+    kwargs: Dict[str, object] = model_launch.GENERATION_CONFIG.copy()
+    if stream is not None:
+        kwargs["stream"] = stream
+    else:
+        kwargs["stream"] = model_launch.MODEL_SETTINGS.get("stream", False)
+    return model_launch.call_llm(prompt, **kwargs)
