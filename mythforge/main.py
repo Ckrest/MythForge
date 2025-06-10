@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import json
+
 import os
 from typing import Dict, List
 
@@ -6,15 +9,23 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .server_log import myth_log
-
-from . import model_launch, model_call, call_types
+from .utils import (
+    CHATS_DIR,
+    myth_log,
+    load_json,
+    save_json,
+    chat_file,
+    ensure_chat_dir,
+    goals_exists,
+    goals_path,
+)
+from . import model
+from .call_core import handle_chat
 
 app = FastAPI(title="Myth Forge Server")
 
 # --- Configuration ---------------------------------------------------------
 
-CHATS_DIR = "chats"
 GLOBAL_PROMPTS_DIR = "global_prompts"
 
 
@@ -30,53 +41,6 @@ class ChatRequest(BaseModel):
 # --- Helper utilities ------------------------------------------------------
 
 
-def load_json(path: str) -> list:
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if not content:
-                    return []
-                return json.loads(content)
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON from '{path}': {e}")
-        except Exception as e:
-            print(f"Failed to load JSON from '{path}': {e}")
-    return []
-
-
-def save_json(path: str, data: object) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-def chat_file(chat_id: str, filename: str) -> str:
-    """Return the path for ``filename`` within ``chat_id``'s directory."""
-    return os.path.join(CHATS_DIR, chat_id, filename)
-
-
-def ensure_chat_dir(chat_id: str) -> str:
-    """Create and return the directory path for ``chat_id``."""
-    path = os.path.join(CHATS_DIR, chat_id)
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
-def goals_path(chat_id: str) -> str:
-    """Return the path to ``chat_id``'s goals JSON file."""
-
-    return chat_file(chat_id, "goals.json")
-
-
-def goals_exists(chat_id: str) -> bool:
-    """Return ``True`` if goals are enabled for ``chat_id``."""
-
-    path = goals_path(chat_id)
-    exists = os.path.exists(path)
-    myth_log("goals_check", chat_id=chat_id, exists=exists)
-    return exists
-
-
 def import_message_data(req: ChatRequest) -> ChatRequest:
     """Return ``req`` with resolved prompt content and default ``call_type``."""
 
@@ -86,58 +50,6 @@ def import_message_data(req: ChatRequest) -> ChatRequest:
         if content is not None:
             req.global_prompt = content
     return req
-
-
-def read_text_file(path: str) -> str:
-    """Return the contents of ``path`` as a string."""
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read()
-        except Exception as e:
-            print(f"Failed to read text from '{path}': {e}")
-    return ""
-
-
-def write_text_file(path: str, text: str) -> None:
-    """Write ``text`` to ``path`` creating directories as needed."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
-
-
-def make_model_call(system_text: str, user_text: str, call_type: str):
-    """Build prompt, call the model, and process the result."""
-
-    build = getattr(
-        call_types, f"{call_type}_prompt", call_types.default_prompt
-    )
-    respond = getattr(
-        call_types, f"{call_type}_response", call_types.default_response
-    )
-
-    prompt = build(system_text, user_text)
-    myth_log("model_input", prompt=prompt)
-
-    kwargs = model_launch.GENERATION_CONFIG.copy()
-    kwargs["stream"] = call_type == "standard_chat"
-    raw = model_launch.call_llm(prompt, **kwargs)
-
-    output = respond(raw)
-
-    if kwargs["stream"]:
-
-        def _stream():
-            parts = []
-            for text in output:
-                parts.append(text)
-                yield text
-            myth_log("model_output", raw="".join(parts))
-
-        return _stream()
-
-    myth_log("model_output", raw=str(output))
-    return output
 
 
 # --- Global prompt utilities ----------------------------------------------
@@ -244,7 +156,7 @@ def load_item(kind: str, name: str | None = None):
     if kind == "prompt_names":
         return list_prompt_names()
     if kind == "settings":
-        return model_launch.MODEL_SETTINGS
+        return model.MODEL_SETTINGS
     raise HTTPException(status_code=400, detail="Invalid load request")
 
 
@@ -304,10 +216,8 @@ def save_item(
         return
 
     if kind == "settings" and isinstance(data, dict):
-        model_launch.MODEL_SETTINGS.update(data)
-        save_json(
-            model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS
-        )
+        model.MODEL_SETTINGS.update(data)
+        save_json(model.MODEL_SETTINGS_PATH, model.MODEL_SETTINGS)
         for key in (
             "temperature",
             "top_k",
@@ -316,12 +226,10 @@ def save_item(
             "repeat_penalty",
             "stop",
         ):
-            if key in model_launch.MODEL_SETTINGS:
-                model_launch.GENERATION_CONFIG[key] = (
-                    model_launch.MODEL_SETTINGS[key]
-                )
-        model_launch.DEFAULT_MAX_TOKENS = model_launch.MODEL_SETTINGS.get(
-            "max_tokens", model_launch.DEFAULT_MAX_TOKENS
+            if key in model.MODEL_SETTINGS:
+                model.GENERATION_CONFIG[key] = model.MODEL_SETTINGS[key]
+        model.DEFAULT_MAX_TOKENS = model.MODEL_SETTINGS.get(
+            "max_tokens", model.DEFAULT_MAX_TOKENS
         )
         return
 
@@ -606,7 +514,7 @@ def chat_received(req: ChatRequest):
     """Import message data then stream a model-generated reply."""
 
     req = import_message_data(req)
-    return model_call.chat_stream(req)
+    return handle_chat(req, stream=True)
 
 
 @app.post("/chat")
@@ -614,7 +522,7 @@ def chat(req: ChatRequest):
     """Return a standard model-generated reply."""
 
     req = import_message_data(req)
-    return model_call.chat(req)
+    return handle_chat(req)
 
 
 # --- Static UI Mount ------------------------------------------------------
