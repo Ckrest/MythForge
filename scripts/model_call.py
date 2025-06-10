@@ -91,9 +91,9 @@ def chat_stream(req: "ChatRequest"):
                 print(f"Failed to load goals for '{req.chat_id}': {e}")
         system_text = "\n".join(p for p in system_parts if p)
         user_text = "\n".join(m["content"] for m in history)
-        chunks = make_model_call(system_text, user_text, "standard_chat")
+        stream = make_model_call(system_text, user_text, "standard_chat")
     else:
-        chunks = make_model_call(
+        stream = make_model_call(
             req.global_prompt or "",
             req.message,
             "standard_chat",
@@ -103,7 +103,7 @@ def chat_stream(req: "ChatRequest"):
     def generate():
         meta = {"prompt": req.global_prompt or ""}
         yield json.dumps(meta) + "\n"
-        for text in stream_parsed(chunks):
+        for text in stream:
             parts.append(text)
             yield text
         assistant_reply = "".join(parts).strip()
@@ -127,14 +127,11 @@ def chat(req: "ChatRequest"):
     ensure_chat_dir(req.chat_id)
     history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
-    output = make_model_call(
+    assistant_reply = make_model_call(
         req.global_prompt or "",
         req.message,
         "helper",
     )
-    if isinstance(output, Iterable):
-        output = next(iter(output), {})
-    assistant_reply = parse_response(output)
     history.append({"role": "assistant", "content": assistant_reply})
     save_item("chat_history", req.chat_id, data=history)
     _maybe_generate_goals(req.chat_id, req.global_prompt or "")
@@ -302,10 +299,7 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
     )
     system_text = "\n".join(system_parts)
 
-    output = make_model_call(system_text, user_text, "goal_generation")
-    if isinstance(output, Iterable):
-        output = next(iter(output), {})
-    text = parse_response(output)
+    text = make_model_call(system_text, user_text, "goal_generation")
     goals = _parse_goals_from_response(text)
     if not goals:
         _save_goal_state(chat_id, state)
