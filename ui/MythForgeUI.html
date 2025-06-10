@@ -492,12 +492,16 @@
             }catch(e){ console.error('Failed to save server settings:', e); }
         }
 
-        function resizeModal(modal){
+        function resizeModal(modal, width){
             const content = modal.querySelector('.modal-content');
             if(!content) return;
             const vw = window.innerWidth;
             const vh = window.innerHeight;
-            content.style.maxWidth = Math.min(1000, Math.round(vw * 0.9)) + 'px';
+            if(width){
+                content.style.maxWidth = width + 'px';
+            }else{
+                content.style.maxWidth = Math.min(1000, Math.round(vw * 0.9)) + 'px';
+            }
             content.style.maxHeight = Math.round(vh * 0.9) + 'px';
         }
 
@@ -507,7 +511,7 @@
             themeSelect.value   = state.settings.theme;
             textSizeSelect.value = state.settings.textSize;
             scrollLinesInput.value = state.settings.autoScrollLines;
-            resizeModal(settingsModal);
+            resizeModal(settingsModal, 400);
             settingsModal.style.display='flex';
         }
 
@@ -525,7 +529,7 @@
                 closeDialog();
             };
             dialogCancelBtn.onclick = closeDialog;
-            resizeModal(dialogModal);
+            resizeModal(dialogModal, opts.width);
             dialogModal.style.display = 'flex';
             const field = dialogBody.querySelector('input, textarea');
             if(field){
@@ -574,8 +578,9 @@
         function confirmDialog(message, cb){
             openDialog({
                 title: message,
-                okText:'Confirm',
-                onOk:cb
+                okText: 'Confirm',
+                onOk: cb,
+                width: 400
             });
         }
 
@@ -962,7 +967,7 @@
         }
 
         async function deletePrompt(name){
-            confirmDialog('Delete this prompt?', async ()=>{
+            confirmDialog('Are you sure you want to delete this prompt?', async ()=>{
                 try{
                     const res = await apiFetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
                     if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
