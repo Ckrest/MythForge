@@ -22,6 +22,7 @@ class ChatRequest(BaseModel):
     chat_id: str
     message: str
     global_prompt: str | None = None
+    call_type: str = "user_message"
 
 
 # --- Helper utilities ------------------------------------------------------
@@ -69,6 +70,13 @@ def goals_exists(chat_id: str) -> bool:
     """Return ``True`` if goals are enabled for ``chat_id``."""
 
     return os.path.exists(goals_path(chat_id))
+
+
+def import_message_data(req: ChatRequest) -> ChatRequest:
+    """Return ``req`` with a default ``call_type`` of ``user_message``."""
+
+    req.call_type = req.call_type or "user_message"
+    return req
 
 
 def read_text_file(path: str) -> str:
@@ -230,9 +238,7 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(
-                    status_code=400, detail="Chat name already exists"
-                )
+                raise HTTPException(status_code=400, detail="Chat name already exists")
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -255,17 +261,13 @@ def save_item(
             os.rename(old_path, new_path)
             return
         if data is None:
-            raise HTTPException(
-                status_code=400, detail="No prompt data provided"
-            )
+            raise HTTPException(status_code=400, detail="No prompt data provided")
         save_global_prompt({"name": name, "content": str(data)})
         return
 
     if kind == "settings" and isinstance(data, dict):
         model_launch.MODEL_SETTINGS.update(data)
-        save_json(
-            model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS
-        )
+        save_json(model_launch.MODEL_SETTINGS_PATH, model_launch.MODEL_SETTINGS)
         for key in (
             "temperature",
             "top_k",
@@ -275,9 +277,7 @@ def save_item(
             "stop",
         ):
             if key in model_launch.MODEL_SETTINGS:
-                model_launch.GENERATION_CONFIG[key] = (
-                    model_launch.MODEL_SETTINGS[key]
-                )
+                model_launch.GENERATION_CONFIG[key] = model_launch.MODEL_SETTINGS[key]
         model_launch.DEFAULT_MAX_TOKENS = model_launch.MODEL_SETTINGS.get(
             "max_tokens", model_launch.DEFAULT_MAX_TOKENS
         )
@@ -538,10 +538,11 @@ def save_message(req: ChatRequest):
     return {"detail": "Message stored"}
 
 
-@app.post("/chat/stream")
-def chat_stream(req: ChatRequest):
-    """Stream a model-generated reply and store it in chat history."""
+@app.post("/chat/received")
+def chat_received(req: ChatRequest):
+    """Import message data then stream a model-generated reply."""
 
+    req = import_message_data(req)
     return model_call.chat_stream(req)
 
 

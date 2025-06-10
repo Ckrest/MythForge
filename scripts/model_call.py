@@ -61,17 +61,38 @@ def chat_stream(req: "ChatRequest"):
         load_item,
         save_item,
         make_model_call,
+        goals_exists,
+        goals_path,
     )
 
     ensure_chat_dir(req.chat_id)
     history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
 
-    chunks = make_model_call(
-        req.global_prompt or "",
-        req.message,
-        "standard_chat",
-    )
+    call_type = req.call_type or "user_message"
+
+    if call_type == "user_message":
+        system_parts = [req.global_prompt or ""]
+        if goals_exists(req.chat_id):
+            try:
+                with open(goals_path(req.chat_id), "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    if data.get("character"):
+                        system_parts.append(data["character"])
+                    if data.get("setting"):
+                        system_parts.append(data["setting"])
+            except Exception as e:  # pragma: no cover - best effort
+                print(f"Failed to load goals for '{req.chat_id}': {e}")
+        system_text = "\n".join(p for p in system_parts if p)
+        user_text = "\n".join(m["content"] for m in history)
+        chunks = make_model_call(system_text, user_text, "standard_chat")
+    else:
+        chunks = make_model_call(
+            req.global_prompt or "",
+            req.message,
+            "standard_chat",
+        )
     parts: List[str] = []
 
     def generate():
