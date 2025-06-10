@@ -9,7 +9,6 @@ from typing import Dict
 
 from llama_cpp import Llama
 
-from .server_log import myth_log
 
 MODELS_DIR = "models"
 MODEL_SETTINGS_PATH = "model_settings.json"
@@ -104,9 +103,7 @@ except Exception:  # pragma: no cover
 
 
 def call_llm(prompt: str, **kwargs):
-    """Call the ``llm`` object and log the prompt and raw output."""
-
-    myth_log("llm_prompt", prompt=prompt)
+    """Call the ``llm`` object with ``prompt`` and return the result."""
 
     if _CALL_KWARGS:
         filtered = {k: v for k, v in kwargs.items() if k in _CALL_KWARGS}
@@ -116,19 +113,12 @@ def call_llm(prompt: str, **kwargs):
     if filtered.get("stream"):
 
         def _stream():
-            parts = []
             for chunk in llm(prompt, **filtered):
-                text = chunk["choices"][0]["text"]
-                parts.append(text)
                 yield chunk
-            myth_log("llm_raw_output", raw="".join(parts))
 
         return _stream()
 
-    res = llm(prompt, **filtered)
-    text = res["choices"][0]["text"]
-    myth_log("llm_raw_output", raw=text)
-    return res
+    return llm(prompt, **filtered)
 
 
 call_llm._patched = True
