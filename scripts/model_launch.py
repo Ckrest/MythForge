@@ -9,7 +9,7 @@ from typing import Dict
 
 from llama_cpp import Llama
 
-from .disable import log_event
+from .server_log import myth_log
 
 MODELS_DIR = "models"
 MODEL_SETTINGS_PATH = "model_settings.json"
@@ -116,14 +116,14 @@ def call_llm(prompt: str, **kwargs):
         def _stream():
             for chunk in llm(prompt, **filtered):
                 text = chunk["choices"][0]["text"]
-                log_event("llm_raw_output", {"raw": text})
+                myth_log("llm_raw_output", raw=text)
                 yield chunk
 
         return _stream()
 
     res = llm(prompt, **filtered)
     text = res["choices"][0]["text"]
-    log_event("llm_raw_output", {"raw": text})
+    myth_log("llm_raw_output", raw=text)
     return res
 
 
