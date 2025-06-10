@@ -282,6 +282,10 @@ def rename_prompt(name: str, data: Dict[str, str]):
     new_name = data.get("new_name", "").strip()
     if not new_name:
         raise HTTPException(status_code=400, detail="New name required")
+
+    if new_name == name:
+        return {"detail": f"Renamed prompt '{name}'"}
+
     save_item("prompts", name, new_name=new_name)
     return {"detail": f"Renamed prompt '{name}'"}
 
