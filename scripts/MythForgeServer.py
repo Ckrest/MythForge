@@ -59,21 +59,12 @@ def ensure_chat_dir(chat_id: str) -> str:
     return path
 
 
-def make_user_model_call(system_text: str, user_text: str):
-    """Return a streaming model call using ``system_text`` and ``user_text``."""
+def make_model_call(system_text: str, user_text: str, call_type: str):
+    """Return a model call based on ``call_type``."""
 
-    prompt = model_call.user_model_call(system_text, user_text)
+    prompt = model_call.model_call(system_text, user_text, call_type)
     kwargs = model_launch.GENERATION_CONFIG.copy()
-    kwargs["stream"] = True
-    return model_launch.call_llm(prompt, **kwargs)
-
-
-def make_helper_model_call(system_text: str, user_text: str):
-    """Return a non-streaming model call using ``system_text`` and ``user_text``."""
-
-    prompt = model_call.helper_model_call(system_text, user_text)
-    kwargs = model_launch.GENERATION_CONFIG.copy()
-    kwargs["stream"] = False
+    kwargs["stream"] = call_type == "standard_chat"
     return model_launch.call_llm(prompt, **kwargs)
 
 
