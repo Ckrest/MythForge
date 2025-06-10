@@ -6,6 +6,8 @@ from typing import Iterable, Iterator, List, TYPE_CHECKING, Dict
 
 import os
 
+from .server_log import myth_log
+
 import json
 from fastapi.responses import StreamingResponse
 
@@ -23,7 +25,7 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 
 def parse_response(output: dict) -> str:
     """Extract and clean the text portion from a model call result."""
-
+    myth_log("pre_parse", raw=str(output))
     text = output.get("choices", [{}])[0].get("text", "")
     return clean_text(text, trim=True)
 
