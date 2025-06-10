@@ -132,7 +132,17 @@
             background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; margin-top: 5px; cursor: pointer; font-size: 14px;
         }
         .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;}
-        .modal-content{background:var(--bg-color);color:var(--text-color);padding:20px;border-radius:8px;min-width:250px;max-width:90vw;max-height:90vh;overflow-y:auto;}
+        .modal-content{
+            background:var(--bg-color);
+            color:var(--text-color);
+            padding:20px;
+            border-radius:8px;
+            min-width:250px;
+            width:90vw;
+            max-width:600px;
+            max-height:90vh;
+            overflow-y:auto;
+        }
         .modal-content label{display:block;margin-top:10px;}
         .modal-actions{text-align:right;margin-top:15px;}
         .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; }
@@ -474,23 +484,34 @@
             }catch(e){ console.error('Failed to save server settings:', e); }
         }
 
+        function resizeModal(modal){
+            const content = modal.querySelector('.modal-content');
+            if(!content) return;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            content.style.maxWidth = Math.min(600, Math.round(vw * 0.9)) + 'px';
+            content.style.maxHeight = Math.round(vh * 0.9) + 'px';
+        }
+
        function openSettings(){
             userNameInput.value = state.settings.userName;
             botNameInput.value  = state.settings.botName;
             themeSelect.value   = state.settings.theme;
             textSizeSelect.value = state.settings.textSize;
             scrollLinesInput.value = state.settings.autoScrollLines;
+            resizeModal(settingsModal);
             settingsModal.style.display='flex';
         }
 
         function closeSettings(){ settingsModal.style.display='none'; }
 
-        function openDialog(opts){
+       function openDialog(opts){
             dialogTitle.textContent = opts.title || '';
             dialogBody.innerHTML = opts.body || '';
             dialogOkBtn.textContent = opts.okText || 'OK';
             dialogOkBtn.onclick = () => { closeDialog(); opts.onOk && opts.onOk(); };
             dialogCancelBtn.onclick = closeDialog;
+            resizeModal(dialogModal);
             dialogModal.style.display = 'flex';
         }
 
@@ -729,6 +750,7 @@
             promptNameInput.value = name;
             if(isNew){
                 promptInput.value = '';
+                resizeModal(promptModal);
                 promptModal.style.display = 'flex';
                 return;
             }
@@ -737,6 +759,7 @@
                 if(!res.ok){ alert('Prompt not found.'); return; }
                 const promptObj = await res.json();
                 promptInput.value = promptObj.content;
+                resizeModal(promptModal);
                 promptModal.style.display = 'flex';
             }catch(e){ console.error('Failed to load prompt:', e); }
         }
