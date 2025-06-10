@@ -293,6 +293,7 @@
             <label>Prompt</label>
             <textarea id="prompt-edit-input" rows="20" style="width:100%;"></textarea>
             <div class="modal-actions">
+                <button id="prompt-edit-cancel-btn">Cancel</button>
                 <button id="prompt-edit-save-btn">Save</button>
             </div>
         </div>
@@ -378,6 +379,7 @@
         const promptNameInput  = document.getElementById('prompt-name-input');
         const promptInput      = document.getElementById('prompt-edit-input');
         const promptSaveBtn    = document.getElementById('prompt-edit-save-btn');
+        const promptCancelBtn  = document.getElementById('prompt-edit-cancel-btn');
         const dialogModal      = document.getElementById('dialog-modal');
         const dialogTitle      = document.getElementById('dialog-title');
         const dialogBody       = document.getElementById('dialog-body');
@@ -1173,6 +1175,7 @@
             newPromptBtn.addEventListener('click', addNewPrompt);
             noPromptBtn.addEventListener('click', ()=>selectPrompt(''));
             promptSaveBtn.addEventListener('click', savePromptEdit);
+            promptCancelBtn.addEventListener('click', closePromptEditor);
             promptModal.addEventListener('click', e=>{ if(e.target===promptModal) closePromptEditor(); });
             dialogModal.addEventListener('click', e=>{ if(e.target===dialogModal) closeDialog(); });
             systemToggle.addEventListener('click', toggleSystem);
