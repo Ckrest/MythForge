@@ -2,19 +2,38 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, TYPE_CHECKING
+from typing import Iterable, Iterator, List, TYPE_CHECKING
 
 import json
 from fastapi.responses import StreamingResponse
 
 
-from . import model_response
-
 if TYPE_CHECKING:
     from .MythForgeServer import ChatRequest
 
 
-def format_for_model(system_text: str, user_text: str) -> str:
+def clean_text(text: str) -> str:
+    """Return ``text`` stripped of whitespace and known tokens."""
+
+    cleaned = text.replace("<|eot_id|>", "").strip()
+    return cleaned
+
+
+def parse_response(output: dict) -> str:
+    """Extract and clean the text portion from a model call result."""
+
+    text = output.get("choices", [{}])[0].get("text", "")
+    return clean_text(text)
+
+
+def stream_parsed(chunks: Iterable[dict]) -> Iterator[str]:
+    """Yield cleaned text from a streaming model call."""
+
+    for chunk in chunks:
+        yield clean_text(chunk.get("choices", [{}])[0].get("text", ""))
+
+
+def format_for_model(system_text: str, user_text: str, call_type: str) -> str:
     """Return ``system_text`` and ``user_text`` formatted for the model."""
 
     return (
@@ -28,16 +47,10 @@ def format_for_model(system_text: str, user_text: str) -> str:
     )
 
 
-def user_model_call(system_text: str, user_text: str) -> str:
-    """Return a prompt for a streaming model call."""
+def model_call(system_text: str, user_text: str, call_type: str) -> str:
+    """Return a prompt for a model call based on ``call_type``."""
 
-    return format_for_model(system_text, user_text)
-
-
-def helper_model_call(system_text: str, user_text: str) -> str:
-    """Return a prompt for a standard model call."""
-
-    return format_for_model(system_text, user_text)
+    return format_for_model(system_text, user_text, call_type)
 
 
 def chat_stream(req: "ChatRequest"):
@@ -47,20 +60,24 @@ def chat_stream(req: "ChatRequest"):
         ensure_chat_dir,
         load_item,
         save_item,
-        make_user_model_call,
+        make_model_call,
     )
 
     ensure_chat_dir(req.chat_id)
     history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
 
-    chunks = make_user_model_call(req.global_prompt or "", req.message)
+    chunks = make_model_call(
+        req.global_prompt or "",
+        req.message,
+        "standard_chat",
+    )
     parts: List[str] = []
 
     def generate():
         meta = {"prompt": req.global_prompt or ""}
         yield json.dumps(meta) + "\n"
-        for text in model_response.stream_parsed(chunks):
+        for text in stream_parsed(chunks):
             parts.append(text)
             yield text
         assistant_reply = "".join(parts).strip()
@@ -77,16 +94,20 @@ def chat(req: "ChatRequest"):
         ensure_chat_dir,
         load_item,
         save_item,
-        make_helper_model_call,
+        make_model_call,
     )
 
     ensure_chat_dir(req.chat_id)
     history = load_item("chat_history", req.chat_id)
     history.append({"role": "user", "content": req.message})
-    output = make_helper_model_call(req.global_prompt or "", req.message)
+    output = make_model_call(
+        req.global_prompt or "",
+        req.message,
+        "helper",
+    )
     if isinstance(output, Iterable):
         output = next(iter(output), {})
-    assistant_reply = model_response.parse_response(output)
+    assistant_reply = parse_response(output)
     history.append({"role": "assistant", "content": assistant_reply})
     save_item("chat_history", req.chat_id, data=history)
     return {"detail": assistant_reply}
