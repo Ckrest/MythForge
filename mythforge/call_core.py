@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING, Callable
 
 from fastapi.responses import StreamingResponse
 
-from .model import GENERATION_CONFIG, call_llm
+from .model import GENERATION_CONFIG, DEFAULT_N_GPU_LAYERS, call_llm
 from .utils import (
     CHATS_DIR,
     chat_file,
@@ -316,7 +316,7 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
     myth_log("model_input", prompt=prompt)
     kwargs = GENERATION_CONFIG.copy()
     kwargs["stream"] = stream
-    kwargs["n_gpu_layers"] = 35
+    kwargs["n_gpu_layers"] = DEFAULT_N_GPU_LAYERS
     raw = call_llm(prompt, **kwargs)
     processed = handler.response(raw)
 
