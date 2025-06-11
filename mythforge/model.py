@@ -108,6 +108,7 @@ def call_llm(system_prompt: str, user_prompt: str, **kwargs):
         user_prompt,
     ]
     cmd.append("--no-warmup")
+    cmd.append("--no-conversation")
     cmd.extend(_cli_args(**kwargs))
     if "--single-turn" not in cmd:
         cmd.insert(1, "--single-turn")
@@ -182,6 +183,7 @@ def warm_up(system_prompt: str = "", user_prompt: str = "") -> None:
         user_prompt,
         "--single-turn",
         "--no-warmup",
+        "--no-conversation",
     ]
     try:
         model_path = discover_model_path()
@@ -192,7 +194,10 @@ def warm_up(system_prompt: str = "", user_prompt: str = "") -> None:
 
     try:
         _warm_process = subprocess.Popen(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
     except Exception as exc:  # pragma: no cover - best effort
         myth_log("warm_up_error", error=str(exc))
