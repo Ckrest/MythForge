@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .utils import (
+    ROOT_DIR,
     CHATS_DIR,
     myth_log,
     load_json,
@@ -26,7 +27,7 @@ app = FastAPI(title="Myth Forge Server")
 
 # --- Configuration ---------------------------------------------------------
 
-GLOBAL_PROMPTS_DIR = "global_prompts"
+GLOBAL_PROMPTS_DIR = os.path.join(ROOT_DIR, "global_prompts")
 
 
 class ChatRequest(BaseModel):
