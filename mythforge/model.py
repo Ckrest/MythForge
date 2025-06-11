@@ -87,6 +87,9 @@ def call_llm(prompt: str, **kwargs):
 
     cmd = [LLAMA_CLI, "--prompt", prompt]
     cmd.extend(_cli_args(**kwargs))
+    if "model" not in kwargs:
+        model_path = discover_model_path()
+        cmd.extend(["--model", model_path])
 
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
