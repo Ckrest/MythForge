@@ -7,7 +7,7 @@
   "f16_kv": false,
   "use_mmap": true,
   "use_mlock": true,
-  "n_gpu_layers": 35,
+  "n_gpu_layers": 13,
   "main_memory_kv": true,
 
   "max_tokens": 250,

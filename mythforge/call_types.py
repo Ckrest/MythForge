@@ -72,9 +72,7 @@ def default_response(result: Any) -> Any:
 CALL_HANDLERS: dict[str, CallHandler] = {
     "standard_chat": CallHandler(standard_chat_prompt, standard_chat_response),
     "helper": CallHandler(helper_prompt, helper_response),
-    "goal_generation": CallHandler(
-        goal_generation_prompt, goal_generation_response
-    ),
+    "goal_generation": CallHandler(goal_generation_prompt, goal_generation_response),
     "user_message": CallHandler(standard_chat_prompt, standard_chat_response),
     "default": CallHandler(default_prompt, default_response),
 }
