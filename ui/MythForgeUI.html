@@ -739,7 +739,16 @@
             try{
                 const res = await apiFetch(`/history/${encodeURIComponent(id)}`);
                 if(!res.ok) return;
-                const msgs = await res.json();
+                const data = await res.json();
+                let msgs = data;
+                if(!Array.isArray(data)){
+                    if(data.chat_id){
+                        state.currentChatId = data.chat_id;
+                        localStorage.setItem('lastChatId', data.chat_id);
+                        updateActiveChat();
+                    }
+                    msgs = data.history || [];
+                }
                 msgs.forEach(m => appendMessageToUI(m.role==='bot'?'assistant':m.role, m.content));
             }catch(e){ console.error('Failed to load history:',e); }
         }
@@ -891,6 +900,8 @@
                     alert('Error: '+(err.detail||res.status));
                     return;
                 }
+                const data = await res.json().catch(()=>({}));
+                name = data.chat_id || name;
             }catch(e){ console.error('Failed to create chat:', e); return; }
             await fetchChatList();
             state.currentChatId = name;
