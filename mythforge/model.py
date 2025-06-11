@@ -65,7 +65,7 @@ def discover_model_path() -> str:
     raise FileNotFoundError(f"No .gguf model files found under '{MODELS_DIR}'")
 
 
-LLAMA_CLI = "llama-cli.exe"
+LLAMA_CLI = os.path.join("dependencies", "llama-cli.exe")
 
 
 def _cli_args(**kwargs) -> list[str]:
@@ -83,7 +83,7 @@ def _cli_args(**kwargs) -> list[str]:
 
 
 def call_llm(prompt: str, **kwargs):
-    """Return output from ``llama-cli.exe`` for ``prompt``."""
+    """Return output from :data:`LLAMA_CLI` for ``prompt``."""
 
     cmd = [LLAMA_CLI, "--prompt", prompt]
     cmd.extend(_cli_args(**kwargs))
