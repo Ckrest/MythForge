@@ -8,6 +8,7 @@ from typing import Dict, List
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+import subprocess
 
 from .utils import (
     CHATS_DIR,
@@ -522,6 +523,23 @@ def chat(req: ChatRequest):
 
     req = import_message_data(req)
     return handle_chat(req)
+
+
+@app.post("/stop_llama")
+def stop_llama() -> Dict[str, str]:
+    """Send CTRL+C to all running ``llama-cli.exe`` processes."""
+
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/IM", "llama-cli.exe"], check=False)
+        else:
+            subprocess.run(
+                ["pkill", "-INT", "-f", "llama-cli.exe"], check=False
+            )
+    except Exception as exc:  # pragma: no cover - best effort
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {"detail": "Signal sent"}
 
 
 # --- Static UI Mount ------------------------------------------------------
