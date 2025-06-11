@@ -95,7 +95,7 @@ def _cli_args(**kwargs) -> list[str]:
 def call_llm(prompt: str, **kwargs):
     """Return output from :data:`LLAMA_CLI` for ``prompt`` with logging."""
 
-    cmd = [LLAMA_CLI, "--prompt", prompt]
+    cmd = [LLAMA_CLI, "--single-turn", "--prompt", prompt]
     cmd.extend(_cli_args(**kwargs))
     try:
         if "model" not in kwargs:
