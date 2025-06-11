@@ -1125,7 +1125,10 @@
 
         async function sendMessage(allowEmpty=false){
             const text = userInput.value.trim();
-            if(state.isGenerating || !state.currentChatId) return;
+            if(state.isGenerating) return;
+            if(!state.currentChatId){
+                await startNewChat();
+            }
             if(text==='' && !allowEmpty) return;
             userInput.value=''; autoResize();
             sendButton.disabled=true; sendOnlyButton.disabled=true;
@@ -1224,7 +1227,10 @@
 
         async function sendMessageNoGen(){
             const text = userInput.value.trim();
-            if(text==='' || state.isGenerating || !state.currentChatId) return;
+            if(text==='' || state.isGenerating) return;
+            if(!state.currentChatId){
+                await startNewChat();
+            }
             userInput.value=''; autoResize();
             sendButton.disabled=true; sendOnlyButton.disabled=true;
             appendMessageToUI('user', text);
