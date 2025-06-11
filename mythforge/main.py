@@ -524,6 +524,14 @@ def chat(req: ChatRequest):
     return handle_chat(req)
 
 
+@app.post("/abort_generation")
+def abort_generation_endpoint():
+    """Abort any in-progress model generation."""
+
+    model.abort_current_generation()
+    return {"detail": "Aborted"}
+
+
 # --- Static UI Mount ------------------------------------------------------
 
 app.mount("/", StaticFiles(directory="ui", html=True), name="static")
