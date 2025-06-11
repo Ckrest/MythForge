@@ -25,6 +25,21 @@ from .call_core import handle_chat
 
 app = FastAPI(title="Myth Forge Server")
 
+
+@app.on_event("startup")
+def _startup() -> None:
+    """Load the model in the background."""
+
+    model.warm_up(n_gpu_layers=model.DEFAULT_N_GPU_LAYERS)
+
+
+@app.on_event("shutdown")
+def _shutdown() -> None:
+    """Stop any background model process."""
+
+    model._stop_warm()
+
+
 # --- Configuration ---------------------------------------------------------
 
 GLOBAL_PROMPTS_DIR = os.path.join(ROOT_DIR, "global_prompts")

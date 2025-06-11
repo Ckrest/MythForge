@@ -9,7 +9,13 @@ from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING, Callable
 
 from fastapi.responses import StreamingResponse
 
-from .model import GENERATION_CONFIG, DEFAULT_N_GPU_LAYERS, call_llm
+from .model import (
+    GENERATION_CONFIG,
+    DEFAULT_N_GPU_LAYERS,
+    call_llm,
+    warm_up,
+    _stop_warm,
+)
 from .utils import (
     CHATS_DIR,
     chat_file,
@@ -23,6 +29,10 @@ from .utils import (
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from .main import ChatRequest
+
+
+_current_chat_id: str | None = None
+_current_prompt: str | None = None
 
 # --- Background task queue -------------------------------------------------
 
@@ -317,6 +327,9 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
 
     from .call_types import CALL_HANDLERS
 
+    global _current_chat_id, _current_prompt
+    _stop_warm()
+
     ensure_chat_dir(req.chat_id)
     history = load_json(chat_file(req.chat_id, "full.json"))
     history.append({"role": "user", "content": req.message})
@@ -342,6 +355,12 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
     else:
         system_text = req.global_prompt or ""
         user_text = req.message
+
+    if req.chat_id != _current_chat_id or system_text != (
+        _current_prompt or ""
+    ):
+        _current_chat_id = req.chat_id
+        _current_prompt = system_text
 
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
     myth_log("model_input", prompt=user_prompt)
@@ -373,6 +392,7 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
                 req.global_prompt or "",
             )
 
+        warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
         return StreamingResponse(_generate(), media_type="text/plain")
 
     assistant_reply = (
@@ -386,4 +406,5 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
         req.chat_id,
         req.global_prompt or "",
     )
+    warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
     return {"detail": assistant_reply}
