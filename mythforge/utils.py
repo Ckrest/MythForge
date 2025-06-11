@@ -8,8 +8,9 @@ import os
 from datetime import datetime
 from typing import Any, List
 
-LOG_DIR = "server_logs"
-CHATS_DIR = "chats"
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+LOG_DIR = os.path.join(ROOT_DIR, "server_logs")
+CHATS_DIR = os.path.join(ROOT_DIR, "chats")
 VERBOSE_MODE = False
 
 

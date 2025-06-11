@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import subprocess
 import threading
 from typing import Dict, Iterator
 
-from .utils import myth_log
+from .utils import ROOT_DIR, myth_log
 
 
-MODELS_DIR = "models"
-MODEL_SETTINGS_PATH = "model_settings.json"
+MODELS_DIR = os.path.join(ROOT_DIR, "models")
+MODEL_SETTINGS_PATH = os.path.join(ROOT_DIR, "model_settings.json")
 
 
 def load_model_settings(path: str = MODEL_SETTINGS_PATH) -> Dict[str, object]:
@@ -69,7 +70,12 @@ def discover_model_path() -> str:
     raise FileNotFoundError(f"No .gguf model files found under '{MODELS_DIR}'")
 
 
-LLAMA_CLI = os.path.join("dependencies", "llama-cli.exe")
+def _default_cli() -> str:
+    name = "llama-cli.exe" if platform.system() == "Windows" else "llama-cli"
+    return os.path.join(ROOT_DIR, "dependencies", name)
+
+
+LLAMA_CLI = os.path.abspath(MODEL_SETTINGS.get("llama_cli", _default_cli()))
 
 # Currently running subprocess if any
 CURRENT_PROCESS: subprocess.Popen | None = None
