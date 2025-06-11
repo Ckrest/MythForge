@@ -46,7 +46,6 @@ GENERATION_CONFIG = {
     "top_p": MODEL_SETTINGS.get("top_p", 0.95),
     "min_p": MODEL_SETTINGS.get("min_p", 0.05),
     "repeat_penalty": MODEL_SETTINGS.get("repeat_penalty", 1.1),
-    "no_interactive": True,
 }
 
 
