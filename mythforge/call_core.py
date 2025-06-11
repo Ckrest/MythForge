@@ -323,7 +323,9 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
     if stream:
 
         def _generate():
-            parts = []
+            meta = json.dumps({"prompt": prompt}, ensure_ascii=False)
+            yield meta + "\n"
+            parts: list[str] = []
             for text in processed:
                 parts.append(text)
                 yield text
