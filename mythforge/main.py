@@ -320,15 +320,16 @@ def create_chat(chat_id: str):
     if os.path.exists(chat_dir):
         raise HTTPException(status_code=400, detail="Chat already exists")
     save_item("chat_history", chat_id, data=[])
-    return {"detail": f"Created chat '{chat_id}'"}
+    return {"detail": f"Created chat '{chat_id}'", "chat_id": chat_id}
 
 
 @app.get("/history/{chat_id}")
 def get_history(chat_id: str):
     try:
-        return load_item("chat_history", chat_id)
+        history = load_item("chat_history", chat_id)
     except HTTPException as exc:
         raise exc
+    return {"chat_id": chat_id, "history": history}
 
 
 @app.put("/history/{chat_id}/{index}")
