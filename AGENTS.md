@@ -7,6 +7,8 @@ project.
 
 ## Coding Style
 
+- Group more based on inputs and outputs
+- Keep code easyer to read and more adatible rather than efficent
 - Use **black** with a line length of 79 characters for formatting Python files.
 - Prefer f-strings for string interpolation.
 - Document functions with docstrings when adding new code.
