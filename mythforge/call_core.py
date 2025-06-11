@@ -26,7 +26,9 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
+    queue.Queue()
+)
 _queued_types: set[str] = set()
 
 
@@ -254,7 +256,9 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
         return
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    state["messages_since_goal_eval"] = (
+        state.get("messages_since_goal_eval", 0) + 1
+    )
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -278,10 +282,10 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
     from .call_types import CALL_HANDLERS
 
     handler = CALL_HANDLERS["goal_generation"]
-    prompt = handler.prompt(system_text, user_text)
+    system_prompt, user_prompt = handler.prompt(system_text, user_text)
     bg_kwargs = GENERATION_CONFIG.copy()
     bg_kwargs["n_gpu_layers"] = 0
-    raw = call_llm(prompt, **bg_kwargs)
+    raw = call_llm(system_prompt, user_prompt, **bg_kwargs)
     text = handler.response(raw)
 
     goals = _parse_goals_from_response(text)
@@ -334,18 +338,21 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
         system_text = req.global_prompt or ""
         user_text = req.message
 
-    prompt = handler.prompt(system_text, user_text)
-    myth_log("model_input", prompt=prompt)
+    system_prompt, user_prompt = handler.prompt(system_text, user_text)
+    myth_log("model_input", prompt=user_prompt)
     kwargs = GENERATION_CONFIG.copy()
     kwargs["stream"] = stream
     kwargs["n_gpu_layers"] = DEFAULT_N_GPU_LAYERS
-    raw = call_llm(prompt, **kwargs)
+    raw = call_llm(system_prompt, user_prompt, **kwargs)
     processed = handler.response(raw)
 
     if stream:
 
         def _generate():
-            meta = json.dumps({"prompt": prompt}, ensure_ascii=False)
+            meta = json.dumps(
+                {"system_prompt": system_prompt, "prompt": user_prompt},
+                ensure_ascii=False,
+            )
             yield meta + "\n"
             parts: list[str] = []
             for text in processed:
@@ -363,7 +370,9 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = processed if isinstance(processed, str) else str(processed)
+    assistant_reply = (
+        processed if isinstance(processed, str) else str(processed)
+    )
     history.append({"role": "assistant", "content": assistant_reply})
     save_json(chat_file(req.chat_id, "full.json"), history)
     enqueue_task(

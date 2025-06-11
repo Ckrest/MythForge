@@ -98,10 +98,16 @@ def _cli_args(**kwargs) -> list[str]:
     return args
 
 
-def call_llm(prompt: str, **kwargs):
-    """Return output from :data:`LLAMA_CLI` for ``prompt`` with logging."""
+def call_llm(system_prompt: str, user_prompt: str, **kwargs):
+    """Return output from :data:`LLAMA_CLI` for the given prompts."""
 
-    cmd = [LLAMA_CLI, "--prompt", prompt]
+    cmd = [
+        LLAMA_CLI,
+        "--system-prompt",
+        system_prompt,
+        "--prompt",
+        user_prompt,
+    ]
     cmd.extend(_cli_args(**kwargs))
     if "--single-turn" not in cmd:
         cmd.insert(1, "--single-turn")

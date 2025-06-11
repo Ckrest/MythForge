@@ -6,32 +6,37 @@ from typing import Any, Callable, Iterable, Iterator
 
 @dataclass
 class CallHandler:
-    prompt: Callable[[str, str], str]
+    """Container for prompt and response handlers."""
+
+    prompt: Callable[[str, str], tuple[str, str]]
     response: Callable[[Any], Any]
 
 
 # Prompt builders -----------------------------------------------------------
 
 
-def _fmt(system_text: str, user_text: str, call_type: str) -> str:
-    from .call_core import format_for_model
+def _fmt(system_text: str, user_text: str, call_type: str) -> tuple[str, str]:
+    """Return ``system_text`` and ``user_text`` ignoring ``call_type``."""
 
-    return format_for_model(system_text, user_text, call_type)
+    del call_type
+    return system_text, user_text
 
 
-def standard_chat_prompt(system_text: str, user_text: str) -> str:
+def standard_chat_prompt(system_text: str, user_text: str) -> tuple[str, str]:
     return _fmt(system_text, user_text, "standard_chat")
 
 
-def helper_prompt(system_text: str, user_text: str) -> str:
+def helper_prompt(system_text: str, user_text: str) -> tuple[str, str]:
     return _fmt(system_text, user_text, "helper")
 
 
-def goal_generation_prompt(system_text: str, user_text: str) -> str:
+def goal_generation_prompt(
+    system_text: str, user_text: str
+) -> tuple[str, str]:
     return _fmt(system_text, user_text, "goal_generation")
 
 
-def default_prompt(system_text: str, user_text: str) -> str:
+def default_prompt(system_text: str, user_text: str) -> tuple[str, str]:
     return _fmt(system_text, user_text, "default")
 
 
