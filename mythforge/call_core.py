@@ -26,9 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
-    queue.Queue()
-)
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
 _queued_types: set[str] = set()
 
 
@@ -64,6 +62,27 @@ def clean_text(text: str, *, trim: bool = False) -> str:
     return cleaned.strip() if trim else cleaned
 
 
+def _strip_model_logs(text: str) -> str:
+    """Return ``text`` without lines from model loading logs."""
+
+    noise_prefixes = (
+        "llama_model_load:",
+        "llama_init_from_gpt_params:",
+        "llama_print_timings:",
+        "llama_new_context_with_model:",
+        "main:",
+        "system_info:",
+    )
+
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if any(stripped.startswith(p) for p in noise_prefixes):
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _extract_text(data: Any) -> str:
     """Return text content from ``data`` which may be nested."""
 
@@ -86,6 +105,7 @@ def parse_response(output: Any) -> str:
 
     myth_log("pre_parse", raw=str(output))
     text = _extract_text(output)
+    text = _strip_model_logs(text)
     return clean_text(text, trim=True)
 
 
@@ -93,7 +113,11 @@ def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
     """Yield cleaned text from streaming model output."""
 
     for chunk in chunks:
-        yield clean_text(_extract_text(chunk))
+        text = _extract_text(chunk)
+        text = _strip_model_logs(text)
+        cleaned = clean_text(text)
+        if cleaned:
+            yield cleaned
 
 
 def format_for_model(system_text: str, user_text: str, call_type: str) -> str:
@@ -230,9 +254,7 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
         return
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = (
-        state.get("messages_since_goal_eval", 0) + 1
-    )
+    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -341,9 +363,7 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = (
-        processed if isinstance(processed, str) else str(processed)
-    )
+    assistant_reply = processed if isinstance(processed, str) else str(processed)
     history.append({"role": "assistant", "content": assistant_reply})
     save_json(chat_file(req.chat_id, "full.json"), history)
     enqueue_task(
