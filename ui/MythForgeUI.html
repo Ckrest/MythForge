@@ -234,7 +234,6 @@
                     <label>Goal Impulse <input id="goal-impulse-input" type="number" min="1" value="2"></label>
                     <label>New Goal Bias <input id="new-goal-bias-input" type="number" min="1" value="2"></label>
                     <button id="server-settings-save-btn">Save</button>
-                    <button id="stop-llama-btn" style="margin-top:5px;">Stop llama-cli</button>
                 </div>
                 <button id="system-toggle" class="new-chat" style="display:none;margin-top:10px;">⚙️ Last Prompt</button>
             </div>
@@ -395,7 +394,6 @@
         const goalImpulseInput  = document.getElementById('goal-impulse-input');
         const newGoalBiasInput  = document.getElementById('new-goal-bias-input');
         const serverSettingsSaveBtn = document.getElementById('server-settings-save-btn');
-        const stopLlamaBtn    = document.getElementById('stop-llama-btn');
         const promptModal      = document.getElementById('prompt-edit-modal');
         const promptModalTitle = document.getElementById('prompt-edit-title');
         const promptNameInput  = document.getElementById('prompt-name-input');
@@ -515,18 +513,6 @@
                 state.serverSettings = {...state.serverSettings, ...payload};
                 alert('Settings saved');
             }catch(e){ console.error('Failed to save server settings:', e); }
-        }
-
-        async function stopLlama(){
-            try{
-                const res = await apiFetch('/stop_llama', {method:'POST'});
-                if(!res.ok){
-                    const err = await res.json();
-                    alert('Error: ' + (err.detail || res.status));
-                    return;
-                }
-                alert('Signal sent');
-            }catch(e){ console.error('Failed to stop llama:', e); }
         }
 
         function resizeModal(modal, width){
@@ -1269,7 +1255,6 @@
             openSettingsBtn.addEventListener('click', openSettings);
             settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
             serverSettingsSaveBtn.addEventListener('click', saveServerSettings);
-            stopLlamaBtn.addEventListener('click', stopLlama);
             settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
             sendButton.addEventListener('click', () => {
                 if(userInput.value.trim()===''){
