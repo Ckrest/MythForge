@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING
+import threading
+import queue
+from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING, Callable
 
 from fastapi.responses import StreamingResponse
 
@@ -21,6 +23,33 @@ from .utils import (
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from .main import ChatRequest
+
+# --- Background task queue -------------------------------------------------
+
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
+    queue.Queue()
+)
+_queued_types: set[str] = set()
+
+
+def _task_worker() -> None:
+    while True:
+        call_type, func, args = _task_queue.get()
+        try:
+            func(*args)
+        finally:
+            _queued_types.discard(call_type)
+            _task_queue.task_done()
+
+
+threading.Thread(target=_task_worker, daemon=True).start()
+
+
+def enqueue_task(call_type: str, func: Callable[..., None], *args) -> None:
+    if call_type in _queued_types:
+        return
+    _queued_types.add(call_type)
+    _task_queue.put((call_type, func, args))
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +257,9 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
 
     handler = CALL_HANDLERS["goal_generation"]
     prompt = handler.prompt(system_text, user_text)
-    raw = call_llm(prompt, **GENERATION_CONFIG)
+    bg_kwargs = GENERATION_CONFIG.copy()
+    bg_kwargs["n_gpu_layers"] = 0
+    raw = call_llm(prompt, **bg_kwargs)
     text = handler.response(raw)
 
     goals = _parse_goals_from_response(text)
@@ -285,6 +316,7 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
     myth_log("model_input", prompt=prompt)
     kwargs = GENERATION_CONFIG.copy()
     kwargs["stream"] = stream
+    kwargs["n_gpu_layers"] = 35
     raw = call_llm(prompt, **kwargs)
     processed = handler.response(raw)
 
@@ -298,7 +330,12 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
             assistant_reply = "".join(parts).strip()
             history.append({"role": "assistant", "content": assistant_reply})
             save_json(chat_file(req.chat_id, "full.json"), history)
-            _maybe_generate_goals(req.chat_id, req.global_prompt or "")
+            enqueue_task(
+                "goal_generation",
+                _maybe_generate_goals,
+                req.chat_id,
+                req.global_prompt or "",
+            )
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
@@ -307,5 +344,10 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
     )
     history.append({"role": "assistant", "content": assistant_reply})
     save_json(chat_file(req.chat_id, "full.json"), history)
-    _maybe_generate_goals(req.chat_id, req.global_prompt or "")
+    enqueue_task(
+        "goal_generation",
+        _maybe_generate_goals,
+        req.chat_id,
+        req.global_prompt or "",
+    )
     return {"detail": assistant_reply}
