@@ -1261,7 +1261,6 @@
 
         function stopGenerating(){
             if(abortController){ abortController.abort(); }
-            apiFetch('/abort_generation',{method:'POST'}).catch(()=>{});
             state.isGenerating=false;
             updateBusyUI();
         }
