@@ -10,10 +10,14 @@ from typing import Any, List
 
 LOG_DIR = "server_logs"
 CHATS_DIR = "chats"
+VERBOSE_MODE = False
 
 
 def myth_log(*args, **kwargs) -> None:
-    """Log caller name with supplied arguments."""
+    """Log caller name with supplied arguments when ``VERBOSE_MODE`` is true."""
+
+    if not VERBOSE_MODE:
+        return
 
     now = datetime.utcnow()
     caller = "unknown"
