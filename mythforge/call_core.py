@@ -356,7 +356,9 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
         system_text = req.global_prompt or ""
         user_text = req.message
 
-    if req.chat_id != _current_chat_id or system_text != (_current_prompt or ""):
+    if req.chat_id != _current_chat_id or system_text != (
+        _current_prompt or ""
+    ):
         _current_chat_id = req.chat_id
         _current_prompt = system_text
 
@@ -390,7 +392,8 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
                 req.global_prompt or "",
             )
 
-        warm_up(_current_prompt or "")
+        warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
+
         return StreamingResponse(_generate(), media_type="text/plain")
 
     assistant_reply = (
@@ -404,5 +407,7 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
         req.chat_id,
         req.global_prompt or "",
     )
-    warm_up(_current_prompt or "")
+
+    warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
+
     return {"detail": assistant_reply}

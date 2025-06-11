@@ -30,7 +30,8 @@ app = FastAPI(title="Myth Forge Server")
 def _startup() -> None:
     """Load the model in the background."""
 
-    model.warm_up()
+    model.warm_up(n_gpu_layers=model.DEFAULT_N_GPU_LAYERS)
+
 
 
 @app.on_event("shutdown")

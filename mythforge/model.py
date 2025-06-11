@@ -170,8 +170,9 @@ def _stop_warm() -> None:
             _warm_process.kill()
     _warm_process = None
 
-
-def warm_up(system_prompt: str = "", user_prompt: str = "") -> None:
+def warm_up(
+    system_prompt: str = "", user_prompt: str = "", *, n_gpu_layers: int = 0
+) -> None:
     """Start a background process to load the model early."""
 
     _stop_warm()
@@ -192,6 +193,9 @@ def warm_up(system_prompt: str = "", user_prompt: str = "") -> None:
         myth_log("warm_up_error", error=str(exc))
         return
 
+
+    cmd.extend(_cli_args(n_gpu_layers=n_gpu_layers))
+    
     try:
         _warm_process = subprocess.Popen(
             cmd,
