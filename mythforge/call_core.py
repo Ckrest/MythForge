@@ -74,6 +74,11 @@ def _strip_model_logs(text: str) -> str:
         "llama_new_context_with_model:",
         "main:",
         "system_info:",
+        "ggml_vulkan:",
+        "load_tensors:",
+        "print_info:",
+        "llama_context:",
+        "llama_kv_cache_unified:",
     )
 
     lines = []
