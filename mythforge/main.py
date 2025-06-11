@@ -219,12 +219,11 @@ def save_item(
         model.MODEL_SETTINGS.update(data)
         save_json(model.MODEL_SETTINGS_PATH, model.MODEL_SETTINGS)
         for key in (
-            "temperature",
+            "temp",
             "top_k",
             "top_p",
             "min_p",
             "repeat_penalty",
-            "stop",
         ):
             if key in model.MODEL_SETTINGS:
                 model.GENERATION_CONFIG[key] = model.MODEL_SETTINGS[key]

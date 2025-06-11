@@ -223,7 +223,7 @@
                 <div class="sidebar-section" id="generation-settings">
                     <h3>Model</h3>
                     <label>Max Tokens <input id="max-tokens-input" type="number" min="1"></label>
-                    <label>Temperature <input id="temperature-input" type="number" step="0.01"></label>
+                    <label>Temp <input id="temp-input" type="number" step="0.01"></label>
                     <label>Top K <input id="top-k-input" type="number" min="0"></label>
                     <label>Top P <input id="top-p-input" type="number" step="0.01" min="0" max="1"></label>
                     <label>Min P <input id="min-p-input" type="number" step="0.01" min="0" max="1"></label>
@@ -345,7 +345,7 @@
             },
             serverSettings: {
                 max_tokens: 250,
-                temperature: 0.8,
+                temp: 0.8,
                 top_k: 40,
                 top_p: 0.95,
                 min_p: 0.05,
@@ -384,7 +384,7 @@
         const botNameInput     = document.getElementById('bot-name-input');
         const scrollLinesInput = document.getElementById('scroll-lines-input');
         const maxTokensInput   = document.getElementById('max-tokens-input');
-        const temperatureInput = document.getElementById('temperature-input');
+        const tempInput = document.getElementById('temp-input');
         const topKInput        = document.getElementById('top-k-input');
         const topPInput        = document.getElementById('top-p-input');
         const minPInput        = document.getElementById('min-p-input');
@@ -478,7 +478,7 @@
                 const data = await res.json();
                 state.serverSettings = data;
                 maxTokensInput.value     = data.max_tokens ?? '';
-                temperatureInput.value   = data.temperature ?? '';
+                tempInput.value          = data.temp ?? '';
                 topKInput.value          = data.top_k ?? '';
                 topPInput.value          = data.top_p ?? '';
                 minPInput.value          = data.min_p ?? '';
@@ -493,7 +493,7 @@
         async function saveServerSettings(){
             const payload = {
                 max_tokens: parseInt(maxTokensInput.value) || 1,
-                temperature: parseFloat(temperatureInput.value) || 0,
+                temp: parseFloat(tempInput.value) || 0,
                 top_k: parseInt(topKInput.value) || 0,
                 top_p: parseFloat(topPInput.value) || 0,
                 min_p: parseFloat(minPInput.value) || 0,
