@@ -49,6 +49,15 @@ GENERATION_CONFIG = {
 }
 
 
+def llm_args(*, stream: bool = False, background: bool = False) -> dict[str, object]:
+    """Return argument mapping for :func:`call_llm`."""
+
+    args = GENERATION_CONFIG.copy()
+    args["stream"] = stream
+    args["n_gpu_layers"] = 0 if background else DEFAULT_N_GPU_LAYERS
+    return args
+
+
 # ---------------------------------------------------------------------------
 # Model initialization
 # ---------------------------------------------------------------------------
@@ -170,6 +179,7 @@ def _stop_warm() -> None:
             _warm_process.kill()
     _warm_process = None
 
+
 def warm_up(
     system_prompt: str = "", user_prompt: str = "", *, n_gpu_layers: int = 0
 ) -> None:
@@ -193,9 +203,8 @@ def warm_up(
         myth_log("warm_up_error", error=str(exc))
         return
 
-
     cmd.extend(_cli_args(n_gpu_layers=n_gpu_layers))
-    
+
     try:
         _warm_process = subprocess.Popen(
             cmd,

@@ -13,6 +13,7 @@ from .model import (
     GENERATION_CONFIG,
     DEFAULT_N_GPU_LAYERS,
     call_llm,
+    llm_args,
     warm_up,
     _stop_warm,
 )
@@ -36,9 +37,7 @@ _current_prompt: str | None = None
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
-    queue.Queue()
-)
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
 _queued_types: set[str] = set()
 
 
@@ -271,9 +270,7 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
         return
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = (
-        state.get("messages_since_goal_eval", 0) + 1
-    )
+    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -298,9 +295,11 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
 
     handler = CALL_HANDLERS["goal_generation"]
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
-    bg_kwargs = GENERATION_CONFIG.copy()
-    bg_kwargs["n_gpu_layers"] = 0
-    raw = call_llm(system_prompt, user_prompt, **bg_kwargs)
+    raw = call_llm(
+        system_prompt,
+        user_prompt,
+        **llm_args(background=True),
+    )
     text = handler.response(raw)
 
     goals = _parse_goals_from_response(text)
@@ -356,18 +355,17 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
         system_text = req.global_prompt or ""
         user_text = req.message
 
-    if req.chat_id != _current_chat_id or system_text != (
-        _current_prompt or ""
-    ):
+    if req.chat_id != _current_chat_id or system_text != (_current_prompt or ""):
         _current_chat_id = req.chat_id
         _current_prompt = system_text
 
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
     myth_log("model_input", prompt=user_prompt)
-    kwargs = GENERATION_CONFIG.copy()
-    kwargs["stream"] = stream
-    kwargs["n_gpu_layers"] = DEFAULT_N_GPU_LAYERS
-    raw = call_llm(system_prompt, user_prompt, **kwargs)
+    raw = call_llm(
+        system_prompt,
+        user_prompt,
+        **llm_args(stream=stream),
+    )
     processed = handler.response(raw)
 
     if stream:
@@ -396,9 +394,7 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = (
-        processed if isinstance(processed, str) else str(processed)
-    )
+    assistant_reply = processed if isinstance(processed, str) else str(processed)
     history.append({"role": "assistant", "content": assistant_reply})
     save_json(chat_file(req.chat_id, "full.json"), history)
     enqueue_task(
