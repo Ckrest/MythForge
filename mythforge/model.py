@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import inspect
 import json
 import os
-from typing import Dict
-
-from llama_cpp import Llama, llama_print_system_info
+import subprocess
+from typing import Dict, Iterator
 
 
 MODELS_DIR = "models"
@@ -54,7 +52,7 @@ GENERATION_CONFIG = {
 
 
 def discover_model_path() -> str:
-    """Return the path to the first ``.gguf`` model file under ``MODELS_DIR``."""
+    """Return path to the first ``.gguf`` model under ``MODELS_DIR``."""
 
     if not os.path.isdir(MODELS_DIR):
         raise FileNotFoundError(f"Models directory '{MODELS_DIR}' not found")
@@ -67,75 +65,45 @@ def discover_model_path() -> str:
     raise FileNotFoundError(f"No .gguf model files found under '{MODELS_DIR}'")
 
 
-_model_config = {
-    "model_path": MODEL_SETTINGS.get("model_path") or discover_model_path(),
-    "n_ctx": MODEL_SETTINGS.get("n_ctx", DEFAULT_CTX_SIZE),
-    "n_batch": MODEL_SETTINGS.get("n_batch", DEFAULT_N_BATCH),
-    "n_threads": MODEL_SETTINGS.get("n_threads") or DEFAULT_N_THREADS,
-    "prompt_template": MODEL_SETTINGS.get("prompt_template", ""),
-}
-
-for key in (
-    "f16_kv",
-    "use_mmap",
-    "use_mlock",
-    "n_gpu_layers",
-    "main_memory_kv",
-):
-    if key in MODEL_SETTINGS and MODEL_SETTINGS[key] is not None:
-        _model_config[key] = MODEL_SETTINGS[key]
-
-# Default to full GPU utilization when not specified
-if "n_gpu_layers" not in _model_config:
-    _model_config["n_gpu_layers"] = -1
-
-try:
-    sig = inspect.signature(Llama)
-    if "add_bos" in sig.parameters:
-        _model_config["add_bos"] = False
-    elif "add_bos_token" in sig.parameters:
-        _model_config["add_bos_token"] = False
-except Exception:
-    pass
-
-llm = Llama(**_model_config)
+LLAMA_CLI = "llama-cli.exe"
 
 
-def show_system_info() -> None:
-    """Print llama.cpp system info for debugging GPU usage."""
-
-    try:
-        info = llama_print_system_info()
-        print(info)
-    except Exception as exc:  # pragma: no cover - best effort
-        print(f"Failed to get system info: {exc}")
-
-
-show_system_info()
-
-try:
-    _CALL_KWARGS = set(inspect.signature(llm.__call__).parameters)
-except Exception:  # pragma: no cover
-    _CALL_KWARGS = set()
+def _cli_args(**kwargs) -> list[str]:
+    args = []
+    for key, value in kwargs.items():
+        if key == "stream":
+            continue
+        option = f"--{key.replace('_', '-')}"
+        if isinstance(value, bool):
+            if value:
+                args.append(option)
+        else:
+            args.extend([option, str(value)])
+    return args
 
 
 def call_llm(prompt: str, **kwargs):
-    """Call the ``llm`` object with ``prompt`` and return the result."""
+    """Return output from ``llama-cli.exe`` for ``prompt``."""
 
-    if _CALL_KWARGS:
-        filtered = {k: v for k, v in kwargs.items() if k in _CALL_KWARGS}
-    else:  # Fallback if inspection failed
-        filtered = kwargs
+    cmd = [LLAMA_CLI, "--prompt", prompt]
+    cmd.extend(_cli_args(**kwargs))
 
-    if filtered.get("stream"):
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    stream = kwargs.get("stream", False)
 
-        def _stream():
-            for chunk in llm(prompt, **filtered):
-                yield chunk
+    if stream:
+
+        def _stream() -> Iterator[dict[str, str]]:
+            assert process.stdout is not None
+            for line in process.stdout:
+                yield {"text": line.rstrip()}
 
         return _stream()
 
-    return llm(prompt, **filtered)
+    output, _ = process.communicate()
+    return {"text": output.rstrip()}
 
 
 call_llm._patched = True
