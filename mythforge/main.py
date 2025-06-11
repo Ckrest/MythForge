@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 import os
-from datetime import datetime
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException
@@ -28,7 +27,6 @@ app = FastAPI(title="Myth Forge Server")
 # --- Configuration ---------------------------------------------------------
 
 GLOBAL_PROMPTS_DIR = "global_prompts"
-SERVER_VERSION = datetime.utcnow().isoformat()
 
 
 class ChatRequest(BaseModel):
@@ -306,12 +304,6 @@ def update_settings(data: Dict[str, object]):
 @app.get("/response_prompt_status")
 def response_prompt_status():
     return {"pending": 0}
-
-
-@app.get("/server_version")
-def server_version():
-    """Return the server start time string."""
-    return {"version": SERVER_VERSION}
 
 
 # --- Standard Chat Endpoints ---------------------------------------------
