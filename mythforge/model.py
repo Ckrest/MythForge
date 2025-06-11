@@ -6,7 +6,6 @@ import json
 import os
 import platform
 import subprocess
-import threading
 from typing import Dict, Iterator
 
 from .utils import ROOT_DIR, myth_log
@@ -77,24 +76,6 @@ def _default_cli() -> str:
 
 LLAMA_CLI = os.path.abspath(MODEL_SETTINGS.get("llama_cli", _default_cli()))
 
-# Currently running subprocess if any
-CURRENT_PROCESS: subprocess.Popen | None = None
-_PROC_LOCK = threading.Lock()
-
-
-def abort_current_generation() -> None:
-    """Terminate any active LLM process."""
-
-    global CURRENT_PROCESS
-    with _PROC_LOCK:
-        proc = CURRENT_PROCESS
-        if proc and proc.poll() is None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
-        CURRENT_PROCESS = None
-
 
 def _cli_args(**kwargs) -> list[str]:
     """Return CLI arguments mapping Python names to binary flags."""
@@ -145,18 +126,12 @@ def call_llm(prompt: str, **kwargs):
     stream = kwargs.get("stream", False)
 
     if stream:
-        with _PROC_LOCK:
-            abort_current_generation()
-            globals()["CURRENT_PROCESS"] = process
 
         def _stream() -> Iterator[dict[str, str]]:
             assert process.stdout is not None
-            try:
-                for line in process.stdout:
-                    yield {"text": line.rstrip()}
-            finally:
-                myth_log("call_llm_exit", code=process.wait())
-                abort_current_generation()
+            for line in process.stdout:
+                yield {"text": line.rstrip()}
+            myth_log("call_llm_exit", code=process.wait())
 
         return _stream()
 
