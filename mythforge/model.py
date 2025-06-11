@@ -7,6 +7,8 @@ import os
 import subprocess
 from typing import Dict, Iterator
 
+from .utils import myth_log
+
 
 MODELS_DIR = "models"
 MODEL_SETTINGS_PATH = "model_settings.json"
@@ -83,14 +85,20 @@ def _cli_args(**kwargs) -> list[str]:
 
 
 def call_llm(prompt: str, **kwargs):
-    """Return output from :data:`LLAMA_CLI` for ``prompt``."""
+    """Return output from :data:`LLAMA_CLI` for ``prompt`` with logging."""
 
     cmd = [LLAMA_CLI, "--prompt", prompt]
     cmd.extend(_cli_args(**kwargs))
+    myth_log("call_llm_start", cmd=" ".join(cmd))
 
-    process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-    )
+    try:
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        myth_log("call_llm_error", error=str(exc))
+        raise RuntimeError(f"Failed to start process: {exc}") from exc
+
     stream = kwargs.get("stream", False)
 
     if stream:
@@ -99,10 +107,14 @@ def call_llm(prompt: str, **kwargs):
             assert process.stdout is not None
             for line in process.stdout:
                 yield {"text": line.rstrip()}
+            myth_log("call_llm_exit", code=process.wait())
 
         return _stream()
 
     output, _ = process.communicate()
+    myth_log("call_llm_exit", code=process.returncode)
+    if process.returncode != 0:
+        raise RuntimeError(f"Subprocess exited with code {process.returncode}")
     return {"text": output.rstrip()}
 
 
