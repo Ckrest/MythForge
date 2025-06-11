@@ -96,9 +96,13 @@ def call_llm(prompt: str, **kwargs):
 
     cmd = [LLAMA_CLI, "--prompt", prompt]
     cmd.extend(_cli_args(**kwargs))
-    if "model" not in kwargs:
-        model_path = discover_model_path()
-        cmd.extend(["--model", model_path])
+    try:
+        if "model" not in kwargs:
+            model_path = discover_model_path()
+            cmd.extend(["--model", model_path])
+    except Exception as exc:
+        myth_log("call_llm_error", error=str(exc))
+        raise
 
     myth_log("call_llm_start", cmd=" ".join(cmd))
 
