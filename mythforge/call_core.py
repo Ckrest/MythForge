@@ -35,19 +35,36 @@ def clean_text(text: str, *, trim: bool = False) -> str:
     return cleaned.strip() if trim else cleaned
 
 
-def parse_response(output: Dict[str, Any]) -> str:
+def _extract_text(data: Any) -> str:
+    """Return text content from ``data`` which may be nested."""
+
+    if isinstance(data, dict):
+        choices = data.get("choices")
+        if isinstance(choices, list) and choices:
+            item = choices[0]
+            if isinstance(item, dict):
+                return str(item.get("text", ""))
+        return str(data.get("text", ""))
+    if isinstance(data, list) and data:
+        return _extract_text(data[0])
+    if isinstance(data, str):
+        return data
+    return str(data)
+
+
+def parse_response(output: Any) -> str:
     """Extract and clean text from a model response chunk."""
 
     myth_log("pre_parse", raw=str(output))
-    text = output.get("choices", [{}])[0].get("text", "")
+    text = _extract_text(output)
     return clean_text(text, trim=True)
 
 
-def stream_parsed(chunks: Iterable[Dict[str, Any]]) -> Iterator[str]:
+def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
     """Yield cleaned text from streaming model output."""
 
     for chunk in chunks:
-        yield clean_text(chunk.get("choices", [{}]).get("text", ""))
+        yield clean_text(_extract_text(chunk))
 
 
 def format_for_model(system_text: str, user_text: str, call_type: str) -> str:
