@@ -33,12 +33,12 @@ def _startup() -> None:
     model.warm_up(n_gpu_layers=model.DEFAULT_N_GPU_LAYERS)
 
 
+
 @app.on_event("shutdown")
 def _shutdown() -> None:
     """Stop any background model process."""
 
     model._stop_warm()
-
 
 # --- Configuration ---------------------------------------------------------
 

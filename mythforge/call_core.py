@@ -393,6 +393,7 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
             )
 
         warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
+
         return StreamingResponse(_generate(), media_type="text/plain")
 
     assistant_reply = (
@@ -406,5 +407,7 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
         req.chat_id,
         req.global_prompt or "",
     )
+
     warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
+
     return {"detail": assistant_reply}

@@ -108,6 +108,7 @@ def call_llm(system_prompt: str, user_prompt: str, **kwargs):
         user_prompt,
     ]
     cmd.append("--no-warmup")
+    cmd.append("--no-conversation")
     cmd.extend(_cli_args(**kwargs))
     if "--single-turn" not in cmd:
         cmd.insert(1, "--single-turn")
@@ -169,7 +170,6 @@ def _stop_warm() -> None:
             _warm_process.kill()
     _warm_process = None
 
-
 def warm_up(
     system_prompt: str = "", user_prompt: str = "", *, n_gpu_layers: int = 0
 ) -> None:
@@ -184,6 +184,7 @@ def warm_up(
         user_prompt,
         "--single-turn",
         "--no-warmup",
+        "--no-conversation",
     ]
     try:
         model_path = discover_model_path()
@@ -192,8 +193,9 @@ def warm_up(
         myth_log("warm_up_error", error=str(exc))
         return
 
-    cmd.extend(_cli_args(n_gpu_layers=n_gpu_layers))
 
+    cmd.extend(_cli_args(n_gpu_layers=n_gpu_layers))
+    
     try:
         _warm_process = subprocess.Popen(
             cmd,
