@@ -1248,6 +1248,22 @@
             updateBusyUI();
         }
 
+        async function checkVersionOnce(){
+            try{
+                const res = await apiFetch('/server_version');
+                if(res.ok){
+                    const data = await res.json();
+                    const saved = localStorage.getItem('serverVersion');
+                    if(saved && saved !== data.version){
+                        localStorage.setItem('serverVersion', data.version);
+                        location.reload();
+                    }else if(!saved){
+                        localStorage.setItem('serverVersion', data.version);
+                    }
+                }
+            }catch(e){ console.error('Version check failed:', e); }
+        }
+
         function setupEvents(){
             themeSelect.addEventListener('change', e=>applyTheme(e.target.value));
             textSizeSelect.addEventListener('change', e=>applyTextSize(e.target.value));
@@ -1294,6 +1310,7 @@
             await loadServerSettings();
             autoResize();
             updateBusyUI();
+            await checkVersionOnce();
         })();
     </script>
 </body>
