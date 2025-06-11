@@ -71,11 +71,15 @@ LLAMA_CLI = os.path.join("dependencies", "llama-cli.exe")
 
 
 def _cli_args(**kwargs) -> list[str]:
+    """Return CLI arguments mapping Python names to binary flags."""
+
+    option_map = {"temperature": "temp"}
     args = []
     for key, value in kwargs.items():
         if key == "stream":
             continue
-        option = f"--{key.replace('_', '-')}"
+        opt_key = option_map.get(key, key)
+        option = f"--{opt_key.replace('_', '-')}"
         if isinstance(value, bool):
             if value:
                 args.append(option)
