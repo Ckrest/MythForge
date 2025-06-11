@@ -107,6 +107,7 @@ def call_llm(system_prompt: str, user_prompt: str, **kwargs):
         "--prompt",
         user_prompt,
     ]
+    cmd.append("--no-warmup")
     cmd.extend(_cli_args(**kwargs))
     if "--single-turn" not in cmd:
         cmd.insert(1, "--single-turn")
