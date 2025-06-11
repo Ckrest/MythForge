@@ -39,12 +39,11 @@ SUMMARIZE_BATCH = MODEL_SETTINGS.get("summarize_batch", 12)
 
 # Generation settings
 GENERATION_CONFIG = {
-    "temperature": MODEL_SETTINGS.get("temperature", 0.8),
+    "temp": MODEL_SETTINGS.get("temp", 0.8),
     "top_k": MODEL_SETTINGS.get("top_k", 40),
     "top_p": MODEL_SETTINGS.get("top_p", 0.95),
     "min_p": MODEL_SETTINGS.get("min_p", 0.05),
     "repeat_penalty": MODEL_SETTINGS.get("repeat_penalty", 1.1),
-    "stop": MODEL_SETTINGS.get("stop", ["<|eot_id|>"]),
 }
 
 
@@ -73,7 +72,7 @@ LLAMA_CLI = os.path.join("dependencies", "llama-cli.exe")
 def _cli_args(**kwargs) -> list[str]:
     """Return CLI arguments mapping Python names to binary flags."""
 
-    option_map = {"temperature": "temp"}
+    option_map = {}
     args = []
     for key, value in kwargs.items():
         if key == "stream":

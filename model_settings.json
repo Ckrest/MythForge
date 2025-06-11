@@ -11,7 +11,7 @@
   "main_memory_kv": true,
 
   "max_tokens": 250,
-  "temperature": 0.8,
+  "temp": 0.8,
   "top_k": 40,
   "top_p": 0.95,
   "min_p": 0.05,
@@ -20,7 +20,6 @@
   "goal_limit": 3,
   "goal_impulse": 2,
   "new_goal_bias": 2,
-  "stop": ["<|eot_id|>"],
   "stream": false,
   "echo": false,
   "summarize_threshold": 20,
