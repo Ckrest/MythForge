@@ -83,6 +83,9 @@ def _cli_args(**kwargs) -> list[str]:
         if isinstance(value, bool):
             if value:
                 args.append(option)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                args.extend([option, str(item)])
         else:
             args.extend([option, str(value)])
     return args
