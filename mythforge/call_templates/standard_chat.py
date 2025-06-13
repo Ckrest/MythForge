@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, Iterator, List
 
 from typing import TYPE_CHECKING
 
-from ..model import LLAMA_CLI, llm_args, _cli_args, _select_model_path
+from ..model import model_launch, llm_args
 from .. import memory
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
@@ -20,6 +20,16 @@ _chat_process: subprocess.Popen | None = None
 _last_used: float = 0.0
 _lock = threading.Lock()
 _TIMEOUT = 20 * 60  # 20 minutes
+
+# -----------------------------------
+# Model launch parameters / arguments ORERRIDE
+# -----------------------------------
+
+MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
+    "interactive": True,
+    "interactive_first": True,
+    **llm_args(stream=True),
+}
 
 
 def _watchdog() -> None:
@@ -54,18 +64,7 @@ def prep_standard_chat() -> None:
             _last_used = time.time()
             return
 
-        args = [
-            LLAMA_CLI,
-            "--chat-template",
-            "",
-            "--no-warmup",
-            "--no-conversation",
-            "--interactive",
-            "--interactive-first",
-            "--model",
-            _select_model_path(False),
-        ]
-        args.extend(_cli_args(**llm_args(stream=True)))
+        args = model_launch(**MODEL_LAUNCH_OVERRIDE)
         _chat_process = subprocess.Popen(
             args,
             stdin=subprocess.PIPE,
@@ -88,9 +87,7 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     from ..call_core import format_for_model
 
     with _lock:
-        _chat_process.stdin.write(
-            format_for_model(system_text, user_text) + "\n"
-        )
+        _chat_process.stdin.write(format_for_model(system_text, user_text) + "\n")
         _chat_process.stdin.flush()
         global _last_used
         _last_used = time.time()
@@ -113,9 +110,7 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = (
-            memory.MEMORY.global_prompt or _default_global_prompt()
-        )
+        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data

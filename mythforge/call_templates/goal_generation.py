@@ -5,6 +5,12 @@ from typing import Any, Iterable
 from ..call_core import CallData, _default_global_prompt
 from .. import memory
 
+# -----------------------------------
+# Model launch parameters / arguments ORERRIDE
+# -----------------------------------
+
+MODEL_LAUNCH_OVERRIDE: dict = {}
+
 
 def prepare_system_text(call: CallData) -> str:
     """Return the system prompt for ``call``."""
