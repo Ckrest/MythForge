@@ -50,11 +50,12 @@ GENERATION_CONFIG = {
 
 
 def llm_args(*, stream: bool = False, background: bool = False) -> dict[str, object]:
-    """Return argument mapping for :func:`call_llm`."""
+    """Return argument overrides for :func:`call_llm`."""
 
-    args = GENERATION_CONFIG.copy()
-    args["stream"] = stream
-    args["n_gpu_layers"] = 0 if background else DEFAULT_N_GPU_LAYERS
+    args = {"stream": stream}
+    if background:
+        args["background"] = True
+        args["n_gpu_layers"] = 0
     return args
 
 
@@ -126,6 +127,9 @@ MODEL_LAUNCH_ARGS: dict[str, object] = {
     "chat_template": "",
     "no_warmup": True,
     "no_conversation": True,
+    "single_turn": True,
+    "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
+    **GENERATION_CONFIG,
 }
 
 
@@ -151,8 +155,6 @@ def call_llm(system_prompt: str, user_prompt: str, **kwargs):
     kwargs.pop("background", None)
 
     cmd = model_launch(user_prompt, background=background, **kwargs)
-    if "--single-turn" not in cmd:
-        cmd.insert(1, "--single-turn")
     myth_log("call_llm_start", cmd=" ".join(cmd))
 
     try:
