@@ -23,5 +23,7 @@
   "stream": false,
   "echo": false,
   "summarize_threshold": 20,
-  "summarize_batch": 12
+  "summarize_batch": 12,
+  "primary_model": "unsloth_no_template.gguf",
+  "background_model": "zzphi-2.Q5_K_M.gguf"
 }

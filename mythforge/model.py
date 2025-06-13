@@ -49,7 +49,9 @@ GENERATION_CONFIG = {
 }
 
 
-def llm_args(*, stream: bool = False, background: bool = False) -> dict[str, object]:
+def llm_args(
+    *, stream: bool = False, background: bool = False
+) -> dict[str, object]:
     """Return argument mapping for :func:`call_llm`."""
 
     args = GENERATION_CONFIG.copy()
@@ -75,6 +77,18 @@ def discover_model_path() -> str:
                 return os.path.join(root, fname)
 
     raise FileNotFoundError(f"No .gguf model files found under '{MODELS_DIR}'")
+
+
+def _select_model_path(background: bool = False) -> str:
+    """Return configured model path or fallback to discovery."""
+
+    key = "background_model" if background else "primary_model"
+    name = MODEL_SETTINGS.get(key, "")
+    if name:
+        path = os.path.join(MODELS_DIR, name)
+        if os.path.exists(path):
+            return path
+    return discover_model_path()
 
 
 def _default_cli() -> str:
@@ -123,7 +137,8 @@ def call_llm(system_prompt: str, user_prompt: str, **kwargs):
         cmd.insert(1, "--single-turn")
     try:
         if "model" not in kwargs:
-            model_path = discover_model_path()
+            background = kwargs.get("n_gpu_layers", DEFAULT_N_GPU_LAYERS) == 0
+            model_path = _select_model_path(background)
             cmd.extend(["--model", model_path])
     except Exception as exc:
         myth_log("call_llm_error", error=str(exc))
@@ -197,7 +212,8 @@ def warm_up(
         "--no-conversation",
     ]
     try:
-        model_path = discover_model_path()
+        background = n_gpu_layers == 0
+        model_path = _select_model_path(background)
         cmd.extend(["--model", model_path])
     except Exception as exc:  # pragma: no cover - best effort
         myth_log("warm_up_error", error=str(exc))
