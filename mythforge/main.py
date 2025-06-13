@@ -510,7 +510,7 @@ def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
 
     history_service.append_message(chat_id, "user", req.message)
     call = build_call(req)
-    return handle_chat(call, history_service, memory_manager)
+    return handle_chat(call, history_service, memory_manager, stream=True)
 
 
 @chat_router.post("/{chat_id}/assistant")
