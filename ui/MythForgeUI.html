@@ -788,8 +788,11 @@
                 const json = await res.json();
                 state.prompts = json.prompts.sort((a,b)=>a.localeCompare(b));
                 const last = localStorage.getItem('lastGlobalPrompt');
-                if(last && state.prompts.includes(last)) state.currentPrompt = last;
-                renderPromptList();
+                if(last && state.prompts.includes(last)){
+                    await selectPrompt(last);
+                }else{
+                    renderPromptList();
+                }
             }catch(e){ console.error('Failed to load prompts:',e); }
         }
 
