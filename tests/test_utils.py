@@ -67,3 +67,12 @@ def test_parse_response_extract_text():
 def test_stream_parsed_extract_text():
     chunks = [{"text": "a"}, {"text": "b"}]
     assert list(stream_parsed(chunks)) == ["a", "b"]
+
+
+def test_append_message_skips_blank(tmp_path, monkeypatch):
+    monkeypatch.setattr("mythforge.utils.CHATS_DIR", str(tmp_path))
+    svc = memory.ChatHistoryService()
+    svc.append_message("c1", "user", "   ")
+    assert svc.load_history("c1") == []
+    svc.append_message("c1", "user", "hello")
+    assert svc.load_history("c1") == [{"role": "user", "content": "hello"}]

@@ -50,6 +50,11 @@ class ChatHistoryService:
         self._save(chat_id, history)
 
     def append_message(self, chat_id: str, role: str, content: str) -> None:
+        """Add ``content`` to ``chat_id`` if not blank."""
+
+        if not content.strip():
+            return
+
         history = self.load_history(chat_id)
         history.append({"role": role, "content": content})
         self._save(chat_id, history)
