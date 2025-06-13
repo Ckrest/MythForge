@@ -148,7 +148,12 @@ def call_llm(system_prompt: str, user_prompt: str, **kwargs):
 
     try:
         process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except Exception as exc:  # pragma: no cover - best effort
         myth_log("call_llm_error", error=str(exc))
@@ -227,6 +232,8 @@ def warm_up(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except Exception as exc:  # pragma: no cover - best effort
         myth_log("warm_up_error", error=str(exc))
