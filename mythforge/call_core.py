@@ -99,17 +99,22 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 
 
 def parse_response(output: Any) -> str:
-    """Return ``output`` converted to ``str`` without additional parsing."""
+    """Return ``output`` as plain text."""
 
     myth_log("pre_parse", raw=str(output))
+    if isinstance(output, dict) and "text" in output:
+        return str(output["text"])
     return str(output)
 
 
 def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
-    """Yield raw ``str`` values from streaming model output."""
+    """Yield plain text from streaming model output."""
 
     for chunk in chunks:
-        yield str(chunk)
+        if isinstance(chunk, dict) and "text" in chunk:
+            yield str(chunk["text"])
+        else:
+            yield str(chunk)
 
 
 def format_for_model(system_text: str, user_text: str) -> str:
