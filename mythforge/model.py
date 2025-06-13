@@ -49,16 +49,6 @@ GENERATION_CONFIG = {
 }
 
 
-def llm_args(*, stream: bool = False, background: bool = False) -> dict[str, object]:
-    """Return argument overrides for :func:`call_llm`."""
-
-    args = {"stream": stream}
-    if background:
-        args["background"] = True
-        args["n_gpu_layers"] = 0
-    return args
-
-
 # ---------------------------------------------------------------------------
 # Model initialization
 # ---------------------------------------------------------------------------
@@ -129,11 +119,24 @@ MODEL_LAUNCH_ARGS: dict[str, object] = {
     "no_conversation": True,
     "single_turn": True,
     "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
+    "background": False,
+    "stream": False,
     **GENERATION_CONFIG,
 }
 
+# ``subprocess.Popen`` parameters for launching the model process
+MODEL_LAUNCH_PARAMS: dict[str, object] = {
+    "stdout": subprocess.PIPE,
+    "stderr": subprocess.STDOUT,
+    "text": True,
+    "encoding": "utf-8",
+    "errors": "replace",
+}
 
-def model_launch(prompt: str = "", background: bool = False, **overrides) -> list[str]:
+
+def model_launch(
+    prompt: str = "", background: bool = False, **overrides
+) -> list[str]:
     """Return a command list for launching the model."""
 
     params = MODEL_LAUNCH_ARGS.copy()
@@ -148,29 +151,23 @@ def model_launch(prompt: str = "", background: bool = False, **overrides) -> lis
     return cmd
 
 
-def call_llm(system_prompt: str, user_prompt: str, **kwargs):
+def call_llm(system_prompt: str, user_prompt: str, **overrides):
     """Return output from :data:`LLAMA_CLI` for the given prompts."""
 
-    background = kwargs.get("background", False)
-    kwargs.pop("background", None)
+    params = MODEL_LAUNCH_ARGS.copy()
+    params.update(overrides)
 
-    cmd = model_launch(user_prompt, background=background, **kwargs)
+    background = params.pop("background", False)
+    stream = params.pop("stream", False)
+
+    cmd = model_launch(user_prompt, background=background, **params)
     myth_log("call_llm_start", cmd=" ".join(cmd))
 
     try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        process = subprocess.Popen(cmd, **MODEL_LAUNCH_PARAMS)
     except Exception as exc:  # pragma: no cover - best effort
         myth_log("call_llm_error", error=str(exc))
         raise RuntimeError(f"Failed to start process: {exc}") from exc
-
-    stream = kwargs.get("stream", False)
 
     if stream:
 

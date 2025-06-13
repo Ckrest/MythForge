@@ -14,9 +14,8 @@ from .model import (
     GENERATION_CONFIG,
     DEFAULT_N_GPU_LAYERS,
     call_llm,
-    llm_args,
 )
-from .call_templates import standard_chat
+from .call_templates import standard_chat, goal_generation
 from .utils import (
     CHATS_DIR,
     chat_file,
@@ -216,7 +215,7 @@ def _maybe_generate_goals(
     raw = call_llm(
         system_prompt,
         user_prompt,
-        **llm_args(background=True),
+        **goal_generation.MODEL_LAUNCH_OVERRIDE,
     )
     text = handler.response(raw)
 
@@ -272,11 +271,9 @@ def handle_chat(
 
     from .call_types import CALL_HANDLERS
 
-    history = history_service.load_history(call.chat_id)
-
     handler = CALL_HANDLERS.get(call.call_type, CALL_HANDLERS["standard_chat"])
 
-    system_text, user_text = handler.prepare(call, history)
+    system_text, user_text = handler.prepare(call)
 
     if call.chat_id != current_chat_id or system_text != (
         current_prompt or ""
@@ -296,7 +293,7 @@ def handle_chat(
         raw = call_llm(
             system_prompt,
             user_prompt,
-            **llm_args(stream=stream),
+            stream=stream,
         )
     processed = handler.response(raw)
 

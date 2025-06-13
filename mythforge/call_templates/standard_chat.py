@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, Iterator, List
 
 from typing import TYPE_CHECKING
 
-from ..model import model_launch
+from ..model import model_launch, MODEL_LAUNCH_PARAMS
 from .. import memory
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
@@ -65,14 +65,10 @@ def prep_standard_chat() -> None:
             return
 
         args = model_launch(**MODEL_LAUNCH_OVERRIDE)
-        _chat_process = subprocess.Popen(
-            args,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        popen_args = MODEL_LAUNCH_PARAMS.copy()
+        popen_args["stdin"] = subprocess.PIPE
+        popen_args["stdout"] = subprocess.PIPE
+        _chat_process = subprocess.Popen(args, **popen_args)
         _last_used = time.time()
         threading.Thread(target=_watchdog, daemon=True).start()
 
@@ -87,7 +83,9 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     from ..call_core import format_for_model
 
     with _lock:
-        _chat_process.stdin.write(format_for_model(system_text, user_text) + "\n")
+        _chat_process.stdin.write(
+            format_for_model(system_text, user_text) + "\n"
+        )
         _chat_process.stdin.flush()
         global _last_used
         _last_used = time.time()
@@ -110,7 +108,9 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
+        call.global_prompt = (
+            memory.MEMORY.global_prompt or _default_global_prompt()
+        )
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data
@@ -134,10 +134,14 @@ def prepare_user_text(history: List[Dict[str, Any]]) -> str:
     return "\n".join(m.get("content", "") for m in history)
 
 
-def prepare(call: CallData, history: List[Dict[str, Any]]) -> tuple[str, str]:
+def prepare(call: CallData) -> tuple[str, str]:
     """Return prompts for a standard chat call."""
 
     from ..call_core import format_for_model
+    from ..memory import ChatHistoryService
+
+    history_service = ChatHistoryService()
+    history = history_service.load_history(call.chat_id)
 
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(history)
