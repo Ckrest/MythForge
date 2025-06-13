@@ -15,10 +15,7 @@ VERBOSE_MODE = False
 
 
 def myth_log(*args, **kwargs) -> None:
-    """Log caller name with supplied arguments when ``VERBOSE_MODE`` is true."""
-
-    if not VERBOSE_MODE:
-        return
+    """Log the caller name with the provided arguments."""
 
     now = datetime.utcnow()
     caller = "unknown"
