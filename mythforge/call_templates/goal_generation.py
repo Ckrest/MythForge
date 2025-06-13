@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from ..call_core import CallData
+from ..call_core import CallData, _default_global_prompt
 
 
 def prepare(call: CallData, history: list) -> tuple[str, str]:
     """Return prompts for goal generation calls."""
 
     del history
-    return call.global_prompt or "", call.message
+    if not call.global_prompt:
+        call.global_prompt = _default_global_prompt()
+    return call.global_prompt, call.message
 
 
 def prompt(system_text: str, user_text: str) -> tuple[str, str]:
