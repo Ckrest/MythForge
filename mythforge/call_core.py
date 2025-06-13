@@ -22,14 +22,13 @@ from .utils import (
     CHATS_DIR,
     chat_file,
     ensure_chat_dir,
-    goals_exists,
-    goals_path,
     load_json,
     myth_log,
     save_json,
     list_prompt_names,
     get_global_prompt_content,
 )
+from . import memory
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from .main import ChatRequest
@@ -67,9 +66,7 @@ _current_prompt: str | None = None
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
-    queue.Queue()
-)
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
 _queued_types: set[str] = set()
 
 
@@ -291,20 +288,14 @@ def _dedupe_new_goals(
 def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
     from .call_types import CALL_HANDLERS
 
-    if not goals_exists(chat_id):
+    goals = memory.MEMORY.goals_data
+    if not goals.enabled:
         return
-    try:
-        with open(goals_path(chat_id), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        character = data.get("character", "")
-        setting = data.get("setting", "")
-    except Exception:
-        return
+    character = goals.character
+    setting = goals.setting
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = (
-        state.get("messages_since_goal_eval", 0) + 1
-    )
+    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -385,9 +376,7 @@ def handle_chat(call: CallData, stream: bool = False):
 
     system_text, user_text = handler.prepare(call, history)
 
-    if call.chat_id != _current_chat_id or system_text != (
-        _current_prompt or ""
-    ):
+    if call.chat_id != _current_chat_id or system_text != (_current_prompt or ""):
         _current_chat_id = call.chat_id
         _current_prompt = system_text
 
@@ -431,9 +420,7 @@ def handle_chat(call: CallData, stream: bool = False):
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = (
-        processed if isinstance(processed, str) else str(processed)
-    )
+    assistant_reply = processed if isinstance(processed, str) else str(processed)
     _finalize_chat(history, assistant_reply, call)
 
     return {"detail": assistant_reply}
