@@ -11,6 +11,7 @@ from typing import Any, List
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 LOG_DIR = os.path.join(ROOT_DIR, "server_logs")
 CHATS_DIR = os.path.join(ROOT_DIR, "chats")
+GLOBAL_PROMPTS_DIR = os.path.join(ROOT_DIR, "global_prompts")
 VERBOSE_MODE = False
 
 
@@ -113,3 +114,83 @@ def goals_exists(chat_id: str) -> bool:
     exists = os.path.exists(path)
     myth_log("goals_check", chat_id=chat_id, exists=exists)
     return exists
+
+
+def _prompt_path(name: str) -> str:
+    """Return the filesystem path for a prompt ``name``."""
+
+    safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
+    return os.path.join(GLOBAL_PROMPTS_DIR, f"{safe}.json")
+
+
+def load_global_prompts() -> List[dict[str, str]]:
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    prompts: List[dict[str, str]] = []
+    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
+        if not fname.lower().endswith(".json"):
+            continue
+        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Failed to load prompt '{fname}': {e}")
+            continue
+        if isinstance(data, dict) and "name" in data and "content" in data:
+            prompts.append({"name": data["name"], "content": data["content"]})
+        else:
+            print(f"Ignoring invalid global prompt file: {fname}")
+    return prompts
+
+
+def list_prompt_names() -> List[str]:
+    """Return only the names of available global prompts."""
+
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    names: List[str] = []
+    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
+        if not fname.lower().endswith(".json"):
+            continue
+        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Failed to load prompt '{fname}': {e}")
+            continue
+        if isinstance(data, dict) and "name" in data:
+            names.append(data["name"])
+    return names
+
+
+def get_global_prompt_content(name: str) -> str | None:
+    """Return the content string for a prompt ``name`` if it exists."""
+
+    path = _prompt_path(name)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("content") if isinstance(data, dict) else None
+    except Exception as e:
+        print(f"Failed to load prompt '{name}': {e}")
+        return None
+
+
+def save_global_prompt(prompt: dict[str, str]) -> None:
+    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
+    path = _prompt_path(prompt["name"])
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(
+            {"name": prompt["name"], "content": prompt["content"]},
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
+
+
+def delete_global_prompt(name: str) -> None:
+    path = _prompt_path(name)
+    if os.path.exists(path):
+        os.remove(path)

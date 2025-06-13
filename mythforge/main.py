@@ -19,9 +19,14 @@ from .utils import (
     ensure_chat_dir,
     goals_exists,
     goals_path,
+    load_global_prompts,
+    list_prompt_names,
+    get_global_prompt_content,
+    save_global_prompt,
+    delete_global_prompt,
 )
 from . import model
-from .call_core import handle_chat
+from .call_core import handle_chat, build_call
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -33,16 +38,14 @@ def _startup() -> None:
     model.warm_up(n_gpu_layers=model.DEFAULT_N_GPU_LAYERS)
 
 
-
 @app.on_event("shutdown")
 def _shutdown() -> None:
     """Stop any background model process."""
 
     model._stop_warm()
 
-# --- Configuration ---------------------------------------------------------
 
-GLOBAL_PROMPTS_DIR = os.path.join(ROOT_DIR, "global_prompts")
+# --- Configuration ---------------------------------------------------------
 
 
 class ChatRequest(BaseModel):
@@ -50,102 +53,6 @@ class ChatRequest(BaseModel):
 
     chat_id: str
     message: str
-    global_prompt: str | None = None
-    call_type: str = "user_message"
-
-
-# --- Helper utilities ------------------------------------------------------
-
-
-def import_message_data(req: ChatRequest) -> ChatRequest:
-    """Return ``req`` with resolved prompt content and default ``call_type``."""
-
-    req.call_type = req.call_type or "user_message"
-    if req.global_prompt:
-        content = get_global_prompt_content(req.global_prompt)
-        if content is not None:
-            req.global_prompt = content
-    return req
-
-
-# --- Global prompt utilities ----------------------------------------------
-
-
-def _prompt_path(name: str) -> str:
-    """Return the filesystem path for a prompt ``name``."""
-    safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
-    return os.path.join(GLOBAL_PROMPTS_DIR, f"{safe}.json")
-
-
-def load_global_prompts() -> List[Dict[str, str]]:
-    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
-    prompts: List[Dict[str, str]] = []
-    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
-        if not fname.lower().endswith(".json"):
-            continue
-        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            print(f"Failed to load prompt '{fname}': {e}")
-            continue
-        if isinstance(data, dict) and "name" in data and "content" in data:
-            prompts.append({"name": data["name"], "content": data["content"]})
-        else:
-            print(f"Ignoring invalid global prompt file: {fname}")
-    return prompts
-
-
-def list_prompt_names() -> List[str]:
-    """Return only the names of available global prompts."""
-    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
-    names: List[str] = []
-    for fname in sorted(os.listdir(GLOBAL_PROMPTS_DIR)):
-        if not fname.lower().endswith(".json"):
-            continue
-        path = os.path.join(GLOBAL_PROMPTS_DIR, fname)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            print(f"Failed to load prompt '{fname}': {e}")
-            continue
-        if isinstance(data, dict) and "name" in data:
-            names.append(data["name"])
-    return names
-
-
-def get_global_prompt_content(name: str) -> str | None:
-    """Return the content string for a prompt ``name`` if it exists."""
-    path = _prompt_path(name)
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("content") if isinstance(data, dict) else None
-    except Exception as e:
-        print(f"Failed to load prompt '{name}': {e}")
-        return None
-
-
-def save_global_prompt(prompt: Dict[str, str]) -> None:
-    os.makedirs(GLOBAL_PROMPTS_DIR, exist_ok=True)
-    path = _prompt_path(prompt["name"])
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(
-            {"name": prompt["name"], "content": prompt["content"]},
-            f,
-            indent=2,
-            ensure_ascii=False,
-        )
-
-
-def delete_global_prompt(name: str) -> None:
-    path = _prompt_path(name)
-    if os.path.exists(path):
-        os.remove(path)
 
 
 # --- Load/Save operations --------------------------------------------------
@@ -527,18 +434,18 @@ def save_message(req: ChatRequest):
 
 @app.post("/chat/received")
 def chat_received(req: ChatRequest):
-    """Import message data then stream a model-generated reply."""
+    """Stream a model-generated reply for ``req``."""
 
-    req = import_message_data(req)
-    return handle_chat(req, stream=True)
+    call = build_call(req)
+    return handle_chat(call, stream=True)
 
 
 @app.post("/chat")
 def chat(req: ChatRequest):
     """Return a standard model-generated reply."""
 
-    req = import_message_data(req)
-    return handle_chat(req)
+    call = build_call(req)
+    return handle_chat(call)
 
 
 # --- Static UI Mount ------------------------------------------------------

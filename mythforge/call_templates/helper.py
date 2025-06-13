@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from ..main import ChatRequest
+from ..call_core import CallData
 
 
-def prepare(req: ChatRequest, history: list) -> tuple[str, str]:
+def prepare(call: CallData, history: list) -> tuple[str, str]:
     """Return prompts for helper calls."""
 
     del history
-    return req.global_prompt or "", req.message
+    return call.global_prompt or "", call.message
 
 
 def prompt(system_text: str, user_text: str) -> tuple[str, str]:

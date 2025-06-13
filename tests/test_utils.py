@@ -1,7 +1,8 @@
 import json
 
 from mythforge.utils import load_json
-from mythforge.main import ChatRequest, import_message_data
+from mythforge.main import ChatRequest
+from mythforge.call_core import build_call
 
 
 def test_load_json_basic(tmp_path):
@@ -15,13 +16,13 @@ def test_load_json_missing(tmp_path):
     assert load_json(str(path)) == []
 
 
-def test_import_message_data(tmp_path, monkeypatch):
+def test_build_call(tmp_path, monkeypatch):
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir()
-    monkeypatch.setattr("mythforge.main.GLOBAL_PROMPTS_DIR", str(prompt_dir))
+    monkeypatch.setattr("mythforge.utils.GLOBAL_PROMPTS_DIR", str(prompt_dir))
     data = {"name": "Example", "content": "Hello"}
     (prompt_dir / "Example.json").write_text(json.dumps(data))
-    req = ChatRequest(chat_id="1", message="hi", global_prompt="Example", call_type="")
-    updated = import_message_data(req)
-    assert updated.call_type == "user_message"
-    assert updated.global_prompt == "Hello"
+    req = ChatRequest(chat_id="1", message="hi")
+    call = build_call(req)
+    assert call.call_type == "standard_chat"
+    assert call.global_prompt == "Hello"
