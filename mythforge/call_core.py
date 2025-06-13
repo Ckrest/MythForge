@@ -66,7 +66,9 @@ _current_prompt: str | None = None
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
+    queue.Queue()
+)
 _queued_types: set[str] = set()
 
 
@@ -106,17 +108,17 @@ def _strip_model_logs(text: str) -> str:
     """Return ``text`` without lines from model loading logs."""
 
     noise_prefixes = (
-        "llama_model_load:",
-        "llama_init_from_gpt_params:",
-        "llama_print_timings:",
-        "llama_new_context_with_model:",
-        "main:",
-        "system_info:",
-        "ggml_vulkan:",
-        "load_tensors:",
-        "print_info:",
-        "llama_context:",
-        "llama_kv_cache_unified:",
+        # "llama_model_load:",
+        # "llama_init_from_gpt_params:",
+        # "llama_print_timings:",
+        # "llama_new_context_with_model:",
+        # "main:",
+        # "system_info:",
+        # "ggml_vulkan:",
+        # "load_tensors:",
+        # "print_info:",
+        # "llama_context:",
+        # "llama_kv_cache_unified:",
     )
 
     lines = []
@@ -295,7 +297,9 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
     setting = goals.setting
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    state["messages_since_goal_eval"] = (
+        state.get("messages_since_goal_eval", 0) + 1
+    )
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -376,7 +380,9 @@ def handle_chat(call: CallData, stream: bool = False):
 
     system_text, user_text = handler.prepare(call, history)
 
-    if call.chat_id != _current_chat_id or system_text != (_current_prompt or ""):
+    if call.chat_id != _current_chat_id or system_text != (
+        _current_prompt or ""
+    ):
         _current_chat_id = call.chat_id
         _current_prompt = system_text
 
@@ -420,7 +426,9 @@ def handle_chat(call: CallData, stream: bool = False):
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = processed if isinstance(processed, str) else str(processed)
+    assistant_reply = (
+        processed if isinstance(processed, str) else str(processed)
+    )
     _finalize_chat(history, assistant_reply, call)
 
     return {"detail": assistant_reply}
