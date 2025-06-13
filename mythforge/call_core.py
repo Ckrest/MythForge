@@ -356,6 +356,20 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _finalize_chat(history: list, reply: str, call: CallData) -> None:
+    """Update ``history`` and run post-response tasks."""
+
+    history.append({"role": "assistant", "content": reply})
+    save_json(chat_file(call.chat_id, "full.json"), history)
+    enqueue_task(
+        "goal_generation",
+        _maybe_generate_goals,
+        call.chat_id,
+        call.global_prompt,
+    )
+    warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
+
+
 def handle_chat(call: CallData, stream: bool = False):
     """Process ``call`` and return a model reply."""
 
@@ -400,31 +414,13 @@ def handle_chat(call: CallData, stream: bool = False):
                 parts.append(text)
                 yield text
             assistant_reply = "".join(parts).strip()
-            history.append({"role": "assistant", "content": assistant_reply})
-            save_json(chat_file(call.chat_id, "full.json"), history)
-            enqueue_task(
-                "goal_generation",
-                _maybe_generate_goals,
-                call.chat_id,
-                call.global_prompt,
-            )
-
-        warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
+            _finalize_chat(history, assistant_reply, call)
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
     assistant_reply = (
         processed if isinstance(processed, str) else str(processed)
     )
-    history.append({"role": "assistant", "content": assistant_reply})
-    save_json(chat_file(call.chat_id, "full.json"), history)
-    enqueue_task(
-        "goal_generation",
-        _maybe_generate_goals,
-        call.chat_id,
-        call.global_prompt,
-    )
-
-    warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
+    _finalize_chat(history, assistant_reply, call)
 
     return {"detail": assistant_reply}
