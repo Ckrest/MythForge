@@ -39,14 +39,14 @@ def prepare(call: CallData, history: List[Dict[str, Any]]) -> tuple[str, str]:
 
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(history)
-    return system_text, user_text
+    combined = format_for_model(system_text, user_text, "standard_chat")
+    return "", combined
 
 
 def prompt(system_text: str, user_text: str) -> tuple[str, str]:
-    """Return formatted prompts for model input."""
+    """Return ``system_text`` and ``user_text`` unchanged."""
 
-    combined = format_for_model(system_text, user_text, "standard_chat")
-    return "", combined
+    return system_text, user_text
 
 
 def response(result: Iterable[dict]) -> Iterator[str]:
