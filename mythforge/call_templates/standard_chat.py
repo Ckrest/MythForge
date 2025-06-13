@@ -41,14 +41,8 @@ def prepare(call: CallData, history: List[Dict[str, Any]]) -> tuple[str, str]:
 
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(history)
-    combined = format_for_model(system_text, user_text, "standard_chat")
+    combined = format_for_model(system_text, user_text)
     return "", combined
-
-
-def prompt(system_text: str, user_text: str) -> tuple[str, str]:
-    """Return ``system_text`` and ``user_text`` unchanged."""
-
-    return system_text, user_text
 
 
 def response(result: Iterable[dict]) -> Iterator[str]:
