@@ -1175,7 +1175,7 @@
             updateBusyUI();
             abortController = new AbortController();
             try{
-                const response = await apiFetch('/chats/received', {
+                const response = await apiFetch(`/chats/${encodeURIComponent(state.currentChatId)}/message`, {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({
@@ -1272,10 +1272,10 @@
             sendButton.disabled=true; sendOnlyButton.disabled=true;
             appendMessageToUI('user', text);
             try{
-                await apiFetch(`/chats/${encodeURIComponent(state.currentChatId)}/message`, {
+                await apiFetch('/chats/message', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({message: text})
+                    body: JSON.stringify({chat_id: state.currentChatId, message: text})
                 });
             }catch(err){
                 console.error('Send only failed:', err);
