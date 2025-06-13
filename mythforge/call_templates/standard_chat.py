@@ -61,6 +61,7 @@ def prep_standard_chat() -> None:
             "--no-warmup",
             "--no-conversation",
             "--interactive",
+            "--interactive-first",
             "--model",
             _select_model_path(False),
         ]
