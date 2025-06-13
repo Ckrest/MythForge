@@ -538,7 +538,7 @@ def chat_received(
     return runner.process_user_message(req.chat_id, req.message, stream=True)
 
 
-@chat_router.post("")
+@chat_router.post("/")
 def chat(
     req: ChatRequest,
     runner: ChatRunner = Depends(lambda: chat_runner),
