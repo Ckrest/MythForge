@@ -200,50 +200,9 @@ def _stop_warm() -> None:
     _warm_process = None
 
 
-def warm_up(
-    system_prompt: str = "", user_prompt: str = "", *, n_gpu_layers: int = 0
-) -> None:
-    """Start a background process to load the model early."""
-
-    _stop_warm()
-    cmd = [
-        LLAMA_CLI,
-        "--system-prompt",
-        system_prompt,
-        "--prompt",
-        user_prompt,
-        "--single-turn",
-        "--no-warmup",
-        "--no-conversation",
-    ]
-    try:
-        background = n_gpu_layers == 0
-        model_path = _select_model_path(background)
-        cmd.extend(["--model", model_path])
-    except Exception as exc:  # pragma: no cover - best effort
-        myth_log("warm_up_error", error=str(exc))
-        return
-
-    cmd.extend(_cli_args(n_gpu_layers=n_gpu_layers))
-
-    try:
-        _warm_process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-    except Exception as exc:  # pragma: no cover - best effort
-        myth_log("warm_up_error", error=str(exc))
-        _warm_process = None
-
-
 __all__ = [
     "GENERATION_CONFIG",
     "DEFAULT_N_GPU_LAYERS",
     "call_llm",
-    "warm_up",
     "_stop_warm",
 ]
