@@ -17,7 +17,6 @@ from .utils import (
     save_json,
     chat_file,
     ensure_chat_dir,
-    goals_exists,
     goals_path,
     load_global_prompts,
     list_prompt_names,
@@ -109,9 +108,7 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(
-                    status_code=400, detail="Chat name already exists"
-                )
+                raise HTTPException(status_code=400, detail="Chat name already exists")
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -133,9 +130,7 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(
-                    status_code=400, detail="No prompt data provided"
-                )
+                raise HTTPException(status_code=400, detail="No prompt data provided")
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
         memory.set_global_prompt(prompts[0]["content"] if prompts else "")
@@ -247,6 +242,7 @@ def create_chat(chat_id: str):
     if os.path.exists(chat_dir):
         raise HTTPException(status_code=400, detail="Chat already exists")
     save_item("chat_history", chat_id, data=[])
+    memory.set_goals_enabled(False)
     return {"detail": f"Created chat '{chat_id}'", "chat_id": chat_id}
 
 
@@ -256,6 +252,7 @@ def get_history(chat_id: str):
         history = load_item("chat_history", chat_id)
     except HTTPException as exc:
         raise exc
+    memory.load_goals(chat_id)
     return {"chat_id": chat_id, "history": history}
 
 
@@ -311,28 +308,14 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
 @app.get("/chat/{chat_id}/goals")
 def get_goals(chat_id: str):
     """Return goals data for ``chat_id`` including progress lists."""
-
-    path = goals_path(chat_id)
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                return {
-                    "exists": True,
-                    "character": data.get("character", ""),
-                    "setting": data.get("setting", ""),
-                    "in_progress": data.get("in_progress", []),
-                    "completed": data.get("completed", []),
-                }
-        except Exception as e:
-            print(f"Failed to load goals for '{chat_id}': {e}")
+    memory.load_goals(chat_id)
+    goals = memory.MEMORY.goals_data
     return {
-        "exists": False,
-        "character": "",
-        "setting": "",
-        "in_progress": [],
-        "completed": [],
+        "exists": goals.enabled,
+        "character": goals.character,
+        "setting": goals.setting,
+        "in_progress": goals.active_goals,
+        "completed": goals.deactive_goals,
     }
 
 
@@ -369,7 +352,7 @@ def disable_goals(chat_id: str):
     disabled = chat_file(chat_id, "goals_disabled.json")
     if os.path.exists(path):
         os.rename(path, disabled)
-    memory.set_goals_enabled(False)
+    memory.load_goals(chat_id)
     return {"detail": "Disabled"}
 
 
@@ -381,7 +364,7 @@ def enable_goals(chat_id: str):
     disabled = chat_file(chat_id, "goals_disabled.json")
     if os.path.exists(disabled):
         os.rename(disabled, path)
-    memory.set_goals_enabled(True)
+    memory.load_goals(chat_id)
     return {"detail": "Enabled"}
 
 
@@ -389,26 +372,16 @@ def enable_goals(chat_id: str):
 def goals_enabled_endpoint(chat_id: str):
     """Return whether goals exist for ``chat_id``."""
 
-    return {"enabled": goals_exists(chat_id)}
+    memory.load_goals(chat_id)
+    return {"enabled": memory.MEMORY.goals_data.enabled}
 
 
 @app.get("/chat/{chat_id}/context")
 def get_context_file(chat_id: str):
     """Return the character/setting context for ``chat_id``."""
-
-    path = goals_path(chat_id)
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                return {
-                    "character": data.get("character", ""),
-                    "setting": data.get("setting", ""),
-                }
-        except Exception as e:
-            print(f"Failed to load context for '{chat_id}': {e}")
-    return {"character": "", "setting": ""}
+    memory.load_goals(chat_id)
+    goals = memory.MEMORY.goals_data
+    return {"character": goals.character, "setting": goals.setting}
 
 
 @app.put("/chat/{chat_id}/context")

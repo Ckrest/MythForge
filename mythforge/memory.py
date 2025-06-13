@@ -6,7 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from . import model
-from .utils import load_global_prompts
+import json
+import os
+
+from .utils import load_global_prompts, goals_path
 
 
 @dataclass
@@ -72,3 +75,27 @@ def update_goals(data: Dict[str, Any]) -> None:
     MEMORY.goals_data.setting = str(data.get("setting", ""))
     MEMORY.goals_data.active_goals = list(data.get("active_goals", []))
     MEMORY.goals_data.deactive_goals = list(data.get("deactive_goals", []))
+
+
+def load_goals(chat_id: str) -> None:
+    """Populate goal related memory from ``chat_id``'s file."""
+
+    path = goals_path(chat_id)
+    if not os.path.exists(path):
+        MEMORY.goals_data = GoalsData(enabled=False)
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        update_goals(
+            {
+                "character": data.get("character", ""),
+                "setting": data.get("setting", ""),
+                "active_goals": data.get("in_progress", []),
+                "deactive_goals": data.get("completed", []),
+            }
+        )
+        MEMORY.goals_data.enabled = True
+    except Exception:
+        MEMORY.goals_data = GoalsData(enabled=False)
