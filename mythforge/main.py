@@ -32,7 +32,7 @@ from .memory import (
     MEMORY_MANAGER,
     initialize as init_memory,
 )
-from .call_core import ChatRunner, build_call
+from .call_core import ChatRunner, build_call, handle_chat
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -505,15 +505,12 @@ def save_message(
 
 
 @chat_router.post("/{chat_id}/message")
-def append_user_message(
-    chat_id: str,
-    data: Dict[str, str],
-    history: ChatHistoryService = Depends(get_history_service),
-):
-    """Append a user message to ``chat_id``."""
+def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
+    """Generate a reply for ``req.message`` in ``chat_id``."""
 
-    history.append_message(chat_id, "user", data.get("message", ""))
-    return {"detail": "Message stored"}
+    history_service.append_message(chat_id, "user", req.message)
+    call = build_call(req)
+    return handle_chat(call, history_service, memory_manager)
 
 
 @chat_router.post("/{chat_id}/assistant")
