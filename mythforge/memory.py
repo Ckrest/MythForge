@@ -1,15 +1,22 @@
-"""Shared in-memory state for Myth Forge."""
+"""Shared in-memory state and file utilities."""
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from . import model
-import json
-import os
-
-from .utils import load_global_prompts, goals_path
+from .utils import (
+    CHATS_DIR,
+    chat_file,
+    ensure_chat_dir,
+    load_json,
+    save_json,
+    load_global_prompts,
+    goals_path,
+)
 
 
 @dataclass
@@ -23,79 +30,133 @@ class GoalsData:
     enabled: bool = False
 
 
-@dataclass
-class ServerMemory:
-    """Overall in-memory server state."""
+class ChatHistoryService:
+    """Handle loading and saving chat histories."""
 
-    model: Dict[str, Any] = field(default_factory=dict)
-    goals: Dict[str, Any] = field(default_factory=dict)
-    global_prompt: str = ""
-    goals_data: GoalsData = field(default_factory=GoalsData)
+    def load_history(self, chat_id: str) -> List[Dict[str, Any]]:
+        """Return history list for ``chat_id``."""
+
+        return load_json(chat_file(chat_id, "full.json"))
+
+    def _save(self, chat_id: str, history: List[Dict[str, Any]]) -> None:
+        ensure_chat_dir(chat_id)
+        save_json(chat_file(chat_id, "full.json"), history)
+
+    def save_history(
+        self, chat_id: str, history: List[Dict[str, Any]]
+    ) -> None:
+        """Persist ``history`` for ``chat_id``."""
+
+        self._save(chat_id, history)
+
+    def append_message(self, chat_id: str, role: str, content: str) -> None:
+        history = self.load_history(chat_id)
+        history.append({"role": role, "content": content})
+        self._save(chat_id, history)
+
+    def edit_message(self, chat_id: str, index: int, content: str) -> None:
+        history = self.load_history(chat_id)
+        if 0 <= index < len(history):
+            history[index]["content"] = content
+            self._save(chat_id, history)
+
+    def delete_message(self, chat_id: str, index: int) -> None:
+        history = self.load_history(chat_id)
+        if 0 <= index < len(history):
+            history.pop(index)
+            self._save(chat_id, history)
+
+    def list_chats(self) -> List[str]:
+        os.makedirs(CHATS_DIR, exist_ok=True)
+        return [
+            d
+            for d in os.listdir(CHATS_DIR)
+            if os.path.isdir(os.path.join(CHATS_DIR, d))
+        ]
 
 
-MEMORY = ServerMemory()
+class MemoryManager:
+    """Centralized state for prompts, goals and model settings."""
+
+    def __init__(self) -> None:
+        self.model_settings: Dict[str, Any] = model.MODEL_SETTINGS.copy()
+        self.global_prompt: str = ""
+        self.goals_data: GoalsData = GoalsData()
+
+    # ------------------------------------------------------------------
+    # Goal helpers
+    # ------------------------------------------------------------------
+    def update_goals(self, data: Dict[str, Any]) -> None:
+        self.goals_data.character = str(data.get("character", ""))
+        self.goals_data.setting = str(data.get("setting", ""))
+        self.goals_data.active_goals = list(data.get("active_goals", []))
+        self.goals_data.deactive_goals = list(data.get("deactive_goals", []))
+
+    def toggle_goals(self, enabled: bool) -> None:
+        self.goals_data.enabled = enabled
+
+    def load_goals(self, chat_id: str) -> None:
+        path = goals_path(chat_id)
+        if not os.path.exists(path):
+            self.goals_data = GoalsData(enabled=False)
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.update_goals(
+                {
+                    "character": data.get("character", ""),
+                    "setting": data.get("setting", ""),
+                    "active_goals": data.get("in_progress", []),
+                    "deactive_goals": data.get("completed", []),
+                }
+            )
+            self.goals_data.enabled = True
+        except Exception:
+            self.goals_data = GoalsData(enabled=False)
+
+    def save_goals(self, chat_id: str, data: Dict[str, Any]) -> None:
+        ensure_chat_dir(chat_id)
+        obj = {
+            "character": data.get("character", ""),
+            "setting": data.get("setting", ""),
+            "in_progress": data.get("in_progress", []),
+            "completed": data.get("completed", []),
+        }
+        with open(goals_path(chat_id), "w", encoding="utf-8") as f:
+            json.dump(obj, f, indent=2, ensure_ascii=False)
+        self.toggle_goals(True)
+        self.update_goals(
+            {
+                "character": obj.get("character", ""),
+                "setting": obj.get("setting", ""),
+                "active_goals": obj.get("in_progress", []),
+                "deactive_goals": obj.get("completed", []),
+            }
+        )
 
 
-def initialize() -> None:
-    """Populate :data:`MEMORY` with defaults."""
-
-    MEMORY.model = model.MODEL_SETTINGS.copy()
-    MEMORY.goals = {
-        "goal_refresh_rate": model.MODEL_SETTINGS.get("goal_refresh_rate", 1),
-        "goal_limit": model.MODEL_SETTINGS.get("goal_limit", 3),
-        "goal_impulse": model.MODEL_SETTINGS.get("goal_impulse", 2),
-        "new_goal_bias": model.MODEL_SETTINGS.get("new_goal_bias", 2),
-    }
-    prompts = load_global_prompts()
-    MEMORY.global_prompt = prompts[0]["content"] if prompts else ""
-
-
-def update_model_settings(settings: Dict[str, Any]) -> None:
-    """Update model settings portion of memory."""
-
-    MEMORY.model.update(settings)
+MEMORY_MANAGER = MemoryManager()
+MEMORY = MEMORY_MANAGER
 
 
 def set_global_prompt(prompt: str) -> None:
-    """Update the cached global prompt."""
+    """Compatibility wrapper to set the global prompt."""
 
-    MEMORY.global_prompt = prompt
-
-
-def set_goals_enabled(enabled: bool) -> None:
-    """Toggle whether goals are active."""
-
-    MEMORY.goals_data.enabled = enabled
+    MEMORY_MANAGER.global_prompt = prompt
 
 
-def update_goals(data: Dict[str, Any]) -> None:
-    """Update all goal related fields from ``data``."""
+def update_model_settings(settings: Dict[str, Any]) -> None:
+    """Compatibility wrapper for updating model settings."""
 
-    MEMORY.goals_data.character = str(data.get("character", ""))
-    MEMORY.goals_data.setting = str(data.get("setting", ""))
-    MEMORY.goals_data.active_goals = list(data.get("active_goals", []))
-    MEMORY.goals_data.deactive_goals = list(data.get("deactive_goals", []))
+    MEMORY_MANAGER.model_settings.update(settings)
 
 
-def load_goals(chat_id: str) -> None:
-    """Populate goal related memory from ``chat_id``'s file."""
+def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
+    """Populate ``manager`` with default values."""
 
-    path = goals_path(chat_id)
-    if not os.path.exists(path):
-        MEMORY.goals_data = GoalsData(enabled=False)
-        return
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        update_goals(
-            {
-                "character": data.get("character", ""),
-                "setting": data.get("setting", ""),
-                "active_goals": data.get("in_progress", []),
-                "deactive_goals": data.get("completed", []),
-            }
-        )
-        MEMORY.goals_data.enabled = True
-    except Exception:
-        MEMORY.goals_data = GoalsData(enabled=False)
+    manager.model_settings = model.MODEL_SETTINGS.copy()
+    manager.global_prompt = ""
+    prompts = load_global_prompts()
+    if prompts:
+        manager.global_prompt = prompts[0]["content"]

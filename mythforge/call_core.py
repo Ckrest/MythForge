@@ -21,14 +21,11 @@ from .model import (
 from .utils import (
     CHATS_DIR,
     chat_file,
-    ensure_chat_dir,
-    load_json,
     myth_log,
-    save_json,
     list_prompt_names,
     get_global_prompt_content,
 )
-from . import memory
+from .memory import ChatHistoryService, MemoryManager, MEMORY_MANAGER
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from .main import ChatRequest
@@ -175,10 +172,15 @@ def _dedupe_new_goals(
     return [g for g in new if g.get("description", "") not in existing_desc]
 
 
-def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
+def _maybe_generate_goals(
+    chat_id: str,
+    global_prompt: str,
+    history_service: ChatHistoryService,
+    memory: MemoryManager = MEMORY_MANAGER,
+) -> None:
     from .call_types import CALL_HANDLERS
 
-    goals = memory.MEMORY.goals_data
+    goals = memory.goals_data
     if not goals.enabled:
         return
     character = goals.character
@@ -196,7 +198,7 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
 
     goal_limit = GENERATION_CONFIG.get("goal_limit", 3)
 
-    history = load_json(chat_file(chat_id, "full.json"))
+    history = history_service.load_history(chat_id)
     user_text = "\n".join(m.get("content", "") for m in history)
 
     system_parts = [p for p in (global_prompt, character, setting) if p]
@@ -238,21 +240,32 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _finalize_chat(history: list, reply: str, call: CallData) -> None:
-    """Update ``history`` and run post-response tasks."""
+def _finalize_chat(
+    reply: str,
+    call: CallData,
+    history_service: ChatHistoryService,
+    memory: MemoryManager = MEMORY_MANAGER,
+) -> None:
+    """Store assistant reply and queue background work."""
 
-    history.append({"role": "assistant", "content": reply})
-    save_json(chat_file(call.chat_id, "full.json"), history)
+    history_service.append_message(call.chat_id, "assistant", reply)
     enqueue_task(
         "goal_generation",
         _maybe_generate_goals,
         call.chat_id,
         call.global_prompt,
+        history_service,
+        memory,
     )
     warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
 
 
-def handle_chat(call: CallData, stream: bool = False):
+def handle_chat(
+    call: CallData,
+    history_service: ChatHistoryService,
+    memory: MemoryManager = MEMORY_MANAGER,
+    stream: bool = False,
+):
     """Process ``call`` and return a model reply."""
 
     from .call_types import CALL_HANDLERS
@@ -260,9 +273,8 @@ def handle_chat(call: CallData, stream: bool = False):
     global _current_chat_id, _current_prompt
     _stop_warm()
 
-    ensure_chat_dir(call.chat_id)
-    history = load_json(chat_file(call.chat_id, "full.json"))
-    history.append({"role": "user", "content": call.message})
+    history_service.append_message(call.chat_id, "user", call.message)
+    history = history_service.load_history(call.chat_id)
 
     handler = CALL_HANDLERS.get(call.call_type, CALL_HANDLERS["default"])
 
@@ -310,13 +322,33 @@ def handle_chat(call: CallData, stream: bool = False):
                     yield text
 
             assistant_reply = "".join(parts).strip()
-            _finalize_chat(history, assistant_reply, call)
+            _finalize_chat(assistant_reply, call, history_service, memory)
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
     assistant_reply = (
         processed if isinstance(processed, str) else str(processed)
     )
-    _finalize_chat(history, assistant_reply, call)
+    _finalize_chat(assistant_reply, call, history_service, memory)
 
     return {"detail": assistant_reply}
+
+
+class ChatRunner:
+    """High level interface for processing chat messages."""
+
+    def __init__(
+        self,
+        history_service: ChatHistoryService,
+        memory: MemoryManager = MEMORY_MANAGER,
+    ) -> None:
+        self.history_service = history_service
+        self.memory = memory
+
+    def process_user_message(
+        self, chat_id: str, message: str, stream: bool = False
+    ):
+        call = CallData(chat_id=chat_id, message=message)
+        return handle_chat(
+            call, self.history_service, self.memory, stream=stream
+        )
