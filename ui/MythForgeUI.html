@@ -994,10 +994,17 @@
             });
         }
 
-        function selectPrompt(name){
+        async function selectPrompt(name){
             state.currentPrompt = name;
             localStorage.setItem('lastGlobalPrompt', name);
             renderPromptList();
+            try{
+                await apiFetch('/prompts/select', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({name})
+                });
+            }catch(e){ console.error('Failed to update prompt:', e); }
         }
 
         async function deletePrompt(name){

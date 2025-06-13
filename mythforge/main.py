@@ -108,7 +108,9 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(status_code=400, detail="Chat name already exists")
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -130,7 +132,9 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
         memory.set_global_prompt(prompts[0]["content"] if prompts else "")
@@ -203,6 +207,22 @@ def rename_prompt(name: str, data: Dict[str, str]):
 def remove_prompt(name: str):
     save_item("prompts", name, delete=True)
     return {"detail": f"Deleted prompt '{name}'"}
+
+
+@app.post("/prompts/select")
+def select_prompt(data: Dict[str, str]):
+    """Set the active global prompt to ``data['name']``."""
+
+    name = data.get("name", "").strip()
+    if not name:
+        memory.set_global_prompt("")
+        return {"detail": "Cleared"}
+
+    content = get_global_prompt_content(name)
+    if content is None:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    memory.set_global_prompt(content)
+    return {"detail": f"Selected prompt '{name}'"}
 
 
 # --- Settings Endpoints ---------------------------------------------------
