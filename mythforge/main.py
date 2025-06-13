@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import os
+import threading
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException, APIRouter, Depends
@@ -58,6 +59,8 @@ def _startup() -> None:
     """Initialize the server."""
 
     init_memory(memory_manager)
+    if os.environ.get("MYTHFORGE_STDIN"):
+        threading.Thread(target=_stdin_chat, daemon=True).start()
 
 
 @app.on_event("shutdown")
@@ -65,6 +68,23 @@ def _shutdown() -> None:
     """Stop any background model process."""
 
     model._stop_warm()
+
+
+def _stdin_chat() -> None:
+    """Forward terminal input to the interactive model process."""
+
+    chat_id = os.environ.get("MF_TERM_CHAT", "terminal")
+    while True:
+        try:
+            line = input()
+        except EOFError:
+            break
+        if not line.strip():
+            continue
+        history_service.append_message(chat_id, "user", line)
+        result = chat_runner.process_user_message(chat_id, line)
+        reply = result.get("detail") if isinstance(result, dict) else str(result)
+        print(reply, flush=True)
 
 
 # --- Configuration ---------------------------------------------------------
