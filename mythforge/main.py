@@ -5,7 +5,7 @@ import json
 import os
 from typing import Dict, List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter, Depends
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -25,10 +25,32 @@ from .utils import (
     delete_global_prompt,
     _prompt_path,
 )
-from . import model, memory
-from .call_core import handle_chat, build_call
+from . import model
+from .memory import (
+    ChatHistoryService,
+    MemoryManager,
+    MEMORY_MANAGER,
+    initialize as init_memory,
+)
+from .call_core import ChatRunner, build_call
 
 app = FastAPI(title="Myth Forge Server")
+
+history_service = ChatHistoryService()
+memory_manager: MemoryManager = MEMORY_MANAGER
+chat_runner = ChatRunner(history_service, memory_manager)
+
+chat_router = APIRouter()
+prompt_router = APIRouter()
+settings_router = APIRouter()
+
+
+def get_history_service() -> ChatHistoryService:
+    return history_service
+
+
+def get_memory_manager() -> MemoryManager:
+    return memory_manager
 
 
 @app.on_event("startup")
@@ -36,7 +58,7 @@ def _startup() -> None:
     """Load the model in the background."""
 
     model.warm_up(n_gpu_layers=model.DEFAULT_N_GPU_LAYERS)
-    memory.initialize()
+    init_memory(memory_manager)
 
 
 @app.on_event("shutdown")
@@ -137,7 +159,7 @@ def save_item(
                 )
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
-        memory.set_global_prompt(prompts[0]["content"] if prompts else "")
+        memory_manager.global_prompt = prompts[0]["content"] if prompts else ""
         return
 
     if kind == "settings" and isinstance(data, dict):
@@ -155,7 +177,7 @@ def save_item(
         model.DEFAULT_MAX_TOKENS = model.MODEL_SETTINGS.get(
             "max_tokens", model.DEFAULT_MAX_TOKENS
         )
-        memory.update_model_settings(model.MODEL_SETTINGS)
+        memory_manager.model_settings.update(model.MODEL_SETTINGS)
         return
 
     raise HTTPException(status_code=400, detail="Invalid save request")
@@ -164,25 +186,25 @@ def save_item(
 # --- Prompt Endpoints -----------------------------------------------------
 
 
-@app.get("/prompts")
+@prompt_router.get("/")
 def list_prompts(names_only: int = 0):
     if names_only:
         return {"prompts": load_item("prompt_names")}
     return {"prompts": load_item("prompts")}
 
 
-@app.get("/prompts/{name}")
+@prompt_router.get("/{name}")
 def get_prompt(name: str):
     return load_item("prompts", name)
 
 
-@app.post("/prompts")
+@prompt_router.post("/")
 def create_prompt(item: Dict[str, str]):
     save_item("prompts", item["name"], data=item.get("content", ""))
     return {"detail": "Created"}
 
 
-@app.put("/prompts/{name}")
+@prompt_router.put("/{name}")
 def update_prompt(name: str, item: Dict[str, str]):
     if item.get("name") != name:
         raise HTTPException(status_code=400, detail="Name mismatch")
@@ -190,7 +212,7 @@ def update_prompt(name: str, item: Dict[str, str]):
     return {"detail": "Updated"}
 
 
-@app.put("/prompts/{name}/rename")
+@prompt_router.put("/{name}/rename")
 def rename_prompt(name: str, data: Dict[str, str]):
     new_name = data.get("new_name", "").strip()
     if not new_name:
@@ -203,37 +225,37 @@ def rename_prompt(name: str, data: Dict[str, str]):
     return {"detail": f"Renamed prompt '{name}'"}
 
 
-@app.delete("/prompts/{name}")
+@prompt_router.delete("/{name}")
 def remove_prompt(name: str):
     save_item("prompts", name, delete=True)
     return {"detail": f"Deleted prompt '{name}'"}
 
 
-@app.post("/prompts/select")
+@prompt_router.post("/select")
 def select_prompt(data: Dict[str, str]):
     """Set the active global prompt to ``data['name']``."""
 
     name = data.get("name", "").strip()
     if not name:
-        memory.set_global_prompt("")
+        memory_manager.global_prompt = ""
         return {"detail": "Cleared"}
 
     content = get_global_prompt_content(name)
     if content is None:
         raise HTTPException(status_code=404, detail="Prompt not found")
-    memory.set_global_prompt(content)
+    memory_manager.global_prompt = content
     return {"detail": f"Selected prompt '{name}'"}
 
 
 # --- Settings Endpoints ---------------------------------------------------
 
 
-@app.get("/settings")
+@settings_router.get("/")
 def get_settings():
     return load_item("settings")
 
 
-@app.put("/settings")
+@settings_router.put("/")
 def update_settings(data: Dict[str, object]):
     save_item("settings", data=data)
     return {"detail": "Updated", "settings": load_item("settings")}
@@ -250,68 +272,89 @@ def response_prompt_status():
 # --- Standard Chat Endpoints ---------------------------------------------
 
 
-@app.get("/chats")
-def list_chats():
-    return {"chats": load_item("chats")}
+@chat_router.get("/")
+def list_chats(
+    history: ChatHistoryService = Depends(get_history_service),
+):
+    return {"chats": history.list_chats()}
 
 
-@app.post("/chats/{chat_id}")
-def create_chat(chat_id: str):
+@chat_router.post("/{chat_id}")
+def create_chat(
+    chat_id: str,
+    history: ChatHistoryService = Depends(get_history_service),
+    memory: MemoryManager = Depends(get_memory_manager),
+):
     """Create an empty chat directory for ``chat_id``."""
     chat_dir = os.path.join(CHATS_DIR, chat_id)
     if os.path.exists(chat_dir):
         raise HTTPException(status_code=400, detail="Chat already exists")
-    save_item("chat_history", chat_id, data=[])
-    memory.set_goals_enabled(False)
+    history.save_history(chat_id, [])
+    memory.toggle_goals(False)
     return {"detail": f"Created chat '{chat_id}'", "chat_id": chat_id}
 
 
-@app.get("/history/{chat_id}")
-def get_history(chat_id: str):
-    try:
-        history = load_item("chat_history", chat_id)
-    except HTTPException as exc:
-        raise exc
+@chat_router.get("/{chat_id}/history")
+def get_history(
+    chat_id: str,
+    history: ChatHistoryService = Depends(get_history_service),
+    memory: MemoryManager = Depends(get_memory_manager),
+):
+    history_data = history.load_history(chat_id)
     memory.load_goals(chat_id)
-    return {"chat_id": chat_id, "history": history}
+    return {"chat_id": chat_id, "history": history_data}
 
 
-@app.put("/history/{chat_id}/{index}")
-def edit_message(chat_id: str, index: int, data: Dict[str, str]):
+@chat_router.put("/{chat_id}/history/{index}")
+def edit_message(
+    chat_id: str,
+    index: int,
+    data: Dict[str, str],
+    history: ChatHistoryService = Depends(get_history_service),
+):
     """Update the content of a message at ``index`` in ``chat_id``."""
-    try:
-        full = load_item("chat_history", chat_id)
-    except HTTPException as exc:
-        raise exc
+    full = history.load_history(chat_id)
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full[index]["content"] = data.get("content", "")
-    save_item("chat_history", chat_id, data=full)
+    history.save_history(chat_id, full)
     return {"detail": "Updated"}
 
 
-@app.delete("/history/{chat_id}/{index}")
-def delete_message(chat_id: str, index: int):
+@chat_router.delete("/{chat_id}/history/{index}")
+def delete_message(
+    chat_id: str,
+    index: int,
+    history: ChatHistoryService = Depends(get_history_service),
+):
     """Remove the message at ``index`` from ``chat_id``."""
-    try:
-        full = load_item("chat_history", chat_id)
-    except HTTPException as exc:
-        raise exc
+    full = history.load_history(chat_id)
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full.pop(index)
-    save_item("chat_history", chat_id, data=full)
+    history.save_history(chat_id, full)
     return {"detail": "Deleted"}
 
 
-@app.delete("/chat/{chat_id}")
-def delete_chat(chat_id: str):
-    save_item("chat_history", chat_id, delete=True)
+@chat_router.delete("/{chat_id}")
+def delete_chat(
+    chat_id: str,
+    history: ChatHistoryService = Depends(get_history_service),
+):
+    chat_dir = os.path.join(CHATS_DIR, chat_id)
+    if os.path.isdir(chat_dir):
+        for fname in os.listdir(chat_dir):
+            os.remove(os.path.join(chat_dir, fname))
+        os.rmdir(chat_dir)
     return {"detail": f"Deleted chat '{chat_id}'"}
 
 
-@app.put("/chat/{chat_id}")
-def rename_chat(chat_id: str, data: Dict[str, str]):
+@chat_router.put("/{chat_id}")
+def rename_chat(
+    chat_id: str,
+    data: Dict[str, str],
+    history: ChatHistoryService = Depends(get_history_service),
+):
     """Rename an existing chat ``chat_id`` to ``data['new_id']``."""
 
     new_id = data.get("new_id", "").strip()
@@ -321,15 +364,24 @@ def rename_chat(chat_id: str, data: Dict[str, str]):
     if new_id == chat_id:
         return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
-    save_item("chat_history", chat_id, new_name=new_id)
+    old_dir = os.path.join(CHATS_DIR, chat_id)
+    new_dir = os.path.join(CHATS_DIR, new_id)
+    if not os.path.isdir(old_dir):
+        raise HTTPException(status_code=404, detail="Chat not found")
+    if os.path.exists(new_dir):
+        raise HTTPException(status_code=400, detail="Chat name already exists")
+    os.rename(old_dir, new_dir)
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
 
-@app.get("/chat/{chat_id}/goals")
-def get_goals(chat_id: str):
+@chat_router.get("/{chat_id}/goals")
+def get_goals(
+    chat_id: str,
+    memory: MemoryManager = Depends(get_memory_manager),
+):
     """Return goals data for ``chat_id`` including progress lists."""
     memory.load_goals(chat_id)
-    goals = memory.MEMORY.goals_data
+    goals = memory.goals_data
     return {
         "exists": goals.enabled,
         "character": goals.character,
@@ -339,33 +391,23 @@ def get_goals(chat_id: str):
     }
 
 
-@app.put("/chat/{chat_id}/goals")
-def save_goals(chat_id: str, data: Dict[str, object]):
+@chat_router.put("/{chat_id}/goals")
+def save_goals(
+    chat_id: str,
+    data: Dict[str, object],
+    memory: MemoryManager = Depends(get_memory_manager),
+):
     """Save goals for ``chat_id`` including progress tracking."""
 
-    ensure_chat_dir(chat_id)
-    obj = {
-        "character": data.get("character", ""),
-        "setting": data.get("setting", ""),
-        "in_progress": data.get("in_progress", []),
-        "completed": data.get("completed", []),
-    }
-    with open(goals_path(chat_id), "w", encoding="utf-8") as f:
-        json.dump(obj, f, indent=2, ensure_ascii=False)
-    memory.set_goals_enabled(True)
-    memory.update_goals(
-        {
-            "character": obj["character"],
-            "setting": obj["setting"],
-            "active_goals": obj["in_progress"],
-            "deactive_goals": obj["completed"],
-        }
-    )
+    memory.save_goals(chat_id, data)
     return {"detail": "Saved"}
 
 
-@app.post("/chat/{chat_id}/goals/disable")
-def disable_goals(chat_id: str):
+@chat_router.post("/{chat_id}/goals/disable")
+def disable_goals(
+    chat_id: str,
+    memory: MemoryManager = Depends(get_memory_manager),
+):
     """Disable goals for ``chat_id`` by renaming the JSON file."""
 
     path = goals_path(chat_id)
@@ -376,8 +418,11 @@ def disable_goals(chat_id: str):
     return {"detail": "Disabled"}
 
 
-@app.post("/chat/{chat_id}/goals/enable")
-def enable_goals(chat_id: str):
+@chat_router.post("/{chat_id}/goals/enable")
+def enable_goals(
+    chat_id: str,
+    memory: MemoryManager = Depends(get_memory_manager),
+):
     """Re-enable goals for ``chat_id`` if a disabled JSON file exists."""
 
     path = goals_path(chat_id)
@@ -388,24 +433,34 @@ def enable_goals(chat_id: str):
     return {"detail": "Enabled"}
 
 
-@app.get("/chat/{chat_id}/goals_enabled")
-def goals_enabled_endpoint(chat_id: str):
+@chat_router.get("/{chat_id}/goals_enabled")
+def goals_enabled_endpoint(
+    chat_id: str,
+    memory: MemoryManager = Depends(get_memory_manager),
+):
     """Return whether goals exist for ``chat_id``."""
 
     memory.load_goals(chat_id)
-    return {"enabled": memory.MEMORY.goals_data.enabled}
+    return {"enabled": memory.goals_data.enabled}
 
 
-@app.get("/chat/{chat_id}/context")
-def get_context_file(chat_id: str):
+@chat_router.get("/{chat_id}/context")
+def get_context_file(
+    chat_id: str,
+    memory: MemoryManager = Depends(get_memory_manager),
+):
     """Return the character/setting context for ``chat_id``."""
     memory.load_goals(chat_id)
-    goals = memory.MEMORY.goals_data
+    goals = memory.goals_data
     return {"character": goals.character, "setting": goals.setting}
 
 
-@app.put("/chat/{chat_id}/context")
-def save_context_file(chat_id: str, data: Dict[str, str]):
+@chat_router.put("/{chat_id}/context")
+def save_context_file(
+    chat_id: str,
+    data: Dict[str, str],
+    memory: MemoryManager = Depends(get_memory_manager),
+):
     """Save character/setting context for ``chat_id`` preserving progress."""
 
     ensure_chat_dir(chat_id)
@@ -426,7 +481,7 @@ def save_context_file(chat_id: str, data: Dict[str, str]):
             print(f"Failed to load existing goals for '{chat_id}': {e}")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
-    memory.set_goals_enabled(True)
+    memory.toggle_goals(True)
     memory.update_goals(
         {
             "character": obj.get("character", ""),
@@ -438,33 +493,43 @@ def save_context_file(chat_id: str, data: Dict[str, str]):
     return {"detail": "Saved"}
 
 
-@app.post("/message")
-def save_message(req: ChatRequest):
+@chat_router.post("/message")
+def save_message(
+    req: ChatRequest,
+    history: ChatHistoryService = Depends(get_history_service),
+):
     """Store ``req.message`` in ``req.chat_id`` without generating a reply."""
 
-    ensure_chat_dir(req.chat_id)
-    history = load_item("chat_history", req.chat_id)
-    history.append({"role": "user", "content": req.message})
-    save_item("chat_history", req.chat_id, data=history)
+    history.append_message(req.chat_id, "user", req.message)
     return {"detail": "Message stored"}
 
 
-@app.post("/chat/received")
-def chat_received(req: ChatRequest):
+@chat_router.post("/received")
+def chat_received(
+    req: ChatRequest,
+    runner: ChatRunner = Depends(lambda: chat_runner),
+):
     """Stream a model-generated reply for ``req``."""
 
     call = build_call(req)
-    return handle_chat(call, stream=True)
+    return runner.process_user_message(req.chat_id, req.message, stream=True)
 
 
-@app.post("/chat")
-def chat(req: ChatRequest):
+@chat_router.post("")
+def chat(
+    req: ChatRequest,
+    runner: ChatRunner = Depends(lambda: chat_runner),
+):
     """Return a standard model-generated reply."""
 
     call = build_call(req)
-    return handle_chat(call)
+    return runner.process_user_message(req.chat_id, req.message)
 
 
 # --- Static UI Mount ------------------------------------------------------
+
+app.include_router(chat_router, prefix="/chats")
+app.include_router(prompt_router, prefix="/prompts")
+app.include_router(settings_router, prefix="/settings")
 
 app.mount("/", StaticFiles(directory="ui", html=True), name="static")
