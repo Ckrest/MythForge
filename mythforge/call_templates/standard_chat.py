@@ -10,7 +10,9 @@ def prepare_system_text(call: CallData) -> str:
     """Return the system prompt text for ``call``."""
 
     if not call.global_prompt:
-        call.global_prompt = _default_global_prompt()
+        call.global_prompt = (
+            memory.MEMORY.global_prompt or _default_global_prompt()
+        )
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data
