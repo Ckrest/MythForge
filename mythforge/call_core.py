@@ -403,11 +403,11 @@ def handle_chat(call: CallData, stream: bool = False):
             for text in processed:
                 print(text, end="", flush=True)
 
-                if not send_ui and "n_keep" in text:
+                if not send_ui and "assistant" in text:
                     send_ui = True
                     continue
 
-                if send_ui and "[end of text]" in text:
+                if send_ui and "llama_perf_sampler_print:" in text:
                     send_ui = False
                     continue
 
