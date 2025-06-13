@@ -15,7 +15,6 @@ from .model import (
     DEFAULT_N_GPU_LAYERS,
     call_llm,
 )
-from .call_templates import standard_chat, goal_generation
 from .utils import (
     CHATS_DIR,
     chat_file,
@@ -209,6 +208,7 @@ def _maybe_generate_goals(
     system_text = "\n".join(system_parts)
 
     from .call_types import CALL_HANDLERS
+    from .call_templates import goal_generation
 
     handler = CALL_HANDLERS["goal_generation"]
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
@@ -284,6 +284,8 @@ def handle_chat(
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
     myth_log("model_input", prompt=user_prompt)
     if call.call_type == "standard_chat":
+        from .call_templates import standard_chat
+
         raw = standard_chat.send_prompt(
             system_prompt,
             user_prompt,
