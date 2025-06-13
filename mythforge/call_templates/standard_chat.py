@@ -26,9 +26,12 @@ _TIMEOUT = 20 * 60  # 20 minutes
 # -----------------------------------
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
+
     "interactive": True,
     "interactive_first": True,
+
     **llm_args(stream=True),
+
 }
 
 
@@ -37,7 +40,7 @@ def _watchdog() -> None:
 
     global _chat_process
     while True:
-        time.sleep(60)
+        time.sleep(120)
         with _lock:
             if not _chat_process:
                 return

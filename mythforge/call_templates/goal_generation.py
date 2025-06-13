@@ -4,12 +4,23 @@ from typing import Any, Iterable
 
 from ..call_core import CallData, _default_global_prompt
 from .. import memory
+from typing import Any, Dict
+from ..model import llm_args
+
+
 
 # -----------------------------------
 # Model launch parameters / arguments ORERRIDE
 # -----------------------------------
 
-MODEL_LAUNCH_OVERRIDE: dict = {}
+MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
+
+    "n_gpu_layers": 0,
+
+    **llm_args(stream=False)
+
+}
+
 
 
 def prepare_system_text(call: CallData) -> str:
