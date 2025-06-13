@@ -111,7 +111,7 @@ def call_llm(system_prompt: str, user_prompt: str, **kwargs):
 
     cmd = [
         LLAMA_CLI,
-        "--template",
+        "--chat-template",
         "",
         "--system-prompt",
         "",
