@@ -113,8 +113,6 @@ def call_llm(system_prompt: str, user_prompt: str, **kwargs):
         LLAMA_CLI,
         "--chat-template",
         "",
-        "--system-prompt",
-        "",
         "--prompt",
         user_prompt,
     ]
