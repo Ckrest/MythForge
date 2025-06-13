@@ -37,7 +37,9 @@ _current_prompt: str | None = None
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
+    queue.Queue()
+)
 _queued_types: set[str] = set()
 
 
@@ -270,7 +272,9 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
         return
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    state["messages_since_goal_eval"] = (
+        state.get("messages_since_goal_eval", 0) + 1
+    )
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -336,26 +340,11 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
     call_type = req.call_type or "standard_chat"
     handler = CALL_HANDLERS.get(call_type, CALL_HANDLERS["default"])
 
-    if call_type in ("standard_chat", "user_message"):
-        system_parts = [req.global_prompt or ""]
-        if goals_exists(req.chat_id):
-            try:
-                with open(goals_path(req.chat_id), "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    if data.get("character"):
-                        system_parts.append(data["character"])
-                    if data.get("setting"):
-                        system_parts.append(data["setting"])
-            except Exception as e:
-                print(f"Failed to load goals for '{req.chat_id}': {e}")
-        system_text = "\n".join(p for p in system_parts if p)
-        user_text = "\n".join(m["content"] for m in history)
-    else:
-        system_text = req.global_prompt or ""
-        user_text = req.message
+    system_text, user_text = handler.prepare(req, history)
 
-    if req.chat_id != _current_chat_id or system_text != (_current_prompt or ""):
+    if req.chat_id != _current_chat_id or system_text != (
+        _current_prompt or ""
+    ):
         _current_chat_id = req.chat_id
         _current_prompt = system_text
 
@@ -394,7 +383,9 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = processed if isinstance(processed, str) else str(processed)
+    assistant_reply = (
+        processed if isinstance(processed, str) else str(processed)
+    )
     history.append({"role": "assistant", "content": assistant_reply})
     save_json(chat_file(req.chat_id, "full.json"), history)
     enqueue_task(
