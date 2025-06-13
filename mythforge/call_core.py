@@ -108,17 +108,17 @@ def _strip_model_logs(text: str) -> str:
     """Return ``text`` without lines from model loading logs."""
 
     noise_prefixes = (
-        "llama_model_load:",
-        "llama_init_from_gpt_params:",
-        "llama_print_timings:",
-        "llama_new_context_with_model:",
-        "main:",
-        "system_info:",
-        "ggml_vulkan:",
-        "load_tensors:",
-        "print_info:",
-        "llama_context:",
-        "llama_kv_cache_unified:",
+        # "llama_model_load:",
+        # "llama_init_from_gpt_params:",
+        # "llama_print_timings:",
+        # "llama_new_context_with_model:",
+        # "main:",
+        # "system_info:",
+        # "ggml_vulkan:",
+        # "load_tensors:",
+        # "print_info:",
+        # "llama_context:",
+        # "llama_kv_cache_unified:",
     )
 
     lines = []
