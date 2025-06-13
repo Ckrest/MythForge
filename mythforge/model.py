@@ -49,9 +49,7 @@ GENERATION_CONFIG = {
 }
 
 
-def llm_args(
-    *, stream: bool = False, background: bool = False
-) -> dict[str, object]:
+def llm_args(*, stream: bool = False, background: bool = False) -> dict[str, object]:
     """Return argument mapping for :func:`call_llm`."""
 
     args = GENERATION_CONFIG.copy()
@@ -120,30 +118,41 @@ def _cli_args(**kwargs) -> list[str]:
     return args
 
 
+# -----------------------------------
+# Model launch parameters / arguments
+# -----------------------------------
+
+MODEL_LAUNCH_ARGS: dict[str, object] = {
+    "chat_template": "",
+    "no_warmup": True,
+    "no_conversation": True,
+}
+
+
+def model_launch(prompt: str = "", background: bool = False, **overrides) -> list[str]:
+    """Return a command list for launching the model."""
+
+    params = MODEL_LAUNCH_ARGS.copy()
+    params.update(overrides)
+    background = params.pop("background", background)
+    cmd = [LLAMA_CLI]
+    if prompt:
+        cmd.extend(["--prompt", prompt])
+    cmd.extend(_cli_args(**params))
+    if "model" not in params:
+        cmd.extend(["--model", _select_model_path(background)])
+    return cmd
+
+
 def call_llm(system_prompt: str, user_prompt: str, **kwargs):
     """Return output from :data:`LLAMA_CLI` for the given prompts."""
 
-    cmd = [
-        LLAMA_CLI,
-        "--chat-template",
-        "",
-        "--prompt",
-        user_prompt,
-    ]
-    cmd.append("--no-warmup")
-    cmd.append("--no-conversation")
-    cmd.extend(_cli_args(**kwargs))
+    background = kwargs.get("background", False)
+    kwargs.pop("background", None)
+
+    cmd = model_launch(user_prompt, background=background, **kwargs)
     if "--single-turn" not in cmd:
         cmd.insert(1, "--single-turn")
-    try:
-        if "model" not in kwargs:
-            background = kwargs.get("n_gpu_layers", DEFAULT_N_GPU_LAYERS) == 0
-            model_path = _select_model_path(background)
-            cmd.extend(["--model", model_path])
-    except Exception as exc:
-        myth_log("call_llm_error", error=str(exc))
-        raise
-
     myth_log("call_llm_start", cmd=" ".join(cmd))
 
     try:
@@ -184,5 +193,6 @@ call_llm._patched = True
 __all__ = [
     "GENERATION_CONFIG",
     "DEFAULT_N_GPU_LAYERS",
+    "model_launch",
     "call_llm",
 ]
