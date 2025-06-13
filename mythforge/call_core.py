@@ -59,7 +59,6 @@ def build_call(req: "ChatRequest") -> CallData:
     return CallData(
         chat_id=req.chat_id,
         message=req.message,
-        global_prompt=_default_global_prompt(),
     )
 
 

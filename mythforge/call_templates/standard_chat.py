@@ -3,14 +3,17 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Iterable, Iterator, List
 
-from ..call_core import CallData
+from ..call_core import CallData, _default_global_prompt
 from ..utils import goals_exists, goals_path
 
 
 def prepare(call: CallData, history: List[Dict[str, Any]]) -> tuple[str, str]:
     """Return prompts for a standard chat call."""
 
-    system_parts = [call.global_prompt or ""]
+    if not call.global_prompt:
+        call.global_prompt = _default_global_prompt()
+
+    system_parts = [call.global_prompt]
     if goals_exists(call.chat_id):
         try:
             with open(goals_path(call.chat_id), "r", encoding="utf-8") as fh:

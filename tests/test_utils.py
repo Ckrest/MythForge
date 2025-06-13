@@ -3,6 +3,7 @@ import json
 from mythforge.utils import load_json
 from mythforge.main import ChatRequest
 from mythforge.call_core import build_call
+from mythforge.call_templates import standard_chat
 
 
 def test_load_json_basic(tmp_path):
@@ -25,4 +26,7 @@ def test_build_call(tmp_path, monkeypatch):
     req = ChatRequest(chat_id="1", message="hi")
     call = build_call(req)
     assert call.call_type == "standard_chat"
+    assert call.global_prompt == ""
+
+    system_text, user_text = standard_chat.prepare(call, [])
     assert call.global_prompt == "Hello"
