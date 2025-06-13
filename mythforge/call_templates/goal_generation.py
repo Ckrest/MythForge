@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 from ..call_core import CallData, _default_global_prompt
+from .. import memory
 
 
 def prepare(call: CallData, history: list) -> tuple[str, str]:
@@ -10,7 +11,7 @@ def prepare(call: CallData, history: list) -> tuple[str, str]:
 
     del history
     if not call.global_prompt:
-        call.global_prompt = _default_global_prompt()
+        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
     return call.global_prompt, call.message
 
 
