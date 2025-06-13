@@ -45,6 +45,12 @@ def prepare(call: CallData, history: List[Dict[str, Any]]) -> tuple[str, str]:
     return "", combined
 
 
+def prompt(system_text: str, user_text: str) -> tuple[str, str]:
+    """Return ``system_text`` and ``user_text`` for the model."""
+
+    return system_text, user_text
+
+
 def response(result: Iterable[dict]) -> Iterator[str]:
     """Yield parsed output for streaming responses."""
 
