@@ -1,15 +1,117 @@
 from __future__ import annotations
 
+"""Prompt helpers and interactive model utilities for standard chats."""
+
+import subprocess
+import threading
+import time
 from typing import Any, Dict, Iterable, Iterator, List
 
-from ..call_core import CallData, _default_global_prompt, format_for_model
+from typing import TYPE_CHECKING
+
+from ..model import LLAMA_CLI, llm_args, _cli_args, _select_model_path
 from .. import memory
+
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    from ..call_core import CallData
+
+
+_chat_process: subprocess.Popen | None = None
+_last_used: float = 0.0
+_lock = threading.Lock()
+_TIMEOUT = 20 * 60  # 20 minutes
+
+
+def _watchdog() -> None:
+    """Monitor the running model process and terminate on timeout."""
+
+    global _chat_process
+    while True:
+        time.sleep(60)
+        with _lock:
+            if not _chat_process:
+                return
+            if time.time() - _last_used < _TIMEOUT:
+                continue
+            proc = _chat_process
+            _chat_process = None
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+        return
+
+
+def prep_standard_chat() -> None:
+    """Start the standard chat model in interactive mode if needed."""
+
+    global _chat_process, _last_used
+    with _lock:
+        alive = _chat_process and _chat_process.poll() is None
+        if alive:
+            _last_used = time.time()
+            return
+
+        args = [
+            LLAMA_CLI,
+            "--chat-template",
+            "",
+            "--no-warmup",
+            "--no-conversation",
+            "--interactive",
+            "--model",
+            _select_model_path(False),
+        ]
+        args.extend(_cli_args(**llm_args(stream=True)))
+        _chat_process = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        _last_used = time.time()
+        threading.Thread(target=_watchdog, daemon=True).start()
+
+
+def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
+    """Send prompts to the interactive model process."""
+
+    prep_standard_chat()
+    assert _chat_process is not None
+    assert _chat_process.stdin is not None
+    assert _chat_process.stdout is not None
+    from ..call_core import format_for_model
+
+    with _lock:
+        _chat_process.stdin.write(
+            format_for_model(system_text, user_text) + "\n"
+        )
+        _chat_process.stdin.flush()
+        global _last_used
+        _last_used = time.time()
+
+    if stream:
+
+        def _stream() -> Iterator[dict[str, str]]:
+            for line in _chat_process.stdout:
+                yield {"text": line.rstrip()}
+
+        return _stream()
+
+    line = _chat_process.stdout.readline()
+    return {"text": line.rstrip()}
 
 
 def prepare_system_text(call: CallData) -> str:
     """Return the system prompt text for ``call``."""
 
     if not call.global_prompt:
+        from ..call_core import _default_global_prompt
+
         call.global_prompt = (
             memory.MEMORY.global_prompt or _default_global_prompt()
         )
@@ -38,6 +140,8 @@ def prepare_user_text(history: List[Dict[str, Any]]) -> str:
 
 def prepare(call: CallData, history: List[Dict[str, Any]]) -> tuple[str, str]:
     """Return prompts for a standard chat call."""
+
+    from ..call_core import format_for_model
 
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(history)

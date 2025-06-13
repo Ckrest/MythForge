@@ -17,6 +17,7 @@ from .model import (
     llm_args,
     _stop_warm,
 )
+from .call_templates import standard_chat
 from .utils import (
     CHATS_DIR,
     chat_file,
@@ -288,11 +289,18 @@ def handle_chat(
 
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
     myth_log("model_input", prompt=user_prompt)
-    raw = call_llm(
-        system_prompt,
-        user_prompt,
-        **llm_args(stream=stream),
-    )
+    if call.call_type == "standard_chat":
+        raw = standard_chat.send_prompt(
+            system_prompt,
+            user_prompt,
+            stream=stream,
+        )
+    else:
+        raw = call_llm(
+            system_prompt,
+            user_prompt,
+            **llm_args(stream=stream),
+        )
     processed = handler.response(raw)
 
     if stream:
