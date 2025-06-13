@@ -24,8 +24,9 @@ from .utils import (
     get_global_prompt_content,
     save_global_prompt,
     delete_global_prompt,
+    _prompt_path,
 )
-from . import model
+from . import model, memory
 from .call_core import handle_chat, build_call
 
 app = FastAPI(title="Myth Forge Server")
@@ -36,6 +37,7 @@ def _startup() -> None:
     """Load the model in the background."""
 
     model.warm_up(n_gpu_layers=model.DEFAULT_N_GPU_LAYERS)
+    memory.initialize()
 
 
 @app.on_event("shutdown")
@@ -119,8 +121,7 @@ def save_item(
     if kind == "prompts" and name:
         if delete:
             delete_global_prompt(name)
-            return
-        if new_name:
+        elif new_name:
             old_path = _prompt_path(name)
             new_path = _prompt_path(new_name)
             if not os.path.exists(old_path):
@@ -130,12 +131,14 @@ def save_item(
                     status_code=400, detail="Prompt name already exists"
                 )
             os.rename(old_path, new_path)
-            return
-        if data is None:
-            raise HTTPException(
-                status_code=400, detail="No prompt data provided"
-            )
-        save_global_prompt({"name": name, "content": str(data)})
+        else:
+            if data is None:
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
+            save_global_prompt({"name": name, "content": str(data)})
+        prompts = load_global_prompts()
+        memory.set_global_prompt(prompts[0]["content"] if prompts else "")
         return
 
     if kind == "settings" and isinstance(data, dict):
@@ -153,6 +156,7 @@ def save_item(
         model.DEFAULT_MAX_TOKENS = model.MODEL_SETTINGS.get(
             "max_tokens", model.DEFAULT_MAX_TOKENS
         )
+        memory.update_model_settings(model.MODEL_SETTINGS)
         return
 
     raise HTTPException(status_code=400, detail="Invalid save request")
@@ -345,6 +349,15 @@ def save_goals(chat_id: str, data: Dict[str, object]):
     }
     with open(goals_path(chat_id), "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
+    memory.set_goals_enabled(True)
+    memory.update_goals(
+        {
+            "character": obj["character"],
+            "setting": obj["setting"],
+            "active_goals": obj["in_progress"],
+            "deactive_goals": obj["completed"],
+        }
+    )
     return {"detail": "Saved"}
 
 
@@ -356,6 +369,7 @@ def disable_goals(chat_id: str):
     disabled = chat_file(chat_id, "goals_disabled.json")
     if os.path.exists(path):
         os.rename(path, disabled)
+    memory.set_goals_enabled(False)
     return {"detail": "Disabled"}
 
 
@@ -367,6 +381,7 @@ def enable_goals(chat_id: str):
     disabled = chat_file(chat_id, "goals_disabled.json")
     if os.path.exists(disabled):
         os.rename(disabled, path)
+    memory.set_goals_enabled(True)
     return {"detail": "Enabled"}
 
 
@@ -418,6 +433,15 @@ def save_context_file(chat_id: str, data: Dict[str, str]):
             print(f"Failed to load existing goals for '{chat_id}': {e}")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
+    memory.set_goals_enabled(True)
+    memory.update_goals(
+        {
+            "character": obj.get("character", ""),
+            "setting": obj.get("setting", ""),
+            "active_goals": obj.get("in_progress", []),
+            "deactive_goals": obj.get("completed", []),
+        }
+    )
     return {"detail": "Saved"}
 
 
