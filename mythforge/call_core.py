@@ -104,67 +104,18 @@ def clean_text(text: str, *, trim: bool = False) -> str:
     return cleaned.strip() if trim else cleaned
 
 
-def _strip_model_logs(text: str) -> str:
-    """Return ``text`` without lines from model loading logs."""
-
-    noise_prefixes = (
-        # "llama_model_load:",
-        # "llama_init_from_gpt_params:",
-        # "llama_print_timings:",
-        # "llama_new_context_with_model:",
-        # "main:",
-        # "system_info:",
-        # "ggml_vulkan:",
-        # "load_tensors:",
-        # "print_info:",
-        # "llama_context:",
-        # "llama_kv_cache_unified:",
-    )
-
-    lines = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if any(stripped.startswith(p) for p in noise_prefixes):
-            continue
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def _extract_text(data: Any) -> str:
-    """Return text content from ``data`` which may be nested."""
-
-    if isinstance(data, dict):
-        choices = data.get("choices")
-        if isinstance(choices, list) and choices:
-            item = choices[0]
-            if isinstance(item, dict):
-                return str(item.get("text", ""))
-        return str(data.get("text", ""))
-    if isinstance(data, list) and data:
-        return _extract_text(data[0])
-    if isinstance(data, str):
-        return data
-    return str(data)
-
-
 def parse_response(output: Any) -> str:
-    """Extract and clean text from a model response chunk."""
+    """Return ``output`` converted to ``str`` without additional parsing."""
 
     myth_log("pre_parse", raw=str(output))
-    text = _extract_text(output)
-    text = _strip_model_logs(text)
-    return clean_text(text, trim=True)
+    return str(output)
 
 
 def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
-    """Yield cleaned text from streaming model output."""
+    """Yield raw ``str`` values from streaming model output."""
 
     for chunk in chunks:
-        text = _extract_text(chunk)
-        text = _strip_model_logs(text)
-        cleaned = clean_text(text)
-        if cleaned:
-            yield cleaned
+        yield str(chunk)
 
 
 def format_for_model(system_text: str, user_text: str) -> str:
@@ -210,74 +161,11 @@ def _save_goal_state(chat_id: str, state: Dict[str, Any]) -> None:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
 
-def _find_json_chunk(text: str) -> str | None:
-    braces = ("{", "}")
-    start = text.find(braces[0])
-    end = text.rfind(braces[1])
-    if 0 <= start < end:
-        chunk = text[start : end + 1]
-        try:
-            json.loads(chunk)
-            return chunk
-        except Exception:
-            pass
-
-    brackets = ("[", "]")
-    start = text.find(brackets[0])
-    end = text.rfind(brackets[1])
-    if 0 <= start < end:
-        chunk = text[start : end + 1]
-        try:
-            json.loads(chunk)
-            return chunk
-        except Exception:
-            pass
-    return None
-
-
 def _parse_goals_from_response(text: str) -> List[Dict[str, str]]:
-    data: Any | None = None
-    try:
-        data = json.loads(text)
-    except Exception:
-        chunk = _find_json_chunk(text)
-        if chunk is not None:
-            try:
-                data = json.loads(chunk)
-            except Exception:
-                data = None
+    """Return an empty goal list without parsing ``text``."""
 
-    goals: List[Dict[str, str]] = []
-    items: list | None = None
-    if isinstance(data, dict) and isinstance(data.get("goals"), list):
-        items = data["goals"]
-    elif isinstance(data, list):
-        items = data
-
-    if items is not None:
-        for item in items:
-            if isinstance(item, dict):
-                desc = str(item.get("description", "")).strip()
-                method = str(item.get("method", "")).strip()
-                if not desc and isinstance(item.get("text"), str):
-                    desc = item["text"].strip()
-            else:
-                desc = str(item).strip()
-                method = ""
-            if desc:
-                goals.append({"description": desc, "method": method})
-        return goals
-
-    for line in text.splitlines():
-        line = line.strip(" -*\t")
-        if not line:
-            continue
-        parts = re.split(r"\s*-\s*|:\s*", line, maxsplit=1)
-        desc = parts[0].lstrip("0123456789. ").strip()
-        method = parts[1].strip() if len(parts) > 1 else ""
-        if desc:
-            goals.append({"description": desc, "method": method})
-    return goals
+    del text
+    return []
 
 
 def _dedupe_new_goals(
