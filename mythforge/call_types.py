@@ -11,14 +11,14 @@ from .call_templates import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
-    from .main import ChatRequest
+    from .call_core import CallData
 
 
 @dataclass
 class CallHandler:
     """Container for prompt and response handlers."""
 
-    prepare: Callable[["ChatRequest", list], tuple[str, str]]
+    prepare: Callable[["CallData", list], tuple[str, str]]
     prompt: Callable[[str, str], tuple[str, str]]
     response: Callable[[Any], Any]
 

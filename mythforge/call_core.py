@@ -5,6 +5,7 @@ import os
 import re
 import threading
 import queue
+from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING, Callable
 
 from fastapi.responses import StreamingResponse
@@ -26,10 +27,40 @@ from .utils import (
     load_json,
     myth_log,
     save_json,
+    list_prompt_names,
+    get_global_prompt_content,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from .main import ChatRequest
+
+
+@dataclass
+class CallData:
+    """Container for information used when calling the model."""
+
+    chat_id: str
+    message: str
+    global_prompt: str = ""
+    call_type: str = "standard_chat"
+
+
+def _default_global_prompt() -> str:
+    names = list_prompt_names()
+    if not names:
+        return ""
+    content = get_global_prompt_content(names[0])
+    return content or ""
+
+
+def build_call(req: "ChatRequest") -> CallData:
+    """Return :class:`CallData` populated from ``req`` and defaults."""
+
+    return CallData(
+        chat_id=req.chat_id,
+        message=req.message,
+        global_prompt=_default_global_prompt(),
+    )
 
 
 _current_chat_id: str | None = None
@@ -325,27 +356,26 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def handle_chat(req: "ChatRequest", stream: bool = False):
-    """Process ``req`` and return a model reply."""
+def handle_chat(call: CallData, stream: bool = False):
+    """Process ``call`` and return a model reply."""
 
     from .call_types import CALL_HANDLERS
 
     global _current_chat_id, _current_prompt
     _stop_warm()
 
-    ensure_chat_dir(req.chat_id)
-    history = load_json(chat_file(req.chat_id, "full.json"))
-    history.append({"role": "user", "content": req.message})
+    ensure_chat_dir(call.chat_id)
+    history = load_json(chat_file(call.chat_id, "full.json"))
+    history.append({"role": "user", "content": call.message})
 
-    call_type = req.call_type or "standard_chat"
-    handler = CALL_HANDLERS.get(call_type, CALL_HANDLERS["default"])
+    handler = CALL_HANDLERS.get(call.call_type, CALL_HANDLERS["default"])
 
-    system_text, user_text = handler.prepare(req, history)
+    system_text, user_text = handler.prepare(call, history)
 
-    if req.chat_id != _current_chat_id or system_text != (
+    if call.chat_id != _current_chat_id or system_text != (
         _current_prompt or ""
     ):
-        _current_chat_id = req.chat_id
+        _current_chat_id = call.chat_id
         _current_prompt = system_text
 
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
@@ -371,12 +401,12 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
                 yield text
             assistant_reply = "".join(parts).strip()
             history.append({"role": "assistant", "content": assistant_reply})
-            save_json(chat_file(req.chat_id, "full.json"), history)
+            save_json(chat_file(call.chat_id, "full.json"), history)
             enqueue_task(
                 "goal_generation",
                 _maybe_generate_goals,
-                req.chat_id,
-                req.global_prompt or "",
+                call.chat_id,
+                call.global_prompt,
             )
 
         warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
@@ -387,12 +417,12 @@ def handle_chat(req: "ChatRequest", stream: bool = False):
         processed if isinstance(processed, str) else str(processed)
     )
     history.append({"role": "assistant", "content": assistant_reply})
-    save_json(chat_file(req.chat_id, "full.json"), history)
+    save_json(chat_file(call.chat_id, "full.json"), history)
     enqueue_task(
         "goal_generation",
         _maybe_generate_goals,
-        req.chat_id,
-        req.global_prompt or "",
+        call.chat_id,
+        call.global_prompt,
     )
 
     warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)

@@ -1153,8 +1153,7 @@
                     headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({
                         chat_id: state.currentChatId,
-                        message: text,
-                        global_prompt: state.currentPrompt
+                        message: text
                     }),
                     signal: abortController.signal
                 });
@@ -1249,7 +1248,7 @@
                 await apiFetch('/message', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({chat_id: state.currentChatId, message: text, global_prompt: state.currentPrompt})
+                    body: JSON.stringify({chat_id: state.currentChatId, message: text})
                 });
             }catch(err){
                 console.error('Send only failed:', err);
