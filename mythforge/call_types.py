@@ -13,7 +13,7 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 class CallHandler:
     """Container for prompt and response handlers."""
 
-    prepare: Callable[["CallData", list], tuple[str, str]]
+    prepare: Callable[["CallData"], tuple[str, str]]
     prompt: Callable[[str, str], tuple[str, str]]
     response: Callable[[Any], Any]
 

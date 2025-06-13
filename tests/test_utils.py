@@ -29,7 +29,7 @@ def test_build_call(tmp_path, monkeypatch):
     assert call.call_type == "standard_chat"
     assert call.global_prompt == ""
 
-    system_text, user_text = standard_chat.prepare(call, [])
+    system_text, user_text = standard_chat.prepare(call)
     assert call.global_prompt == "Hello"
 
 
@@ -43,7 +43,7 @@ def test_memory_global_prompt(tmp_path, monkeypatch):
     memory.set_global_prompt("Custom")
     req = ChatRequest(chat_id="1", message="hi")
     call = build_call(req)
-    system_text, _ = standard_chat.prepare(call, [])
+    system_text, _ = standard_chat.prepare(call)
     assert call.global_prompt == "Custom"
 
 
@@ -56,7 +56,7 @@ def test_goal_generation_uses_memory_global_prompt(tmp_path, monkeypatch):
 
     req = ChatRequest(chat_id="1", message="hi")
     call = build_call(req)
-    system_text, _ = goal_generation.prepare(call, [])
+    system_text, _ = goal_generation.prepare(call)
     assert call.global_prompt == "Stored"
 
 
