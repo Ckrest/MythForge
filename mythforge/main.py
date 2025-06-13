@@ -55,9 +55,8 @@ def get_memory_manager() -> MemoryManager:
 
 @app.on_event("startup")
 def _startup() -> None:
-    """Load the model in the background."""
+    """Initialize the server."""
 
-    model.warm_up(n_gpu_layers=model.DEFAULT_N_GPU_LAYERS)
     init_memory(memory_manager)
 
 
