@@ -58,9 +58,6 @@ def build_call(req: "ChatRequest") -> CallData:
     )
 
 
-_current_chat_id: str | None = None
-_current_prompt: str | None = None
-
 # --- Background task queue -------------------------------------------------
 
 _task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
@@ -245,6 +242,7 @@ def _finalize_chat(
     call: CallData,
     history_service: ChatHistoryService,
     memory: MemoryManager = MEMORY_MANAGER,
+    prompt: str | None = None,
 ) -> None:
     """Store assistant reply and queue background work."""
 
@@ -257,7 +255,7 @@ def _finalize_chat(
         history_service,
         memory,
     )
-    warm_up(_current_prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
+    warm_up(prompt or "", n_gpu_layers=DEFAULT_N_GPU_LAYERS)
 
 
 def handle_chat(
@@ -265,26 +263,27 @@ def handle_chat(
     history_service: ChatHistoryService,
     memory: MemoryManager = MEMORY_MANAGER,
     stream: bool = False,
+    *,
+    current_chat_id: str | None = None,
+    current_prompt: str | None = None,
 ):
     """Process ``call`` and return a model reply."""
 
     from .call_types import CALL_HANDLERS
 
-    global _current_chat_id, _current_prompt
     _stop_warm()
 
-    history_service.append_message(call.chat_id, "user", call.message)
     history = history_service.load_history(call.chat_id)
 
     handler = CALL_HANDLERS.get(call.call_type, CALL_HANDLERS["default"])
 
     system_text, user_text = handler.prepare(call, history)
 
-    if call.chat_id != _current_chat_id or system_text != (
-        _current_prompt or ""
+    if call.chat_id != current_chat_id or system_text != (
+        current_prompt or ""
     ):
-        _current_chat_id = call.chat_id
-        _current_prompt = system_text
+        current_chat_id = call.chat_id
+        current_prompt = system_text
 
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
     myth_log("model_input", prompt=user_prompt)
@@ -322,14 +321,26 @@ def handle_chat(
                     yield text
 
             assistant_reply = "".join(parts).strip()
-            _finalize_chat(assistant_reply, call, history_service, memory)
+            _finalize_chat(
+                assistant_reply,
+                call,
+                history_service,
+                memory,
+                prompt=current_prompt,
+            )
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
     assistant_reply = (
         processed if isinstance(processed, str) else str(processed)
     )
-    _finalize_chat(assistant_reply, call, history_service, memory)
+    _finalize_chat(
+        assistant_reply,
+        call,
+        history_service,
+        memory,
+        prompt=current_prompt,
+    )
 
     return {"detail": assistant_reply}
 
@@ -344,11 +355,21 @@ class ChatRunner:
     ) -> None:
         self.history_service = history_service
         self.memory = memory
+        self.current_chat_id: str | None = None
+        self.current_prompt: str | None = None
 
     def process_user_message(
         self, chat_id: str, message: str, stream: bool = False
     ):
         call = CallData(chat_id=chat_id, message=message)
-        return handle_chat(
-            call, self.history_service, self.memory, stream=stream
+        result = handle_chat(
+            call,
+            self.history_service,
+            self.memory,
+            stream=stream,
+            current_chat_id=self.current_chat_id,
+            current_prompt=self.current_prompt,
         )
+        self.current_chat_id = call.chat_id
+        self.current_prompt = call.global_prompt or self.current_prompt
+        return result
