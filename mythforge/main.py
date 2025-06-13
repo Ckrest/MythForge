@@ -504,13 +504,39 @@ def save_message(
     return {"detail": "Message stored"}
 
 
+@chat_router.post("/{chat_id}/message")
+def append_user_message(
+    chat_id: str,
+    data: Dict[str, str],
+    history: ChatHistoryService = Depends(get_history_service),
+):
+    """Append a user message to ``chat_id``."""
+
+    history.append_message(chat_id, "user", data.get("message", ""))
+    return {"detail": "Message stored"}
+
+
+@chat_router.post("/{chat_id}/assistant")
+def append_assistant_message(
+    chat_id: str,
+    data: Dict[str, str],
+    history: ChatHistoryService = Depends(get_history_service),
+):
+    """Append an assistant message to ``chat_id``."""
+
+    history.append_message(chat_id, "assistant", data.get("message", ""))
+    return {"detail": "Message stored"}
+
+
 @chat_router.post("/received")
 def chat_received(
     req: ChatRequest,
     runner: ChatRunner = Depends(lambda: chat_runner),
+    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Stream a model-generated reply for ``req``."""
 
+    history.append_message(req.chat_id, "user", req.message)
     call = build_call(req)
     return runner.process_user_message(req.chat_id, req.message, stream=True)
 
@@ -519,9 +545,11 @@ def chat_received(
 def chat(
     req: ChatRequest,
     runner: ChatRunner = Depends(lambda: chat_runner),
+    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Return a standard model-generated reply."""
 
+    history.append_message(req.chat_id, "user", req.message)
     call = build_call(req)
     return runner.process_user_message(req.chat_id, req.message)
 

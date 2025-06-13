@@ -640,6 +640,9 @@
             chatTab.classList.add('active');
             promptTab.classList.remove('active');
             moreTab.classList.remove('active');
+            fetchChatList().then(()=>{
+                if(state.currentChatId) loadChat(state.currentChatId);
+            });
         }
 
         function showMoreTab(){
@@ -650,6 +653,7 @@
             chatTab.classList.remove('active');
             promptTab.classList.remove('active');
             moreTab.classList.add('active');
+            loadServerSettings();
         }
 
         function showPromptTab(){
@@ -660,7 +664,10 @@
             chatTab.classList.remove('active');
             promptTab.classList.add('active');
             moreTab.classList.remove('active');
-            refreshGlobalPromptList();
+            refreshGlobalPromptList().then(()=>{
+                const last = localStorage.getItem('lastGlobalPrompt');
+                if(last) selectPrompt(last);
+            });
         }
 
         function hideSidebar(){
@@ -1255,10 +1262,10 @@
             sendButton.disabled=true; sendOnlyButton.disabled=true;
             appendMessageToUI('user', text);
             try{
-                await apiFetch('/message', {
+                await apiFetch(`/chat/${encodeURIComponent(state.currentChatId)}/message`, {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({chat_id: state.currentChatId, message: text})
+                    body: JSON.stringify({message: text})
                 });
             }catch(err){
                 console.error('Send only failed:', err);
