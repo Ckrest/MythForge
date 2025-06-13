@@ -67,7 +67,6 @@ def _startup() -> None:
 def _shutdown() -> None:
     """Stop any background model process."""
 
-    model._stop_warm()
 
 
 def _stdin_chat() -> None:

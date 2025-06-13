@@ -15,7 +15,6 @@ from .model import (
     DEFAULT_N_GPU_LAYERS,
     call_llm,
     llm_args,
-    _stop_warm,
 )
 from .call_templates import standard_chat
 from .utils import (
@@ -272,8 +271,6 @@ def handle_chat(
     """Process ``call`` and return a model reply."""
 
     from .call_types import CALL_HANDLERS
-
-    _stop_warm()
 
     history = history_service.load_history(call.chat_id)
 
