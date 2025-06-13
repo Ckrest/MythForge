@@ -6,13 +6,27 @@ from ..call_core import CallData, _default_global_prompt
 from .. import memory
 
 
+def prepare_system_text(call: CallData) -> str:
+    """Return the system prompt for ``call``."""
+
+    if not call.global_prompt:
+        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
+    return call.global_prompt
+
+
+def prepare_user_text(call: CallData) -> str:
+    """Return the user prompt for ``call``."""
+
+    return call.message
+
+
 def prepare(call: CallData, history: list) -> tuple[str, str]:
     """Return prompts for goal generation calls."""
 
     del history
-    if not call.global_prompt:
-        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
-    return call.global_prompt, call.message
+    system_text = prepare_system_text(call)
+    user_text = prepare_user_text(call)
+    return system_text, user_text
 
 
 def prompt(system_text: str, user_text: str) -> tuple[str, str]:
