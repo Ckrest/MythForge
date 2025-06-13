@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, Iterator, List
 
 from typing import TYPE_CHECKING
 
-from ..model import model_launch, llm_args
+from ..model import model_launch
 from .. import memory
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
@@ -26,12 +26,9 @@ _TIMEOUT = 20 * 60  # 20 minutes
 # -----------------------------------
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
-
     "interactive": True,
     "interactive_first": True,
-
-    **llm_args(stream=True),
-
+    "single_turn": False,
 }
 
 
