@@ -408,10 +408,24 @@ def handle_chat(call: CallData, stream: bool = False):
                 ensure_ascii=False,
             )
             yield meta + "\n"
+
+            send_ui = False
             parts: list[str] = []
             for text in processed:
-                parts.append(text)
-                yield text
+                print(text, end="", flush=True)
+
+                if not send_ui and "n_keep" in text:
+                    send_ui = True
+                    continue
+
+                if send_ui and "[end of text]" in text:
+                    send_ui = False
+                    continue
+
+                if send_ui:
+                    parts.append(text)
+                    yield text
+
             assistant_reply = "".join(parts).strip()
             _finalize_chat(history, assistant_reply, call)
 
