@@ -3,7 +3,12 @@ import json
 from mythforge.utils import load_json
 from mythforge.main import ChatRequest
 from mythforge.call_core import build_call
-from mythforge.call_templates import standard_chat
+from mythforge.call_templates import (
+    standard_chat,
+    helper,
+    default as default_template,
+    goal_generation,
+)
 from mythforge import memory
 
 
@@ -45,3 +50,24 @@ def test_memory_global_prompt(tmp_path, monkeypatch):
     call = build_call(req)
     system_text, _ = standard_chat.prepare(call, [])
     assert call.global_prompt == "Custom"
+
+
+def test_other_templates_use_memory_global_prompt(tmp_path, monkeypatch):
+    prompt_dir = tmp_path / "prompts"
+    prompt_dir.mkdir()
+    monkeypatch.setattr("mythforge.utils.GLOBAL_PROMPTS_DIR", str(prompt_dir))
+    memory.initialize()
+    memory.set_global_prompt("Stored")
+
+    req = ChatRequest(chat_id="1", message="hi")
+    call = build_call(req)
+    system_text, _ = helper.prepare(call, [])
+    assert call.global_prompt == "Stored"
+
+    call = build_call(req)
+    system_text, _ = default_template.prepare(call, [])
+    assert call.global_prompt == "Stored"
+
+    call = build_call(req)
+    system_text, _ = goal_generation.prepare(call, [])
+    assert call.global_prompt == "Stored"
