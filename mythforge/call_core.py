@@ -66,7 +66,9 @@ _current_prompt: str | None = None
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
+    queue.Queue()
+)
 _queued_types: set[str] = set()
 
 
@@ -165,7 +167,7 @@ def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
             yield cleaned
 
 
-def format_for_model(system_text: str, user_text: str, call_type: str) -> str:
+def format_for_model(system_text: str, user_text: str) -> str:
     """Return ``system_text`` and ``user_text`` formatted for the model."""
 
     return (
@@ -295,7 +297,9 @@ def _maybe_generate_goals(chat_id: str, global_prompt: str) -> None:
     setting = goals.setting
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    state["messages_since_goal_eval"] = (
+        state.get("messages_since_goal_eval", 0) + 1
+    )
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -376,7 +380,9 @@ def handle_chat(call: CallData, stream: bool = False):
 
     system_text, user_text = handler.prepare(call, history)
 
-    if call.chat_id != _current_chat_id or system_text != (_current_prompt or ""):
+    if call.chat_id != _current_chat_id or system_text != (
+        _current_prompt or ""
+    ):
         _current_chat_id = call.chat_id
         _current_prompt = system_text
 
@@ -420,7 +426,9 @@ def handle_chat(call: CallData, stream: bool = False):
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = processed if isinstance(processed, str) else str(processed)
+    assistant_reply = (
+        processed if isinstance(processed, str) else str(processed)
+    )
     _finalize_chat(history, assistant_reply, call)
 
     return {"detail": assistant_reply}
