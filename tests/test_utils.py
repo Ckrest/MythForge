@@ -2,7 +2,7 @@ import json
 
 from mythforge.utils import load_json
 from mythforge.main import ChatRequest
-from mythforge.call_core import build_call
+from mythforge.call_core import build_call, parse_response, stream_parsed
 from mythforge.call_templates import (
     standard_chat,
     helper,
@@ -71,3 +71,12 @@ def test_other_templates_use_memory_global_prompt(tmp_path, monkeypatch):
     call = build_call(req)
     system_text, _ = goal_generation.prepare(call, [])
     assert call.global_prompt == "Stored"
+
+
+def test_parse_response_extract_text():
+    assert parse_response({"text": "hello"}) == "hello"
+
+
+def test_stream_parsed_extract_text():
+    chunks = [{"text": "a"}, {"text": "b"}]
+    assert list(stream_parsed(chunks)) == ["a", "b"]
