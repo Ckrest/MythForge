@@ -280,7 +280,7 @@ def handle_chat(
 
     history = history_service.load_history(call.chat_id)
 
-    handler = CALL_HANDLERS.get(call.call_type, CALL_HANDLERS["default"])
+    handler = CALL_HANDLERS.get(call.call_type, CALL_HANDLERS["standard_chat"])
 
     system_text, user_text = handler.prepare(call, history)
 
