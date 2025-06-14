@@ -33,7 +33,7 @@ from .memory import (
     MEMORY_MANAGER,
     initialize as init_memory,
 )
-from .call_core import ChatRunner, build_call, handle_chat
+from .call_core import ChatRunner, build_call
 from .call_templates import standard_chat
 from .call_templates.standard_chat import prep_standard_chat
 
@@ -133,7 +133,9 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(status_code=400, detail="Chat name already exists")
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -155,11 +157,17 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(status_code=400, detail="No prompt data provided")
-                raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
-        memory_manager.update_paths(prompt_name=prompts[0]["name"] if prompts else "")
+        memory_manager.update_paths(
+            prompt_name=prompts[0]["name"] if prompts else ""
+        )
         return
 
     if kind == "settings" and isinstance(data, dict):
