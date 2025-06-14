@@ -16,7 +16,6 @@ from .utils import (
     save_json,
     load_global_prompts,
     goals_path,
-    _prompt_path,
     get_global_prompt_content,
     save_global_prompt,
 )

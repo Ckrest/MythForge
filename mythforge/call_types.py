@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Iterator, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 from .call_templates import standard_chat, goal_generation, logic_check
 
