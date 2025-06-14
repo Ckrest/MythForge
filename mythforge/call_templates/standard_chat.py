@@ -81,9 +81,33 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     from ..call_core import format_for_model
 
     with _lock:
-        _chat_process.stdin.write(
-            format_for_model(system_text, user_text) + "\n"
-        )
+        _chat_process.stdin.write(format_for_model(system_text, user_text) + "\n")
+        _chat_process.stdin.flush()
+        global _last_used
+        _last_used = time.time()
+
+    if stream:
+
+        def _stream() -> Iterator[dict[str, str]]:
+            for line in _chat_process.stdout:
+                yield {"text": line.rstrip()}
+
+        return _stream()
+
+    line = _chat_process.stdout.readline()
+    return {"text": line.rstrip()}
+
+
+def send_cli_command(command: str, *, stream: bool = False):
+    """Send ``command`` directly to the interactive CLI process."""
+
+    prep_standard_chat()
+    assert _chat_process is not None
+    assert _chat_process.stdin is not None
+    assert _chat_process.stdout is not None
+
+    with _lock:
+        _chat_process.stdin.write(command + "\n")
         _chat_process.stdin.flush()
         global _last_used
         _last_used = time.time()
@@ -106,9 +130,7 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = (
-            memory.MEMORY.global_prompt or _default_global_prompt()
-        )
+        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data

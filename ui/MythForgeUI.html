@@ -1168,6 +1168,32 @@
                 await startNewChat();
             }
             if(text==='' && !allowEmpty) return;
+            if(text.startsWith('/')){
+                userInput.value='';
+                autoResize();
+                sendButton.disabled=true;
+                sendOnlyButton.disabled=true;
+                appendMessageToUI('user', text);
+                state.isProcessing=true;
+                updateBusyUI();
+                try{
+                    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatId)}/cli`, {
+                        method:'POST',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({chat_id: state.currentChatId, message: text})
+                    });
+                    const data = await res.json();
+                    appendMessageToUI('assistant', data.detail || '');
+                }catch(err){
+                    console.error('CLI command failed:', err);
+                    appendMessageToUI('assistant','[CLI error]');
+                }finally{
+                    state.isProcessing=false;
+                    updateBusyUI();
+                    userInput.focus();
+                }
+                return;
+            }
             userInput.value=''; autoResize();
             sendButton.disabled=true; sendOnlyButton.disabled=true;
             if(text!=='') appendMessageToUI('user', text);

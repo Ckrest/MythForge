@@ -143,6 +143,7 @@ def save_item(
         else:
             if data is None:
                 raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(status_code=400, detail="No prompt data provided")
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
         memory_manager.global_prompt = prompts[0]["content"] if prompts else ""
@@ -497,6 +498,19 @@ def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
     history_service.append_message(chat_id, "user", req.message)
     call = build_call(req)
     return handle_chat(call, history_service, memory_manager, stream=True)
+
+
+@chat_router.post("/{chat_id}/cli")
+def run_cli_command(chat_id: str, req: ChatRequest) -> Dict[str, str]:
+    """Send ``req.message`` directly to the running CLI process."""
+
+    from .call_templates import standard_chat
+
+    history_service.append_message(chat_id, "user", req.message)
+    result = standard_chat.send_cli_command(req.message)
+    text = result.get("text", "")
+    history_service.append_message(chat_id, "assistant", text)
+    return {"detail": text}
 
 
 @chat_router.post("/{chat_id}/assistant")
