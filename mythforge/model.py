@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import platform
 import subprocess
@@ -16,18 +15,19 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODELS_DIR = os.path.join(ROOT_DIR, "models")
 
 
-def load_model_settings(path: str) -> Dict[str, object]:
-    """Load the model settings from ``path`` if it exists."""
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            try:
-                return json.load(f)
-            except Exception as e:
-                print(f"Failed to load model settings '{path}': {e}")
-    return {}
+def load_model_settings(_path: str | None = None) -> Dict[str, object]:
+    """Return stored model settings using :class:`MemoryManager`."""
+
+    return MEMORY_MANAGER.load_settings()
 
 
-MODEL_SETTINGS = load_model_settings(MEMORY_MANAGER.settings_path)
+def save_model_settings(settings: Dict[str, object]) -> None:
+    """Persist ``settings`` via :class:`MemoryManager`."""
+
+    MEMORY_MANAGER.save_settings(settings)
+
+
+MODEL_SETTINGS = load_model_settings()
 
 # ---------------------------------------------------------------------------
 # Default values
