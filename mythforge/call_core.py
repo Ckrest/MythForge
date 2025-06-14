@@ -341,6 +341,10 @@ def handle_chat(
             user_prompt,
             stream=stream,
         )
+    elif call.call_type == "logic_check":
+        from .call_templates import logic_check
+
+        raw = logic_check.send_prompt(system_prompt, user_prompt)
     else:
         raw = call_llm(
             system_prompt,

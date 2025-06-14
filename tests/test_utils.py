@@ -1,9 +1,15 @@
 import json
+import sys
+import types
 
 from mythforge.utils import load_json
 from mythforge.main import ChatRequest
 from mythforge.call_core import build_call, parse_response, stream_parsed
-from mythforge.call_templates import standard_chat, goal_generation
+from mythforge.call_templates import (
+    standard_chat,
+    goal_generation,
+    logic_check,
+)
 from mythforge import memory
 
 
@@ -76,3 +82,41 @@ def test_append_message_skips_blank(tmp_path, monkeypatch):
     assert svc.load_history("c1") == []
     svc.append_message("c1", "user", "hello")
     assert svc.load_history("c1") == [{"role": "user", "content": "hello"}]
+
+
+def test_logic_check_invocation(monkeypatch):
+    calls = {}
+
+    def fake_select(background: bool = False):
+        calls["background"] = background
+        return "model.gguf"
+
+    class DummyLLM:
+        def __init__(self, model_path: str, n_ctx: int) -> None:
+            calls["model_path"] = model_path
+            calls["n_ctx"] = n_ctx
+
+        def __call__(self, prompt: str, max_tokens: int):
+            calls["prompt"] = prompt
+            calls["max_tokens"] = max_tokens
+            return {"choices": [{"text": "ok"}]}
+
+    monkeypatch.setattr(
+        "mythforge.call_templates.logic_check._select_model_path", fake_select
+    )
+    module = types.SimpleNamespace(Llama=DummyLLM)
+    monkeypatch.setitem(sys.modules, "llama_cpp", module)
+    monkeypatch.setattr(
+        "mythforge.call_templates.logic_check.format_for_model",
+        lambda s, u: f"{s}|{u}",
+    )
+
+    result = logic_check.send_prompt("sys", "user")
+    assert result == {"text": "ok"}
+    assert calls == {
+        "background": True,
+        "model_path": "model.gguf",
+        "n_ctx": 4096,
+        "prompt": "sys|user",
+        "max_tokens": 256,
+    }
