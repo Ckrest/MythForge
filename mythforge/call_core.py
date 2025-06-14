@@ -114,11 +114,11 @@ def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
 def format_for_model(system_text: str, user_text: str) -> str:
     """Return ``system_text`` and ``user_text`` formatted for the model."""
 
-    sys_clean = system_text.replace("\n", "/n")
+    system_clean = system_text.replace("\n", "/n")
     user_clean = user_text.replace("\n", "/n")
 
     return (
-        f'--prompt "<|im_start|>{sys_clean}<|im_end|>'
+        f'--prompt "<|im_start|>{system_clean}<|im_end|>'
         f"<|im_start|>user {user_clean}<|im_end|>"
         '<|im_start|>assistant"'
     )
