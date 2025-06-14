@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from ..model import model_launch
 from .. import memory
 from ..call_core import format_for_model
-from ..utils import log_server_call
+from ..utils import log_server_call, log_prepared_prompts
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from ..call_core import CallData
@@ -203,6 +203,7 @@ def prepare(call: CallData) -> tuple[str, str]:
 
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(history)
+    log_prepared_prompts(call.call_type, system_text, user_text)
     return system_text, user_text
 
 

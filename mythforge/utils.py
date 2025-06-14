@@ -11,6 +11,7 @@ CHATS_DIR = os.path.join(ROOT_DIR, "chats")
 GLOBAL_PROMPTS_DIR = os.path.join(ROOT_DIR, "global_prompts")
 SERVER_LOGS_DIR = os.path.join(ROOT_DIR, "server_logs")
 MODEL_CALLS_PATH = os.path.join(SERVER_LOGS_DIR, "model_calls.json")
+PREPARED_CALLS_PATH = os.path.join(SERVER_LOGS_DIR, "prepared_prompts.json")
 
 
 def load_json(path: str) -> List[Any]:
@@ -145,3 +146,21 @@ def log_server_call(prompt: str) -> None:
         data = []
     data.insert(0, prompt)
     save_json(MODEL_CALLS_PATH, data)
+
+
+def log_prepared_prompts(
+    call_type: str, system_text: str, user_text: str
+) -> None:
+    """Prepend prepared prompt data to the server log list."""
+
+    os.makedirs(SERVER_LOGS_DIR, exist_ok=True)
+    data = load_json(PREPARED_CALLS_PATH)
+    if not isinstance(data, list):
+        data = []
+    entry = {
+        "call_type": call_type,
+        "system_text": system_text,
+        "user_text": user_text,
+    }
+    data.insert(0, entry)
+    save_json(PREPARED_CALLS_PATH, data)
