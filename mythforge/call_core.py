@@ -56,9 +56,7 @@ def build_call(req: "ChatRequest") -> CallData:
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
-    queue.Queue()
-)
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
 _queued_types: set[str] = set()
 
 
@@ -116,14 +114,13 @@ def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
 def format_for_model(system_text: str, user_text: str) -> str:
     """Return ``system_text`` and ``user_text`` formatted for the model."""
 
+    sys_clean = system_text.replace("\n", "/n")
+    user_clean = user_text.replace("\n", "/n")
+
     return (
-        "<|start_header_id|>system<|end_header_id|>\n"
-        f"{system_text}\n"
-        "<|eot_id|>\n"
-        "<|start_header_id|>user<|end_header_id|>\n"
-        f"{user_text}\n"
-        "<|eot_id|>\n"
-        "<|start_header_id|>assistant<|end_header_id|>\n"
+        f'--prompt "<|im_start|>{sys_clean}<|im_end|>'
+        f"<|im_start|>user {user_clean}<|im_end|>"
+        '<|im_start|>assistant"'
     )
 
 
@@ -200,9 +197,7 @@ def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
         )
 
     if not filtered:
-        myth_log(
-            "logic_goblin_review", reason="No valid goals extracted", text=text
-        )
+        myth_log("logic_goblin_review", reason="No valid goals extracted", text=text)
     return filtered
 
 
@@ -228,9 +223,7 @@ def _maybe_generate_goals(
     setting = goals.setting
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = (
-        state.get("messages_since_goal_eval", 0) + 1
-    )
+    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -336,9 +329,7 @@ def handle_chat(
 
     system_text, user_text = handler.prepare(call)
 
-    if call.chat_id != current_chat_id or system_text != (
-        current_prompt or ""
-    ):
+    if call.chat_id != current_chat_id or system_text != (current_prompt or ""):
         current_chat_id = call.chat_id
         current_prompt = system_text
 
@@ -408,9 +399,7 @@ def handle_chat(
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = (
-        processed if isinstance(processed, str) else str(processed)
-    )
+    assistant_reply = processed if isinstance(processed, str) else str(processed)
     _finalize_chat(
         assistant_reply,
         call,
@@ -435,9 +424,7 @@ class ChatRunner:
         self.current_chat_id: str | None = None
         self.current_prompt: str | None = None
 
-    def process_user_message(
-        self, chat_id: str, message: str, stream: bool = False
-    ):
+    def process_user_message(self, chat_id: str, message: str, stream: bool = False):
         call = CallData(chat_id=chat_id, message=message)
         result = handle_chat(
             call,
