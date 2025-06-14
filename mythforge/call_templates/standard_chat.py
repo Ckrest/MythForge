@@ -50,7 +50,9 @@ def _reset_timer() -> None:
     global _inactivity_timer
     if _inactivity_timer is not None:
         _inactivity_timer.cancel()
-    _inactivity_timer = threading.Timer(INACTIVITY_TIMEOUT_SECONDS, _terminate_chat)
+    _inactivity_timer = threading.Timer(
+        INACTIVITY_TIMEOUT_SECONDS, _terminate_chat
+    )
     _inactivity_timer.daemon = True
     _inactivity_timer.start()
 
@@ -59,9 +61,7 @@ def _reset_timer() -> None:
 # Model launch parameters / arguments ORERRIDE
 # -----------------------------------
 
-MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
-    "stream": True
-    }
+MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {"stream": True}
 
 
 def prep_standard_chat() -> None:
@@ -129,6 +129,7 @@ def chat(chat_id: str, user_text: str) -> str:
     for line in _chat_process.stdout:
         if line.strip() == "<|endoftext|>":
             break
+        print(line, end="", flush=True)
         output.append(line)
     return "".join(output).strip()
 
@@ -163,7 +164,9 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
+        call.global_prompt = (
+            memory.MEMORY.global_prompt or _default_global_prompt()
+        )
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data
