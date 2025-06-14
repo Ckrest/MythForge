@@ -123,7 +123,9 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(status_code=400, detail="Chat name already exists")
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -145,11 +147,17 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(status_code=400, detail="No prompt data provided")
-                raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
-        memory_manager.global_prompt = prompts[0]["content"] if prompts else ""
+        memory_manager.update_paths(
+            prompt_name=prompts[0]["name"] if prompts else ""
+        )
         return
 
     if kind == "settings" and isinstance(data, dict):
@@ -229,14 +237,12 @@ def select_prompt(data: Dict[str, str]):
 
     name = data.get("name", "").strip()
     if not name:
-        memory_manager.global_prompt = ""
         memory_manager.update_paths(prompt_name="")
         return {"detail": "Cleared"}
 
     content = get_global_prompt_content(name)
     if content is None:
         raise HTTPException(status_code=404, detail="Prompt not found")
-    memory_manager.global_prompt = content
     memory_manager.update_paths(prompt_name=name)
     return {"detail": f"Selected prompt '{name}'"}
 
@@ -285,7 +291,7 @@ def create_chat(
         raise HTTPException(status_code=400, detail="Chat already exists")
     history.save_history(chat_id, [])
     memory.toggle_goals(False)
-    memory.update_paths(chat_id=chat_id)
+    memory.update_paths(chat_name=chat_id)
     return {"detail": f"Created chat '{chat_id}'", "chat_id": chat_id}
 
 
@@ -341,7 +347,7 @@ def delete_chat(
         for fname in os.listdir(chat_dir):
             os.remove(os.path.join(chat_dir, fname))
         os.rmdir(chat_dir)
-    memory_manager.update_paths(chat_id="")
+    memory_manager.update_paths(chat_name="")
     return {"detail": f"Deleted chat '{chat_id}'"}
 
 
@@ -367,7 +373,7 @@ def rename_chat(
     if os.path.exists(new_dir):
         raise HTTPException(status_code=400, detail="Chat name already exists")
     os.rename(old_dir, new_dir)
-    memory_manager.update_paths(chat_id=new_id)
+    memory_manager.update_paths(chat_name=new_id)
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
 
@@ -377,10 +383,9 @@ def get_goals(
     memory: MemoryManager = Depends(get_memory_manager),
 ):
     """Return goals data for ``chat_id`` including progress lists."""
-    memory.load_goals(chat_id)
-    goals = memory.goals_data
+    goals = memory.load_goals(chat_id)
     return {
-        "exists": goals.enabled,
+        "exists": memory.goals_active,
         "character": goals.character,
         "setting": goals.setting,
         "in_progress": goals.active_goals,
@@ -438,7 +443,7 @@ def goals_enabled_endpoint(
     """Return whether goals exist for ``chat_id``."""
 
     memory.load_goals(chat_id)
-    return {"enabled": memory.goals_data.enabled}
+    return {"enabled": memory.goals_active}
 
 
 @chat_router.get("/{chat_id}/context")
@@ -447,8 +452,7 @@ def get_context_file(
     memory: MemoryManager = Depends(get_memory_manager),
 ):
     """Return the character/setting context for ``chat_id``."""
-    memory.load_goals(chat_id)
-    goals = memory.goals_data
+    goals = memory.load_goals(chat_id)
     return {"character": goals.character, "setting": goals.setting}
 
 
@@ -479,14 +483,6 @@ def save_context_file(
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
     memory.toggle_goals(True)
-    memory.update_goals(
-        {
-            "character": obj.get("character", ""),
-            "setting": obj.get("setting", ""),
-            "active_goals": obj.get("in_progress", []),
-            "deactive_goals": obj.get("completed", []),
-        }
-    )
     return {"detail": "Saved"}
 
 

@@ -17,6 +17,8 @@ from .utils import (
     load_global_prompts,
     goals_path,
     _prompt_path,
+    get_global_prompt_content,
+    save_global_prompt,
 )
 
 
@@ -34,45 +36,47 @@ class GoalsData:
 class ChatHistoryService:
     """Handle loading and saving chat histories."""
 
-    def load_history(self, chat_id: str) -> List[Dict[str, Any]]:
-        """Return history list for ``chat_id``."""
-        MEMORY_MANAGER.update_paths(chat_id=chat_id)
-        return load_json(chat_file(chat_id, "full.json"))
+    def load_history(self, chat_name: str) -> List[Dict[str, Any]]:
+        """Return history list for ``chat_name``."""
+        MEMORY_MANAGER.update_paths(chat_name=chat_name)
+        return load_json(chat_file(chat_name, "full.json"))
 
-    def _save(self, chat_id: str, history: List[Dict[str, Any]]) -> None:
-        ensure_chat_dir(chat_id)
-        MEMORY_MANAGER.update_paths(chat_id=chat_id)
-        save_json(chat_file(chat_id, "full.json"), history)
+    def _save(self, chat_name: str, history: List[Dict[str, Any]]) -> None:
+        ensure_chat_dir(chat_name)
+        MEMORY_MANAGER.update_paths(chat_name=chat_name)
+        save_json(chat_file(chat_name, "full.json"), history)
 
-    def save_history(self, chat_id: str, history: List[Dict[str, Any]]) -> None:
-        """Persist ``history`` for ``chat_id``."""
+    def save_history(
+        self, chat_name: str, history: List[Dict[str, Any]]
+    ) -> None:
+        """Persist ``history`` for ``chat_name``."""
 
-        self._save(chat_id, history)
+        self._save(chat_name, history)
 
-    def append_message(self, chat_id: str, role: str, content: str) -> None:
-        """Add ``content`` to ``chat_id`` if not blank."""
+    def append_message(self, chat_name: str, role: str, content: str) -> None:
+        """Add ``content`` to ``chat_name`` if not blank."""
 
         if not content.strip():
             return
 
-        MEMORY_MANAGER.update_paths(chat_id=chat_id)
-        history = self.load_history(chat_id)
+        MEMORY_MANAGER.update_paths(chat_name=chat_name)
+        history = self.load_history(chat_name)
         history.append({"role": role, "content": content})
-        self._save(chat_id, history)
+        self._save(chat_name, history)
 
-    def edit_message(self, chat_id: str, index: int, content: str) -> None:
-        MEMORY_MANAGER.update_paths(chat_id=chat_id)
-        history = self.load_history(chat_id)
+    def edit_message(self, chat_name: str, index: int, content: str) -> None:
+        MEMORY_MANAGER.update_paths(chat_name=chat_name)
+        history = self.load_history(chat_name)
         if 0 <= index < len(history):
             history[index]["content"] = content
-            self._save(chat_id, history)
+            self._save(chat_name, history)
 
-    def delete_message(self, chat_id: str, index: int) -> None:
-        MEMORY_MANAGER.update_paths(chat_id=chat_id)
-        history = self.load_history(chat_id)
+    def delete_message(self, chat_name: str, index: int) -> None:
+        MEMORY_MANAGER.update_paths(chat_name=chat_name)
+        history = self.load_history(chat_name)
         if 0 <= index < len(history):
             history.pop(index)
-            self._save(chat_id, history)
+            self._save(chat_name, history)
 
     def list_chats(self) -> List[str]:
         os.makedirs(CHATS_DIR, exist_ok=True)
@@ -88,78 +92,73 @@ class MemoryManager:
 
     def __init__(self) -> None:
         self.model_settings: Dict[str, Any] = model.MODEL_SETTINGS.copy()
-        self.global_prompt: str = ""
-        self.goals_data: GoalsData = GoalsData()
-        self.chat_id: str = ""
-        self.prompt_name: str = ""
-        self.chat_path: str = ""
-        self.prompt_path: str = ""
+        self.chat_name: str = ""
+        self.global_prompt_name: str = ""
+        self.goals_active: bool = False
 
     def update_paths(
-        self, chat_id: str | None = None, prompt_name: str | None = None
+        self, chat_name: str | None = None, prompt_name: str | None = None
     ) -> None:
-        """Update stored file paths for the active chat and prompt."""
+        """Update the stored chat and prompt names."""
 
-        if chat_id is not None:
-            self.chat_id = chat_id
-            self.chat_path = chat_file(chat_id, "full.json")
+        if chat_name is not None:
+            self.chat_name = chat_name
         if prompt_name is not None:
-            self.prompt_name = prompt_name
-            self.prompt_path = _prompt_path(prompt_name)
+            self.global_prompt_name = prompt_name
 
     # ------------------------------------------------------------------
     # Goal helpers
     # ------------------------------------------------------------------
-    def update_goals(self, data: Dict[str, Any]) -> None:
-        self.goals_data.character = str(data.get("character", ""))
-        self.goals_data.setting = str(data.get("setting", ""))
-        self.goals_data.active_goals = list(data.get("active_goals", []))
-        self.goals_data.deactive_goals = list(data.get("deactive_goals", []))
-
     def toggle_goals(self, enabled: bool) -> None:
-        self.goals_data.enabled = enabled
+        self.goals_active = enabled
 
-    def load_goals(self, chat_id: str) -> None:
-        self.update_paths(chat_id=chat_id)
-        path = goals_path(chat_id)
+    def load_goals(self, chat_name: str | None = None) -> GoalsData:
+        name = chat_name or self.chat_name
+        self.update_paths(chat_name=name)
+        path = goals_path(name)
         if not os.path.exists(path):
-            self.goals_data = GoalsData(enabled=False)
-            return
+            self.toggle_goals(False)
+            return GoalsData()
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            self.update_goals(
-                {
-                    "character": data.get("character", ""),
-                    "setting": data.get("setting", ""),
-                    "active_goals": data.get("in_progress", []),
-                    "deactive_goals": data.get("completed", []),
-                }
-            )
-            self.goals_data.enabled = True
         except Exception:
-            self.goals_data = GoalsData(enabled=False)
+            self.toggle_goals(False)
+            return GoalsData()
+        self.toggle_goals(True)
+        return GoalsData(
+            character=str(data.get("character", "")),
+            setting=str(data.get("setting", "")),
+            active_goals=list(data.get("in_progress", [])),
+            deactive_goals=list(data.get("completed", [])),
+        )
 
-    def save_goals(self, chat_id: str, data: Dict[str, Any]) -> None:
-        ensure_chat_dir(chat_id)
-        self.update_paths(chat_id=chat_id)
+    def save_goals(self, chat_name: str, data: Dict[str, Any]) -> None:
+        ensure_chat_dir(chat_name)
+        self.update_paths(chat_name=chat_name)
         obj = {
             "character": data.get("character", ""),
             "setting": data.get("setting", ""),
             "in_progress": data.get("in_progress", []),
             "completed": data.get("completed", []),
         }
-        with open(goals_path(chat_id), "w", encoding="utf-8") as f:
+        with open(goals_path(chat_name), "w", encoding="utf-8") as f:
             json.dump(obj, f, indent=2, ensure_ascii=False)
         self.toggle_goals(True)
-        self.update_goals(
-            {
-                "character": obj.get("character", ""),
-                "setting": obj.get("setting", ""),
-                "active_goals": obj.get("in_progress", []),
-                "deactive_goals": obj.get("completed", []),
-            }
-        )
+
+    @property
+    def global_prompt(self) -> str:
+        return self.get_global_prompt()
+
+    def get_global_prompt(self, prompt_name: str | None = None) -> str:
+        name = prompt_name or self.global_prompt_name
+        if not name:
+            return ""
+        return get_global_prompt_content(name) or ""
+
+    @property
+    def goals_data(self) -> GoalsData:
+        return self.load_goals(self.chat_name)
 
 
 MEMORY_MANAGER = MemoryManager()
@@ -167,9 +166,11 @@ MEMORY = MEMORY_MANAGER
 
 
 def set_global_prompt(prompt: str) -> None:
-    """Compatibility wrapper to set the global prompt."""
+    """Set ``prompt`` as the active global prompt."""
 
-    MEMORY_MANAGER.global_prompt = prompt
+    name = "current_prompt"
+    save_global_prompt({"name": name, "content": prompt})
+    MEMORY_MANAGER.update_paths(prompt_name=name)
 
 
 def update_model_settings(settings: Dict[str, Any]) -> None:
@@ -182,9 +183,8 @@ def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
     """Populate ``manager`` with default values."""
 
     manager.model_settings = model.MODEL_SETTINGS.copy()
-    manager.global_prompt = ""
-    manager.update_paths(chat_id="", prompt_name="")
+    manager.goals_active = False
+    manager.update_paths(chat_name="", prompt_name="")
     prompts = load_global_prompts()
     if prompts:
-        manager.global_prompt = prompts[0]["content"]
         manager.update_paths(prompt_name=prompts[0]["name"])

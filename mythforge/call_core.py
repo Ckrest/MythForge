@@ -55,7 +55,9 @@ def build_call(req: "ChatRequest") -> CallData:
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
+    queue.Queue()
+)
 _queued_types: set[str] = set()
 
 
@@ -175,14 +177,16 @@ def _maybe_generate_goals(
 ) -> None:
     from .call_types import CALL_HANDLERS
 
-    goals = memory.goals_data
-    if not goals.enabled:
+    goals = memory.load_goals(chat_id)
+    if not memory.goals_active:
         return
     character = goals.character
     setting = goals.setting
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
+    state["messages_since_goal_eval"] = (
+        state.get("messages_since_goal_eval", 0) + 1
+    )
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -271,7 +275,9 @@ def handle_chat(
 
     system_text, user_text = handler.prepare(call)
 
-    if call.chat_id != current_chat_id or system_text != (current_prompt or ""):
+    if call.chat_id != current_chat_id or system_text != (
+        current_prompt or ""
+    ):
         current_chat_id = call.chat_id
         current_prompt = system_text
 
@@ -337,7 +343,9 @@ def handle_chat(
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = processed if isinstance(processed, str) else str(processed)
+    assistant_reply = (
+        processed if isinstance(processed, str) else str(processed)
+    )
     _finalize_chat(
         assistant_reply,
         call,
@@ -362,7 +370,9 @@ class ChatRunner:
         self.current_chat_id: str | None = None
         self.current_prompt: str | None = None
 
-    def process_user_message(self, chat_id: str, message: str, stream: bool = False):
+    def process_user_message(
+        self, chat_id: str, message: str, stream: bool = False
+    ):
         call = CallData(chat_id=chat_id, message=message)
         result = handle_chat(
             call,
