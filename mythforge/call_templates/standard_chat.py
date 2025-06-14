@@ -122,7 +122,11 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
 
 
 def chat(chat_id: str, user_text: str) -> str:
-    """Return a model reply for ``user_text`` in ``chat_id``."""
+    """Return a model reply for ``user_text`` in ``chat_id``.
+
+    This now logs the ``user_text`` so every input sent to the model is
+    captured in the server logs.
+    """
 
     if not chat_running():
         prep_standard_chat()
@@ -131,6 +135,7 @@ def chat(chat_id: str, user_text: str) -> str:
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
+    log_server_call(user_text)
     _chat_process.stdin.write(user_text + "\n")
     _chat_process.stdin.flush()
     output: list[str] = []
