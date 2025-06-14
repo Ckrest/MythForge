@@ -114,17 +114,21 @@ def _cli_args(**kwargs) -> list[str]:
 # -----------------------------------
 
 MODEL_LAUNCH_ARGS: dict[str, object] = {
-    "chat_template": "",
+    # "chat_template": "",
     "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
     "background": False,
     "stream": True,
     **GENERATION_CONFIG,
     # testing currently
-    "interactive_first": True,
+    # "interactive_first": True,
     "no_warmup": True,
-    "no_conversation": True,
-    "single_turn": True,
-    "interactive": False,
+    "conversation": True,
+    # "conversation": True,
+    # "no_conversation": True,
+    # "single_turn": True,
+    # "interactive": False,
+    # "verbose": True,
+    # "reverse-prompt": "eval",
 }
 
 # ``subprocess.Popen`` parameters for launching the model process
@@ -178,7 +182,7 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
         def _stream() -> Iterator[dict[str, str]]:
             assert process.stdout is not None
             for line in process.stdout:
-                yield {"text": line.rstrip()}
+                print(line.rstrip())
             myth_log("call_llm_exit", code=process.wait())
 
         return _stream()

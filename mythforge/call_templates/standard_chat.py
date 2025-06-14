@@ -35,7 +35,7 @@ def chat_running() -> bool:
 # -----------------------------------
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
-    "stream": True,  # this is just a placeholder. default is also true
+    "stream": False,  # this is just a placeholder. default is also true
 }
 
 
@@ -96,7 +96,7 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
 
         def _stream() -> Iterator[dict[str, str]]:
             for line in _chat_process.stdout:
-                yield {"text": line.rstrip()}
+                print(line.rstrip())
 
         return _stream()
 
@@ -122,7 +122,7 @@ def send_cli_command(command: str, *, stream: bool = False):
 
         def _stream() -> Iterator[dict[str, str]]:
             for line in _chat_process.stdout:
-                yield {"text": line.rstrip()}
+                print(line.rstrip())
 
         return _stream()
 

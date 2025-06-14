@@ -365,7 +365,7 @@ def handle_chat(
             send_ui = False
             parts: list[str] = []
             for text in processed:
-                print(text, end="", flush=True)
+                # print(text, end="", flush=True)
 
                 if not send_ui and "assistant" in text:
                     send_ui = True
