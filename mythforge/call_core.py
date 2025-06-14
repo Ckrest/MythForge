@@ -155,11 +155,54 @@ def _save_goal_state(chat_id: str, state: Dict[str, Any]) -> None:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
 
-def _parse_goals_from_response(text: str) -> List[Dict[str, str]]:
-    """Return an empty goal list without parsing ``text``."""
+def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
+    """Attempt to parse valid goal objects from model output."""
 
-    del text
-    return []
+    try:
+        myth_log("raw_model_output", text=text)
+
+        # Naive direct parse first
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict) or "goals" not in parsed:
+            raise ValueError("Top-level object is not a dict with 'goals'")
+        goals = parsed["goals"]
+        if not isinstance(goals, list):
+            raise ValueError("'goals' is not a list")
+    except Exception as e:
+        myth_log("json_parse_error", error=str(e), fallback="regex")
+
+        # Fallback regex to extract JSON object manually
+        try:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if not match:
+                raise ValueError("No JSON found in text")
+
+            parsed = json.loads(match.group())
+            goals = parsed.get("goals", [])
+        except Exception as e2:
+            myth_log("regex_fallback_failed", error=str(e2), text=text)
+            return []
+
+    filtered = []
+    for i, g in enumerate(goals):
+        desc = g.get("description", "").strip()
+        importance = g.get("importance", None)
+        if not desc or not isinstance(importance, int):
+            continue
+        filtered.append(
+            {
+                "id": str(i + 1),
+                "description": desc,
+                "importance": importance,
+                "status": "in progress",
+            }
+        )
+
+    if not filtered:
+        myth_log(
+            "logic_goblin_review", reason="No valid goals extracted", text=text
+        )
+    return filtered
 
 
 def _dedupe_new_goals(
