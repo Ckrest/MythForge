@@ -5,6 +5,7 @@ import os
 import re
 import threading
 import queue
+import textwrap
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING, Callable
 
@@ -195,12 +196,29 @@ def _maybe_generate_goals(
     user_text = "\n".join(m.get("content", "") for m in history)
 
     system_parts = [p for p in (global_prompt, character, setting) if p]
-    system_parts.append(
-        "Given the character profile and scene context, determine if the character has any meaningful or natural goals. "
-        f"If so, generate up to {goal_limit} specific, actionable goals, each with a brief plan for how the character might pursue it. "
-        "If no goals are currently appropriate, return an empty list. "
-        'Respond ONLY in JSON format: {"goals": [{"description": "...", "method": "..."}]}.'
-    )
+
+    goal_prompt = f"""
+You are a reasoning assistant.
+
+Given the character profile and scene context, determine whether the character has any goals they would *naturally and strongly* pursue based on their personality, desires, or immediate situation.
+
+If so, generate up to {goal_limit} specific, actionable goals. For each goal, rate how much the character cares about it on a scale from 1 (barely cares) to 10 (deeply invested).
+
+ONLY respond in the following format:
+{{
+  "goals": [
+    {{
+      "description": "...",
+      "importance": 7
+    }},
+    ...
+  ]
+}}
+
+Do not include any explanation, commentary, or other text. If no goals are currently appropriate, return an empty list.
+"""
+
+    system_parts.append(textwrap.dedent(goal_prompt).strip())
     system_text = "\n".join(system_parts)
 
     from .call_types import CALL_HANDLERS
