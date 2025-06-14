@@ -133,7 +133,9 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(status_code=400, detail="Chat name already exists")
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -155,11 +157,17 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(status_code=400, detail="No prompt data provided")
-                raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
-        memory_manager.update_paths(prompt_name=prompts[0]["name"] if prompts else "")
+        memory_manager.update_paths(
+            prompt_name=prompts[0]["name"] if prompts else ""
+        )
         return
 
     if kind == "settings" and isinstance(data, dict):
@@ -500,13 +508,21 @@ def save_message(
 
 
 @chat_router.post("/{chat_id}/message")
-def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
-    """Return a reply for ``req.message`` using the standard chat model."""
+def send_chat_message(chat_id: str, req: ChatRequest):
+    """Stream a reply for ``req.message`` using the standard chat model."""
 
     history_service.append_message(chat_id, "user", req.message)
-    response = standard_chat.chat(chat_id, req.message)
-    history_service.append_message(chat_id, "assistant", response)
-    return {"response": response}
+    stream = standard_chat.send_prompt("", req.message, stream=True)
+
+    def _generate() -> Iterator[str]:
+        parts: list[str] = []
+        for chunk in stream:
+            text = chunk.get("text", "")
+            parts.append(text)
+            yield json.dumps(chunk, ensure_ascii=False) + "\n"
+        history_service.append_message(chat_id, "assistant", "".join(parts))
+
+    return StreamingResponse(_generate(), media_type="application/json")
 
 
 @chat_router.post("/{chat_id}/cli")
