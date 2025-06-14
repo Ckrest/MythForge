@@ -50,22 +50,25 @@ def _reset_timer() -> None:
     global _inactivity_timer
     if _inactivity_timer is not None:
         _inactivity_timer.cancel()
-    _inactivity_timer = threading.Timer(INACTIVITY_TIMEOUT_SECONDS, _terminate_chat)
+    _inactivity_timer = threading.Timer(
+        INACTIVITY_TIMEOUT_SECONDS, _terminate_chat
+    )
     _inactivity_timer.daemon = True
     _inactivity_timer.start()
 
 
-def _stream_output(stop_token: str | None = None) -> Iterator[dict[str, str]]:
-    """Yield CLI output lines, printing them to the terminal."""
+def _stream_output(stop_token: str) -> Iterator[dict[str, str]]:
+    """Yield CLI output lines until ``stop_token`` is seen."""
 
     assert _chat_process is not None
     assert _chat_process.stdout is not None
 
     for line in _chat_process.stdout:
-        if stop_token is not None and line.strip() == stop_token:
-            break
+        text = line.rstrip("\n")
+        if text == stop_token:
+            return
         print(line, end="", flush=True)
-        yield {"text": line.rstrip()}
+        yield {"text": text}
 
 
 # -----------------------------------
@@ -101,19 +104,21 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
 
     prep_standard_chat()
     _reset_timer()
-    log_server_call(user_text)
+    formatted_prompt = format_for_model(system_text, user_text)
+    log_server_call(formatted_prompt)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
 
-    _chat_process.stdin.write(user_text + "\n")
+    _chat_process.stdin.write(formatted_prompt + "\n")
     _chat_process.stdin.flush()
 
     if stream:
-        return _stream_output()
-
-    line = next(_stream_output(), {"text": ""})
-    return line
+        return _stream_output("<|endoftext|>")
+    output: list[str] = []
+    for chunk in _stream_output("<|endoftext|>"):
+        output.append(chunk["text"])
+    return {"text": "".join(output).strip()}
 
 
 def chat(chat_id: str, user_text: str) -> str:
@@ -123,20 +128,15 @@ def chat(chat_id: str, user_text: str) -> str:
         prep_standard_chat()
     else:
         _reset_timer()
-    log_server_call(user_text)
-
-    formatted = format_for_model(chat_id, user_text)
+    formatted_prompt = user_text
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
-    _chat_process.stdin.write(formatted + "\n")
+    _chat_process.stdin.write(formatted_prompt + "\n")
     _chat_process.stdin.flush()
     output: list[str] = []
     for chunk in _stream_output("<|endoftext|>"):
-        text = chunk["text"]
-        if text == "<|endoftext|>":
-            break
-        output.append(text)
+        output.append(chunk["text"])
     return "".join(output).strip()
 
 
@@ -145,19 +145,22 @@ def send_cli_command(command: str, *, stream: bool = False):
 
     prep_standard_chat()
     _reset_timer()
-    log_server_call(command)
+    formatted_prompt = command
+    log_server_call(formatted_prompt)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
 
-    _chat_process.stdin.write(command + "\n")
+    _chat_process.stdin.write(formatted_prompt + "\n")
     _chat_process.stdin.flush()
 
     if stream:
-        return _stream_output()
+        return _stream_output("<|endoftext|>")
 
-    line = next(_stream_output(), {"text": ""})
-    return line
+    output: list[str] = []
+    for chunk in _stream_output("<|endoftext|>"):
+        output.append(chunk["text"])
+    return {"text": "".join(output).strip()}
 
 
 def prepare_system_text(call: CallData) -> str:
@@ -166,7 +169,9 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
+        call.global_prompt = (
+            memory.MEMORY.global_prompt or _default_global_prompt()
+        )
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data
@@ -192,8 +197,6 @@ def prepare_user_text(history: List[Dict[str, Any]]) -> str:
 
 def prepare(call: CallData) -> tuple[str, str]:
     """Return prompts for a standard chat call."""
-
-    from ..call_core import format_for_model
     from ..memory import ChatHistoryService
 
     history_service = ChatHistoryService()
@@ -201,8 +204,7 @@ def prepare(call: CallData) -> tuple[str, str]:
 
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(history)
-    combined = format_for_model(system_text, user_text)
-    return "", combined
+    return system_text, user_text
 
 
 def prompt(system_text: str, user_text: str) -> tuple[str, str]:
