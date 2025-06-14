@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 import os
-import threading
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException, APIRouter, Depends
@@ -41,6 +40,8 @@ history_service = ChatHistoryService()
 memory_manager: MemoryManager = MEMORY_MANAGER
 chat_runner = ChatRunner(history_service, memory_manager)
 
+init_memory(memory_manager)
+
 chat_router = APIRouter()
 prompt_router = APIRouter()
 settings_router = APIRouter()
@@ -50,40 +51,11 @@ def get_history_service() -> ChatHistoryService:
     return history_service
 
 
+# --- Helpers ---------------------------------------------------------------
+
+
 def get_memory_manager() -> MemoryManager:
     return memory_manager
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    """Initialize the server."""
-
-    init_memory(memory_manager)
-    if os.environ.get("MYTHFORGE_STDIN"):
-        threading.Thread(target=_stdin_chat, daemon=True).start()
-
-
-@app.on_event("shutdown")
-def _shutdown() -> None:
-    """Stop any background model process."""
-
-
-
-def _stdin_chat() -> None:
-    """Forward terminal input to the interactive model process."""
-
-    chat_id = os.environ.get("MF_TERM_CHAT", "terminal")
-    while True:
-        try:
-            line = input()
-        except EOFError:
-            break
-        if not line.strip():
-            continue
-        history_service.append_message(chat_id, "user", line)
-        result = chat_runner.process_user_message(chat_id, line)
-        reply = result.get("detail") if isinstance(result, dict) else str(result)
-        print(reply, flush=True)
 
 
 # --- Configuration ---------------------------------------------------------
@@ -148,9 +120,7 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(
-                    status_code=400, detail="Chat name already exists"
-                )
+                raise HTTPException(status_code=400, detail="Chat name already exists")
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -172,9 +142,7 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(
-                    status_code=400, detail="No prompt data provided"
-                )
+                raise HTTPException(status_code=400, detail="No prompt data provided")
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
         memory_manager.global_prompt = prompts[0]["content"] if prompts else ""
