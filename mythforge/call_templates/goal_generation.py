@@ -11,7 +11,7 @@ from .. import memory
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "n_gpu_layers": 0,
-    "stream": False,
+    "stream": True,
     "background": True,
 }
 
