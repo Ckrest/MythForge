@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from .utils import (
     ROOT_DIR,
     CHATS_DIR,
-    myth_log,
     load_json,
     save_json,
     chat_file,

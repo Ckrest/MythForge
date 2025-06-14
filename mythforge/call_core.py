@@ -19,7 +19,6 @@ from .model import (
 from .utils import (
     CHATS_DIR,
     chat_file,
-    myth_log,
     load_global_prompts,
 )
 from .memory import ChatHistoryService, MemoryManager, MEMORY_MANAGER
@@ -97,7 +96,6 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 def parse_response(output: Any) -> str:
     """Return ``output`` as plain text."""
 
-    myth_log("pre_parse", raw=str(output))
     if isinstance(output, dict) and "text" in output:
         return str(output["text"])
     return str(output)
@@ -159,7 +157,6 @@ def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
     """Attempt to parse valid goal objects from model output."""
 
     try:
-        myth_log("raw_model_output", text=text)
 
         # Naive direct parse first
         parsed = json.loads(text)
@@ -169,7 +166,6 @@ def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
         if not isinstance(goals, list):
             raise ValueError("'goals' is not a list")
     except Exception as e:
-        myth_log("json_parse_error", error=str(e), fallback="regex")
 
         # Fallback regex to extract JSON object manually
         try:
@@ -179,8 +175,7 @@ def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
 
             parsed = json.loads(match.group())
             goals = parsed.get("goals", [])
-        except Exception as e2:
-            myth_log("regex_fallback_failed", error=str(e2), text=text)
+        except Exception:
             return []
 
     filtered = []
@@ -198,10 +193,6 @@ def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
             }
         )
 
-    if not filtered:
-        myth_log(
-            "logic_goblin_review", reason="No valid goals extracted", text=text
-        )
     return filtered
 
 
@@ -342,14 +333,6 @@ def handle_chat(
         current_prompt = system_text
 
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
-    myth_log(
-        "model_input",
-        chat_id=call.chat_id,
-        call_type=call.call_type,
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        stream=stream,
-    )
     if call.call_type == "standard_chat":
         from .call_templates import standard_chat
 

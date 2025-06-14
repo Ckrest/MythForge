@@ -2,46 +2,14 @@
 
 from __future__ import annotations
 
-import inspect as _inspect
 import json
 import os
-from datetime import datetime
 from typing import Any, List
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-LOG_DIR = os.path.join(ROOT_DIR, "server_logs")
 CHATS_DIR = os.path.join(ROOT_DIR, "chats")
 GLOBAL_PROMPTS_DIR = os.path.join(ROOT_DIR, "global_prompts")
 VERBOSE_MODE = False
-
-
-def myth_log(*args, **kwargs) -> None:
-    """Log the caller name with the provided arguments."""
-
-    now = datetime.utcnow()
-    caller = "unknown"
-    frame = _inspect.currentframe()
-    if frame and frame.f_back:
-        caller = frame.f_back.f_code.co_name
-
-    entry = {
-        "timestamp": now.isoformat(),
-        "caller": caller,
-        "args": [str(a) for a in args],
-        "kwargs": {k: str(v) for k, v in kwargs.items()},
-    }
-
-    os.makedirs(LOG_DIR, exist_ok=True)
-    path = os.path.join(LOG_DIR, f"{now.date()}.log")
-
-    lines = [f"[{entry['timestamp']}] {entry['caller']}"]
-    lines.extend(entry["args"])
-    for k, v in entry["kwargs"].items():
-        lines.append(f"{k}: {v}")
-    lines.append("")
-
-    with open(path, "a", encoding="utf-8") as fh:
-        fh.write("\n".join(lines))
 
 
 def load_json(path: str) -> List[Any]:
@@ -111,9 +79,7 @@ def goals_exists(chat_id: str) -> bool:
     """Return ``True`` if goals are enabled for ``chat_id``."""
 
     path = goals_path(chat_id)
-    exists = os.path.exists(path)
-    myth_log("goals_check", chat_id=chat_id, exists=exists)
-    return exists
+    return os.path.exists(path)
 
 
 def _prompt_path(name: str) -> str:
