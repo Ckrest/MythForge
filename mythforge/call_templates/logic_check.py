@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from ..model import _select_model_path
 from ..call_core import format_for_model, parse_response
-from ..utils import log_server_call
+from ..utils import log_server_call, log_prepared_prompts
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "background": True,
@@ -49,8 +49,10 @@ def run_logic_check(system_text: str, user_text: str) -> str:
 
 def prepare(call: "CallData") -> tuple[str, str]:
     """Return prompts for ``call`` without modifications."""
-
-    return call.global_prompt, call.message
+    system_text = call.global_prompt
+    user_text = call.message
+    log_prepared_prompts(call.call_type, system_text, user_text)
+    return system_text, user_text
 
 
 def prompt(system_text: str, user_text: str) -> tuple[str, str]:
