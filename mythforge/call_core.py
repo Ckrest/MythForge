@@ -55,9 +55,7 @@ def build_call(req: "ChatRequest") -> CallData:
 
 # --- Background task queue -------------------------------------------------
 
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
-    queue.Queue()
-)
+_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = queue.Queue()
 _queued_types: set[str] = set()
 
 
@@ -218,9 +216,7 @@ def _maybe_generate_goals(
     setting = goals.setting
 
     state = _load_goal_state(chat_id)
-    state["messages_since_goal_eval"] = (
-        state.get("messages_since_goal_eval", 0) + 1
-    )
+    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
@@ -326,9 +322,7 @@ def handle_chat(
 
     system_text, user_text = handler.prepare(call)
 
-    if call.chat_id != current_chat_id or system_text != (
-        current_prompt or ""
-    ):
+    if call.chat_id != current_chat_id or system_text != (current_prompt or ""):
         current_chat_id = call.chat_id
         current_prompt = system_text
 
@@ -362,22 +356,11 @@ def handle_chat(
             )
             yield meta + "\n"
 
-            send_ui = False
             parts: list[str] = []
             for text in processed:
                 print(text, end="", flush=True)
-
-                if not send_ui and "assistant" in text:
-                    send_ui = True
-                    continue
-
-                if send_ui and "llama_perf_sampler_print:" in text:
-                    send_ui = False
-                    continue
-
-                if send_ui:
-                    parts.append(text)
-                    yield text
+                parts.append(text)
+                yield text
 
             assistant_reply = "".join(parts).strip()
             _finalize_chat(
@@ -390,9 +373,7 @@ def handle_chat(
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = (
-        processed if isinstance(processed, str) else str(processed)
-    )
+    assistant_reply = processed if isinstance(processed, str) else str(processed)
     _finalize_chat(
         assistant_reply,
         call,
@@ -417,9 +398,7 @@ class ChatRunner:
         self.current_chat_id: str | None = None
         self.current_prompt: str | None = None
 
-    def process_user_message(
-        self, chat_id: str, message: str, stream: bool = False
-    ):
+    def process_user_message(self, chat_id: str, message: str, stream: bool = False):
         call = CallData(chat_id=chat_id, message=message)
         result = handle_chat(
             call,
