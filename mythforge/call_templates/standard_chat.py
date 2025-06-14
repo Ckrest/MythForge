@@ -50,11 +50,22 @@ def _reset_timer() -> None:
     global _inactivity_timer
     if _inactivity_timer is not None:
         _inactivity_timer.cancel()
-    _inactivity_timer = threading.Timer(
-        INACTIVITY_TIMEOUT_SECONDS, _terminate_chat
-    )
+    _inactivity_timer = threading.Timer(INACTIVITY_TIMEOUT_SECONDS, _terminate_chat)
     _inactivity_timer.daemon = True
     _inactivity_timer.start()
+
+
+def _stream_output(stop_token: str | None = None) -> Iterator[dict[str, str]]:
+    """Yield CLI output lines, printing them to the terminal."""
+
+    assert _chat_process is not None
+    assert _chat_process.stdout is not None
+
+    for line in _chat_process.stdout:
+        if stop_token is not None and line.strip() == stop_token:
+            break
+        print(line, end="", flush=True)
+        yield {"text": line.rstrip()}
 
 
 # -----------------------------------
@@ -99,16 +110,10 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     _chat_process.stdin.flush()
 
     if stream:
+        return _stream_output()
 
-        def _stream() -> Iterator[dict[str, str]]:
-            for line in _chat_process.stdout:
-                print(line, end="", flush=True)
-                yield {"text": line.rstrip()}
-
-        return _stream()
-
-    line = _chat_process.stdout.readline()
-    return {"text": line.rstrip()}
+    line = next(_stream_output(), {"text": ""})
+    return line
 
 
 def chat(chat_id: str, user_text: str) -> str:
@@ -127,11 +132,11 @@ def chat(chat_id: str, user_text: str) -> str:
     _chat_process.stdin.write(formatted + "\n")
     _chat_process.stdin.flush()
     output: list[str] = []
-    for line in _chat_process.stdout:
-        if line.strip() == "<|endoftext|>":
+    for chunk in _stream_output("<|endoftext|>"):
+        text = chunk["text"]
+        if text == "<|endoftext|>":
             break
-        print(line, end="", flush=True)
-        output.append(line)
+        output.append(text)
     return "".join(output).strip()
 
 
@@ -149,15 +154,10 @@ def send_cli_command(command: str, *, stream: bool = False):
     _chat_process.stdin.flush()
 
     if stream:
+        return _stream_output()
 
-        def _stream() -> Iterator[dict[str, str]]:
-            for line in _chat_process.stdout:
-                yield {"text": line.rstrip()}
-
-        return _stream()
-
-    line = _chat_process.stdout.readline()
-    return {"text": line.rstrip()}
+    line = next(_stream_output(), {"text": ""})
+    return line
 
 
 def prepare_system_text(call: CallData) -> str:
@@ -166,9 +166,7 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = (
-            memory.MEMORY.global_prompt or _default_global_prompt()
-        )
+        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data

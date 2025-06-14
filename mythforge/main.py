@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 
 import os
-from typing import Dict, List
+from typing import Dict, List, Iterator
 
 from fastapi import FastAPI, HTTPException, APIRouter, Depends
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 
 from pydantic import BaseModel
 
@@ -132,9 +133,7 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(
-                    status_code=400, detail="Chat name already exists"
-                )
+                raise HTTPException(status_code=400, detail="Chat name already exists")
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -156,17 +155,11 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(
-                    status_code=400, detail="No prompt data provided"
-                )
-                raise HTTPException(
-                    status_code=400, detail="No prompt data provided"
-                )
+                raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(status_code=400, detail="No prompt data provided")
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
-        memory_manager.update_paths(
-            prompt_name=prompts[0]["name"] if prompts else ""
-        )
+        memory_manager.update_paths(prompt_name=prompts[0]["name"] if prompts else "")
         return
 
     if kind == "settings" and isinstance(data, dict):
@@ -517,16 +510,23 @@ def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
 
 
 @chat_router.post("/{chat_id}/cli")
-def run_cli_command(chat_id: str, req: ChatRequest) -> Dict[str, str]:
-    """Send ``req.message`` directly to the running CLI process."""
+def run_cli_command(chat_id: str, req: ChatRequest):
+    """Stream ``req.message`` to the running CLI process."""
 
     from .call_templates import standard_chat
 
     history_service.append_message(chat_id, "user", req.message)
-    result = standard_chat.send_cli_command(req.message)
-    text = result.get("text", "")
-    history_service.append_message(chat_id, "assistant", text)
-    return {"detail": text}
+    stream = standard_chat.send_cli_command(req.message, stream=True)
+
+    def _generate() -> Iterator[str]:
+        parts: list[str] = []
+        for chunk in stream:
+            text = chunk.get("text", "")
+            parts.append(text)
+            yield text
+        history_service.append_message(chat_id, "assistant", "".join(parts))
+
+    return StreamingResponse(_generate(), media_type="text/plain")
 
 
 @chat_router.post("/{chat_id}/assistant")
