@@ -502,7 +502,7 @@ def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
     """Generate a reply for ``req.message`` in ``chat_id``."""
 
     if not standard_chat.chat_running():
-        raise HTTPException(status_code=503, detail="Model not running")
+        standard_chat.prep_standard_chat()
 
     history_service.append_message(chat_id, "user", req.message)
     call = build_call(req)
