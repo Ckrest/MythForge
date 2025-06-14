@@ -8,7 +8,7 @@ import platform
 import subprocess
 from typing import Dict, Iterator
 
-from .utils import ROOT_DIR
+from .utils import ROOT_DIR, log_server_call
 
 
 MODELS_DIR = os.path.join(ROOT_DIR, "models")
@@ -142,9 +142,7 @@ MODEL_LAUNCH_PARAMS: dict[str, object] = {
 }
 
 
-def model_launch(
-    prompt: str = "", background: bool = False, **overrides
-) -> list[str]:
+def model_launch(prompt: str = "", background: bool = False, **overrides) -> list[str]:
     """Return a command list for launching the model."""
 
     params = MODEL_LAUNCH_ARGS.copy()
@@ -161,6 +159,8 @@ def model_launch(
 
 def call_llm(system_prompt: str, user_prompt: str, **overrides):
     """Return output from :data:`LLAMA_CLI` for the given prompts."""
+
+    log_server_call(user_prompt)
 
     params = MODEL_LAUNCH_ARGS.copy()
     params.update(overrides)

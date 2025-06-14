@@ -9,6 +9,8 @@ from typing import Any, List
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CHATS_DIR = os.path.join(ROOT_DIR, "chats")
 GLOBAL_PROMPTS_DIR = os.path.join(ROOT_DIR, "global_prompts")
+SERVER_LOGS_DIR = os.path.join(ROOT_DIR, "server_logs")
+MODEL_CALLS_PATH = os.path.join(SERVER_LOGS_DIR, "model_calls.json")
 VERBOSE_MODE = False
 
 
@@ -160,3 +162,14 @@ def delete_global_prompt(name: str) -> None:
     path = _prompt_path(name)
     if os.path.exists(path):
         os.remove(path)
+
+
+def log_server_call(prompt: str) -> None:
+    """Prepend ``prompt`` to the server log list."""
+
+    os.makedirs(SERVER_LOGS_DIR, exist_ok=True)
+    data = load_json(MODEL_CALLS_PATH)
+    if not isinstance(data, list):
+        data = []
+    data.insert(0, prompt)
+    save_json(MODEL_CALLS_PATH, data)
