@@ -110,15 +110,15 @@ def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
 
 
 def format_for_model(system_text: str, user_text: str) -> str:
-    """Return ``system_text`` and ``user_text`` formatted for the model."""
+    """Format system and user text using ChatML-style tokens."""
 
-    system_clean = system_text.replace("\n", "/n")
-    user_clean = user_text.replace("\n", "/n")
+    system_clean = system_text.strip().replace("\n", "\\n").replace('"', '\\"')
+    user_clean = user_text.strip().replace("\n", "\\n").replace('"', '\\"')
 
     return (
-        f'--prompt "<|im_start|>{system_clean}<|im_end|>'
-        f"<|im_start|>user {user_clean}<|im_end|>"
-        '<|im_start|>assistant"'
+        f"<|im_start|>system\n{system_clean}<|im_end|>\n"
+        f"<|im_start|>user\n{user_clean}<|im_end|>\n"
+        f"<|im_start|>assistant\n"
     )
 
 
