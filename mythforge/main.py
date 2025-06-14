@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 
 import os
+import asyncio
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException, APIRouter, Depends
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .utils import (
@@ -45,6 +47,47 @@ init_memory(memory_manager)
 chat_router = APIRouter()
 prompt_router = APIRouter()
 settings_router = APIRouter()
+
+# --- Server-Sent Events ----------------------------------------------------
+
+clients: list[asyncio.Queue[str]] = []
+
+
+async def _event_stream(queue: asyncio.Queue[str]):
+    """Yield messages from ``queue`` to SSE clients."""
+
+    try:
+        while True:
+            data = await queue.get()
+            yield data
+    finally:
+        clients.remove(queue)
+
+
+@app.get("/events")
+async def sse_events():
+    """Endpoint for subscribing to server-sent events."""
+
+    queue: asyncio.Queue[str] = asyncio.Queue()
+    clients.append(queue)
+    headers = {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(_event_stream(queue), headers=headers)
+
+
+async def broadcast_reload() -> None:
+    """Send a reload event to all connected clients."""
+
+    for queue in list(clients):
+        await queue.put("event: reload\ndata:\n\n")
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    await broadcast_reload()
 
 
 def get_history_service() -> ChatHistoryService:
@@ -120,7 +163,9 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(status_code=400, detail="Chat name already exists")
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -142,8 +187,12 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(status_code=400, detail="No prompt data provided")
-                raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
         memory_manager.global_prompt = prompts[0]["content"] if prompts else ""
