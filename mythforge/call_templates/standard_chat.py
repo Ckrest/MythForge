@@ -148,7 +148,7 @@ def prepare_system_text(call: CallData) -> str:
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data
-    if goals.enabled:
+    if memory.MEMORY.goals_active:
         if goals.character:
             parts.append(goals.character)
         if goals.setting:
