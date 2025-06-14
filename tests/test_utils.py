@@ -75,6 +75,17 @@ def test_stream_parsed_extract_text():
     assert list(stream_parsed(chunks)) == ["a", "b"]
 
 
+def test_format_for_model_single_line():
+    from mythforge.call_core import format_for_model
+
+    result = format_for_model("sys", "user")
+    assert "\n" not in result
+    assert result == (
+        '--prompt "<|im_start|>sys<|im_end|><|im_start|>user user<|im_end|>'
+        '<|im_start|>assistant"'
+    )
+
+
 def test_append_message_skips_blank(tmp_path, monkeypatch):
     monkeypatch.setattr("mythforge.utils.CHATS_DIR", str(tmp_path))
     svc = memory.ChatHistoryService()
