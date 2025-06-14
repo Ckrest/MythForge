@@ -26,9 +26,7 @@ _TIMEOUT = 20 * 60  # 20 minutes
 # -----------------------------------
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
-    "interactive": True,
-    "interactive_first": True,
-    "single_turn": False,
+    "stream": True, # this is just a placeholder. default is also true
 }
 
 

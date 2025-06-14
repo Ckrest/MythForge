@@ -115,13 +115,17 @@ def _cli_args(**kwargs) -> list[str]:
 
 MODEL_LAUNCH_ARGS: dict[str, object] = {
     "chat_template": "",
+    "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
+    "background": False,
+    "stream": True,
+    **GENERATION_CONFIG,
+
+# testing currently
+    "interactive_first": True,
     "no_warmup": True,
     "no_conversation": True,
     "single_turn": True,
-    "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
-    "background": False,
-    "stream": False,
-    **GENERATION_CONFIG,
+    "interactive": False,
 }
 
 # ``subprocess.Popen`` parameters for launching the model process
