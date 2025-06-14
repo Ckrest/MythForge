@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from ..model import model_launch
 from .. import memory
 from ..call_core import format_for_model
+from ..utils import log_server_call
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from ..call_core import CallData
@@ -49,9 +50,7 @@ def _reset_timer() -> None:
     global _inactivity_timer
     if _inactivity_timer is not None:
         _inactivity_timer.cancel()
-    _inactivity_timer = threading.Timer(
-        INACTIVITY_TIMEOUT_SECONDS, _terminate_chat
-    )
+    _inactivity_timer = threading.Timer(INACTIVITY_TIMEOUT_SECONDS, _terminate_chat)
     _inactivity_timer.daemon = True
     _inactivity_timer.start()
 
@@ -89,12 +88,12 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
 
     prep_standard_chat()
     _reset_timer()
+    log_server_call(user_text)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
 
-    prompt_text = system_text + user_text
-    _chat_process.stdin.write(prompt_text + "\n")
+    _chat_process.stdin.write(user_text + "\n")
     _chat_process.stdin.flush()
 
     if stream:
@@ -162,9 +161,7 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = (
-            memory.MEMORY.global_prompt or _default_global_prompt()
-        )
+        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data

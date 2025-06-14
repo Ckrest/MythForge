@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 from ..model import _select_model_path
 from ..call_core import format_for_model, parse_response
+from ..utils import log_server_call
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "background": True,
@@ -19,11 +20,14 @@ def send_prompt(system_text: str, user_text: str) -> dict[str, str]:
     """Return raw model output for ``system_text`` and ``user_text``."""
     from llama_cpp import Llama
 
+    prompt = format_for_model(system_text, user_text)
+    log_server_call(prompt)
+
     llm = Llama(
         model_path=_select_model_path(background=True),
         n_ctx=MODEL_LAUNCH_OVERRIDE["n_ctx"],
     )
-    prompt = format_for_model(system_text, user_text)
+
     result = llm(prompt, max_tokens=MODEL_LAUNCH_OVERRIDE["max_tokens"])
     text = ""
     if isinstance(result, dict):
