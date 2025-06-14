@@ -58,115 +58,27 @@ class ChatRequest(BaseModel):
 # --- Load/Save operations --------------------------------------------------
 
 
-def load_item(kind: str, name: str | None = None):
-    """Load a JSON item based on ``kind`` and ``name``."""
-    if kind == "chat_history" and name:
-        return memory_manager.load_history(name)
-    if kind == "chats":
-        return memory_manager.list_chats()
-    if kind == "prompts":
-        if name:
-            content = memory_manager.get_global_prompt(name)
-            if not content:
-                raise HTTPException(status_code=404, detail="Prompt not found")
-            return {"name": name, "content": content}
-        return memory_manager.load_global_prompts()
-    if kind == "prompt_names":
-        return memory_manager.list_prompt_names()
-    if kind == "settings":
-        return memory_manager.load_settings()
-    raise HTTPException(status_code=400, detail="Invalid load request")
-
-
-def save_item(
-    kind: str,
-    name: str | None = None,
-    *,
-    data: object | None = None,
-    delete: bool = False,
-    new_name: str | None = None,
-):
-    """Handle saving, deleting, or renaming items."""
-    if kind == "chat_history" and name:
-        if delete:
-            if name not in memory_manager.list_chats():
-                raise HTTPException(status_code=404, detail="Chat not found")
-            memory_manager.delete_chat(name)
-            return
-        if new_name:
-            if name not in memory_manager.list_chats():
-                raise HTTPException(status_code=404, detail="Chat not found")
-            if new_name in memory_manager.list_chats():
-                raise HTTPException(
-                    status_code=400, detail="Chat name already exists"
-                )
-            memory_manager.rename_chat(name, new_name)
-            return
-        memory_manager.save_history(name, data or [])
-        return
-
-    if kind == "prompts" and name:
-        if delete:
-            memory_manager.delete_global_prompt(name)
-        elif new_name:
-            if not memory_manager.get_global_prompt(name):
-                raise HTTPException(status_code=404, detail="Prompt not found")
-            if memory_manager.get_global_prompt(new_name):
-                raise HTTPException(
-                    status_code=400, detail="Prompt name already exists"
-                )
-            memory_manager.rename_global_prompt(name, new_name)
-        else:
-            if data is None:
-                raise HTTPException(
-                    status_code=400, detail="No prompt data provided"
-                )
-            memory_manager.set_global_prompt(name, str(data))
-        prompts = memory_manager.load_global_prompts()
-        memory_manager.update_paths(
-            prompt_name=prompts[0]["name"] if prompts else ""
-        )
-        return
-
-    if kind == "settings" and isinstance(data, dict):
-        model.MODEL_SETTINGS.update(data)
-        memory_manager.save_settings(model.MODEL_SETTINGS)
-        for key in (
-            "temp",
-            "top_k",
-            "top_p",
-            "min_p",
-            "repeat_penalty",
-        ):
-            if key in model.MODEL_SETTINGS:
-                model.GENERATION_CONFIG[key] = model.MODEL_SETTINGS[key]
-        model.DEFAULT_MAX_TOKENS = model.MODEL_SETTINGS.get(
-            "max_tokens", model.DEFAULT_MAX_TOKENS
-        )
-        memory_manager.model_settings.update(model.MODEL_SETTINGS)
-        return
-
-    raise HTTPException(status_code=400, detail="Invalid save request")
-
-
 # --- Prompt Endpoints -----------------------------------------------------
 
 
 @prompt_router.get("/")
 def list_prompts(names_only: int = 0):
     if names_only:
-        return {"prompts": load_item("prompt_names")}
-    return {"prompts": load_item("prompts")}
+        return {"prompts": memory_manager.list_prompt_names()}
+    return {"prompts": memory_manager.load_global_prompts()}
 
 
 @prompt_router.get("/{name}")
 def get_prompt(name: str):
-    return load_item("prompts", name)
+    content = memory_manager.get_global_prompt(name)
+    if not content:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"name": name, "content": content}
 
 
 @prompt_router.post("/")
 def create_prompt(item: Dict[str, str]):
-    save_item("prompts", item["name"], data=item.get("content", ""))
+    memory_manager.set_global_prompt(item["name"], item.get("content", ""))
     return {"detail": "Created"}
 
 
@@ -174,7 +86,7 @@ def create_prompt(item: Dict[str, str]):
 def update_prompt(name: str, item: Dict[str, str]):
     if item.get("name") != name:
         raise HTTPException(status_code=400, detail="Name mismatch")
-    save_item("prompts", name, data=item.get("content", ""))
+    memory_manager.set_global_prompt(name, item.get("content", ""))
     return {"detail": "Updated"}
 
 
@@ -187,14 +99,18 @@ def rename_prompt(name: str, data: Dict[str, str]):
     if new_name == name:
         return {"detail": f"Renamed prompt '{name}'"}
 
-    save_item("prompts", name, new_name=new_name)
+    if not memory_manager.get_global_prompt(name):
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    if memory_manager.get_global_prompt(new_name):
+        raise HTTPException(status_code=400, detail="Prompt name already exists")
+    memory_manager.rename_global_prompt(name, new_name)
     memory_manager.update_paths(prompt_name=new_name)
     return {"detail": f"Renamed prompt '{name}'"}
 
 
 @prompt_router.delete("/{name}")
 def remove_prompt(name: str):
-    save_item("prompts", name, delete=True)
+    memory_manager.delete_global_prompt(name)
     memory_manager.update_paths(prompt_name="")
     return {"detail": f"Deleted prompt '{name}'"}
 
@@ -220,13 +136,13 @@ def select_prompt(data: Dict[str, str]):
 
 @settings_router.get("/")
 def get_settings():
-    return load_item("settings")
+    return memory_manager.load_settings()
 
 
 @settings_router.put("/")
 def update_settings(data: Dict[str, object]):
-    save_item("settings", data=data)
-    return {"detail": "Updated", "settings": load_item("settings")}
+    updated = memory_manager.update_settings(data)
+    return {"detail": "Updated", "settings": updated}
 
 
 # --- Response Prompt Status -----------------------------------------------
@@ -478,9 +394,7 @@ def append_assistant_message(
 ):
     """Append an assistant message to ``chat_id``."""
 
-    memory_manager.append_message(
-        chat_id, "assistant", data.get("message", "")
-    )
+    memory_manager.append_message(chat_id, "assistant", data.get("message", ""))
     return {"detail": "Message stored"}
 
 

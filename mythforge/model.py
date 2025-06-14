@@ -15,16 +15,8 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODELS_DIR = os.path.join(ROOT_DIR, "models")
 
 
-def load_model_settings(_path: str | None = None) -> Dict[str, object]:
-    """Return stored model settings using :class:`MemoryManager`."""
-
-    return MEMORY_MANAGER.load_settings()
-
-
-def save_model_settings(settings: Dict[str, object]) -> None:
-    """Persist ``settings`` via :class:`MemoryManager`."""
-
-    MEMORY_MANAGER.save_settings(settings)
+load_model_settings = MEMORY_MANAGER.load_settings
+save_model_settings = MEMORY_MANAGER.save_settings
 
 
 MODEL_SETTINGS = load_model_settings()
@@ -143,9 +135,7 @@ MODEL_LAUNCH_PARAMS: dict[str, object] = {
 }
 
 
-def model_launch(
-    prompt: str = "", background: bool = False, **overrides
-) -> list[str]:
+def model_launch(prompt: str = "", background: bool = False, **overrides) -> list[str]:
     """Return a command list for launching the model."""
 
     params = MODEL_LAUNCH_ARGS.copy()

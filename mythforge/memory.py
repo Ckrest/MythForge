@@ -67,9 +67,7 @@ class MemoryManager:
         return path
 
     def _prompt_path(self, name: str) -> str:
-        safe = "".join(
-            c if c.isalnum() or c in ("-", "_") else "_" for c in name
-        )
+        safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
         return os.path.join(self.prompts_dir, f"{safe}.json")
 
     def _goals_path(self, chat_id: str) -> str:
@@ -91,9 +89,7 @@ class MemoryManager:
         self.update_paths(chat_name=chat_id)
         return list(self._read_json(self._chat_file(chat_id, "full.json")))
 
-    def save_history(
-        self, chat_id: str, history: List[Dict[str, Any]]
-    ) -> None:
+    def save_history(self, chat_id: str, history: List[Dict[str, Any]]) -> None:
         self._ensure_chat_dir(chat_id)
         self.update_paths(chat_name=chat_id)
         self._write_json(self._chat_file(chat_id, "full.json"), history)
@@ -177,9 +173,29 @@ class MemoryManager:
         data = self._read_json(self.settings_path)
         return data if isinstance(data, dict) else {}
 
-    def save_settings(self, settings: Dict[str, Any]) -> None:
-        self._write_json(self.settings_path, settings)
-        self.model_settings.update(settings)
+    def save_settings(self, full_payload: Dict[str, Any]) -> None:
+        """Persist ``full_payload`` and update :attr:`model_settings`."""
+
+        self._write_json(self.settings_path, full_payload)
+        self.model_settings.update(full_payload)
+
+    def update_settings(
+        self, delta: Dict[str, Any], save: bool = True
+    ) -> Dict[str, Any]:
+        """Merge ``delta`` into :attr:`model_settings` and optionally save."""
+
+        self.model_settings.update(delta)
+        model.MODEL_SETTINGS.update(delta)
+        for key in ("temp", "top_k", "top_p", "min_p", "repeat_penalty"):
+            if key in delta:
+                model.GENERATION_CONFIG[key] = model.MODEL_SETTINGS[key]
+        if "max_tokens" in delta:
+            model.DEFAULT_MAX_TOKENS = model.MODEL_SETTINGS.get(
+                "max_tokens", model.DEFAULT_MAX_TOKENS
+            )
+        if save:
+            self.save_settings(self.model_settings)
+        return self.model_settings
 
     # ------------------------------------------------------------------
     # Logging
@@ -256,9 +272,7 @@ class MemoryManager:
 
     def set_global_prompt(self, name: str, content: str) -> None:
         os.makedirs(self.prompts_dir, exist_ok=True)
-        self._write_json(
-            self._prompt_path(name), {"name": name, "content": content}
-        )
+        self._write_json(self._prompt_path(name), {"name": name, "content": content})
         self.update_paths(prompt_name=name)
 
     def delete_global_prompt(self, name: str) -> None:
@@ -280,9 +294,7 @@ class MemoryManager:
                 continue
             data = self._read_json(os.path.join(self.prompts_dir, fname))
             if isinstance(data, dict) and "name" in data and "content" in data:
-                prompts.append(
-                    {"name": data["name"], "content": data["content"]}
-                )
+                prompts.append({"name": data["name"], "content": data["content"]})
         return prompts
 
     def list_prompt_names(self) -> List[str]:
@@ -299,22 +311,12 @@ MEMORY = MEMORY_MANAGER
 
 def set_global_prompt(prompt: str) -> None:
     """Set ``prompt`` as the active global prompt."""
-
     MEMORY_MANAGER.set_global_prompt("current_prompt", prompt)
-
-
-def update_model_settings(settings: Dict[str, Any]) -> None:
-    """Compatibility wrapper for updating model settings."""
-
-    MEMORY_MANAGER.model_settings.update(settings)
 
 
 def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
     """Populate ``manager`` with default values."""
-
-    manager.model_settings = (
-        manager.load_settings() or model.MODEL_SETTINGS.copy()
-    )
+    manager.model_settings = manager.load_settings() or model.MODEL_SETTINGS.copy()
     manager.goals_active = False
     manager.update_paths(chat_name="", prompt_name="")
     prompts = manager.load_global_prompts()
