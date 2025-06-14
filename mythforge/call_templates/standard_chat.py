@@ -103,6 +103,7 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
 
         def _stream() -> Iterator[dict[str, str]]:
             for line in _chat_process.stdout:
+                print(line, end="", flush=True)
                 yield {"text": line.rstrip()}
 
         return _stream()
