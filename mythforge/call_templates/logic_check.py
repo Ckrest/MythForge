@@ -24,6 +24,7 @@ def send_prompt(system_text: str, user_text: str) -> dict[str, str]:
         n_ctx=MODEL_LAUNCH_OVERRIDE["n_ctx"],
     )
     prompt = format_for_model(system_text, user_text)
+    myth_log("cli_input", text=prompt)
     result = llm(prompt, max_tokens=MODEL_LAUNCH_OVERRIDE["max_tokens"])
     text = ""
     if isinstance(result, dict):
