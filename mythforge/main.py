@@ -11,24 +11,8 @@ from fastapi.responses import StreamingResponse
 
 from pydantic import BaseModel
 
-from .utils import (
-    ROOT_DIR,
-    CHATS_DIR,
-    load_json,
-    save_json,
-    chat_file,
-    ensure_chat_dir,
-    goals_path,
-    load_global_prompts,
-    list_prompt_names,
-    get_global_prompt_content,
-    save_global_prompt,
-    delete_global_prompt,
-    _prompt_path,
-)
 from . import model
 from .memory import (
-    ChatHistoryService,
     MemoryManager,
     MEMORY_MANAGER,
     initialize as init_memory,
@@ -41,9 +25,8 @@ DEBUG_MODE = os.environ.get("DEBUG", "0") not in {"0", "false", "False"}
 
 app = FastAPI(title="MythForgeUI", debug=DEBUG_MODE)
 
-history_service = ChatHistoryService()
 memory_manager: MemoryManager = MEMORY_MANAGER
-chat_runner = ChatRunner(history_service, memory_manager)
+chat_runner = ChatRunner(memory_manager)
 
 init_memory(memory_manager)
 
@@ -58,10 +41,6 @@ async def startup_event() -> None:
 chat_router = APIRouter()
 prompt_router = APIRouter()
 settings_router = APIRouter()
-
-
-def get_history_service() -> ChatHistoryService:
-    return history_service
 
 
 # --- Helpers ---------------------------------------------------------------
@@ -87,25 +66,20 @@ class ChatRequest(BaseModel):
 def load_item(kind: str, name: str | None = None):
     """Load a JSON item based on ``kind`` and ``name``."""
     if kind == "chat_history" and name:
-        return load_json(chat_file(name, "full.json"))
+        return memory_manager.load_history(name)
     if kind == "chats":
-        os.makedirs(CHATS_DIR, exist_ok=True)
-        return [
-            d
-            for d in os.listdir(CHATS_DIR)
-            if os.path.isdir(os.path.join(CHATS_DIR, d))
-        ]
+        return memory_manager.list_chats()
     if kind == "prompts":
         if name:
-            content = get_global_prompt_content(name)
-            if content is None:
+            content = memory_manager.get_global_prompt(name)
+            if not content:
                 raise HTTPException(status_code=404, detail="Prompt not found")
             return {"name": name, "content": content}
-        return load_global_prompts()
+        return memory_manager.load_global_prompts()
     if kind == "prompt_names":
-        return list_prompt_names()
+        return memory_manager.list_prompt_names()
     if kind == "settings":
-        return model.MODEL_SETTINGS
+        return memory_manager.load_settings()
     raise HTTPException(status_code=400, detail="Invalid load request")
 
 
@@ -120,51 +94,40 @@ def save_item(
     """Handle saving, deleting, or renaming items."""
     if kind == "chat_history" and name:
         if delete:
-            chat_dir = os.path.join(CHATS_DIR, name)
-            if not os.path.isdir(chat_dir):
+            if name not in memory_manager.list_chats():
                 raise HTTPException(status_code=404, detail="Chat not found")
-            for fname in os.listdir(chat_dir):
-                os.remove(os.path.join(chat_dir, fname))
-            os.rmdir(chat_dir)
+            memory_manager.delete_chat(name)
             return
         if new_name:
-            old_dir = os.path.join(CHATS_DIR, name)
-            new_dir = os.path.join(CHATS_DIR, new_name)
-            if not os.path.isdir(old_dir):
+            if name not in memory_manager.list_chats():
                 raise HTTPException(status_code=404, detail="Chat not found")
-            if os.path.exists(new_dir):
+            if new_name in memory_manager.list_chats():
                 raise HTTPException(
                     status_code=400, detail="Chat name already exists"
                 )
-            os.rename(old_dir, new_dir)
+            memory_manager.rename_chat(name, new_name)
             return
-        ensure_chat_dir(name)
-        save_json(chat_file(name, "full.json"), data or [])
+        memory_manager.save_history(name, data or [])
         return
 
     if kind == "prompts" and name:
         if delete:
-            delete_global_prompt(name)
+            memory_manager.delete_global_prompt(name)
         elif new_name:
-            old_path = _prompt_path(name)
-            new_path = _prompt_path(new_name)
-            if not os.path.exists(old_path):
+            if not memory_manager.get_global_prompt(name):
                 raise HTTPException(status_code=404, detail="Prompt not found")
-            if os.path.exists(new_path):
+            if memory_manager.get_global_prompt(new_name):
                 raise HTTPException(
                     status_code=400, detail="Prompt name already exists"
                 )
-            os.rename(old_path, new_path)
+            memory_manager.rename_global_prompt(name, new_name)
         else:
             if data is None:
                 raise HTTPException(
                     status_code=400, detail="No prompt data provided"
                 )
-                raise HTTPException(
-                    status_code=400, detail="No prompt data provided"
-                )
-            save_global_prompt({"name": name, "content": str(data)})
-        prompts = load_global_prompts()
+            memory_manager.set_global_prompt(name, str(data))
+        prompts = memory_manager.load_global_prompts()
         memory_manager.update_paths(
             prompt_name=prompts[0]["name"] if prompts else ""
         )
@@ -172,7 +135,7 @@ def save_item(
 
     if kind == "settings" and isinstance(data, dict):
         model.MODEL_SETTINGS.update(data)
-        save_json(model.MODEL_SETTINGS_PATH, model.MODEL_SETTINGS)
+        memory_manager.save_settings(model.MODEL_SETTINGS)
         for key in (
             "temp",
             "top_k",
@@ -283,23 +246,19 @@ def response_prompt_status():
 
 
 @chat_router.get("/")
-def list_chats(
-    history: ChatHistoryService = Depends(get_history_service),
-):
-    return {"chats": history.list_chats()}
+def list_chats():
+    return {"chats": memory_manager.list_chats()}
 
 
 @chat_router.post("/{chat_id}")
 def create_chat(
     chat_id: str,
-    history: ChatHistoryService = Depends(get_history_service),
     memory: MemoryManager = Depends(get_memory_manager),
 ):
     """Create an empty chat directory for ``chat_id``."""
-    chat_dir = os.path.join(CHATS_DIR, chat_id)
-    if os.path.exists(chat_dir):
+    if chat_id in memory_manager.list_chats():
         raise HTTPException(status_code=400, detail="Chat already exists")
-    history.save_history(chat_id, [])
+    memory_manager.save_history(chat_id, [])
     memory.toggle_goals(False)
     memory.update_paths(chat_name=chat_id)
     return {"detail": f"Created chat '{chat_id}'", "chat_id": chat_id}
@@ -308,10 +267,9 @@ def create_chat(
 @chat_router.get("/{chat_id}/history")
 def get_history(
     chat_id: str,
-    history: ChatHistoryService = Depends(get_history_service),
     memory: MemoryManager = Depends(get_memory_manager),
 ):
-    history_data = history.load_history(chat_id)
+    history_data = memory.load_history(chat_id)
     memory.load_goals(chat_id)
     return {"chat_id": chat_id, "history": history_data}
 
@@ -321,14 +279,13 @@ def edit_message(
     chat_id: str,
     index: int,
     data: Dict[str, str],
-    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Update the content of a message at ``index`` in ``chat_id``."""
-    full = history.load_history(chat_id)
+    full = memory_manager.load_history(chat_id)
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full[index]["content"] = data.get("content", "")
-    history.save_history(chat_id, full)
+    memory_manager.save_history(chat_id, full)
     return {"detail": "Updated"}
 
 
@@ -336,27 +293,21 @@ def edit_message(
 def delete_message(
     chat_id: str,
     index: int,
-    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Remove the message at ``index`` from ``chat_id``."""
-    full = history.load_history(chat_id)
+    full = memory_manager.load_history(chat_id)
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full.pop(index)
-    history.save_history(chat_id, full)
+    memory_manager.save_history(chat_id, full)
     return {"detail": "Deleted"}
 
 
 @chat_router.delete("/{chat_id}")
 def delete_chat(
     chat_id: str,
-    history: ChatHistoryService = Depends(get_history_service),
 ):
-    chat_dir = os.path.join(CHATS_DIR, chat_id)
-    if os.path.isdir(chat_dir):
-        for fname in os.listdir(chat_dir):
-            os.remove(os.path.join(chat_dir, fname))
-        os.rmdir(chat_dir)
+    memory_manager.delete_chat(chat_id)
     memory_manager.update_paths(chat_name="")
     return {"detail": f"Deleted chat '{chat_id}'"}
 
@@ -365,7 +316,6 @@ def delete_chat(
 def rename_chat(
     chat_id: str,
     data: Dict[str, str],
-    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Rename an existing chat ``chat_id`` to ``data['new_id']``."""
 
@@ -376,13 +326,11 @@ def rename_chat(
     if new_id == chat_id:
         return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
-    old_dir = os.path.join(CHATS_DIR, chat_id)
-    new_dir = os.path.join(CHATS_DIR, new_id)
-    if not os.path.isdir(old_dir):
+    if chat_id not in memory_manager.list_chats():
         raise HTTPException(status_code=404, detail="Chat not found")
-    if os.path.exists(new_dir):
+    if new_id in memory_manager.list_chats():
         raise HTTPException(status_code=400, detail="Chat name already exists")
-    os.rename(old_dir, new_dir)
+    memory_manager.rename_chat(chat_id, new_id)
     memory_manager.update_paths(chat_name=new_id)
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
@@ -422,11 +370,7 @@ def disable_goals(
 ):
     """Disable goals for ``chat_id`` by renaming the JSON file."""
 
-    path = goals_path(chat_id)
-    disabled = chat_file(chat_id, "goals_disabled.json")
-    if os.path.exists(path):
-        os.rename(path, disabled)
-    memory.load_goals(chat_id)
+    memory.disable_goals(chat_id)
     return {"detail": "Disabled"}
 
 
@@ -437,11 +381,7 @@ def enable_goals(
 ):
     """Re-enable goals for ``chat_id`` if a disabled JSON file exists."""
 
-    path = goals_path(chat_id)
-    disabled = chat_file(chat_id, "goals_disabled.json")
-    if os.path.exists(disabled):
-        os.rename(disabled, path)
-    memory.load_goals(chat_id)
+    memory.enable_goals(chat_id)
     return {"detail": "Enabled"}
 
 
@@ -474,36 +414,25 @@ def save_context_file(
 ):
     """Save character/setting context for ``chat_id`` preserving progress."""
 
-    ensure_chat_dir(chat_id)
     obj = {
         "character": data.get("character", ""),
         "setting": data.get("setting", ""),
     }
-    # Preserve goal progress if file already exists
-    path = goals_path(chat_id)
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-            if isinstance(existing, dict):
-                obj["in_progress"] = existing.get("in_progress", [])
-                obj["completed"] = existing.get("completed", [])
-        except Exception as e:
-            print(f"Failed to load existing goals for '{chat_id}': {e}")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, indent=2, ensure_ascii=False)
-    memory.toggle_goals(True)
+    existing = memory.load_goals(chat_id)
+    if existing.active_goals or existing.deactive_goals:
+        obj["in_progress"] = existing.active_goals
+        obj["completed"] = existing.deactive_goals
+    memory.save_goals(chat_id, obj)
     return {"detail": "Saved"}
 
 
 @chat_router.post("/message")
 def save_message(
     req: ChatRequest,
-    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Store ``req.message`` in ``req.chat_id`` without generating a reply."""
 
-    history.append_message(req.chat_id, "user", req.message)
+    memory_manager.append_message(req.chat_id, "user", req.message)
     return {"detail": "Message stored"}
 
 
@@ -511,7 +440,7 @@ def save_message(
 def send_chat_message(chat_id: str, req: ChatRequest):
     """Stream a reply for ``req.message`` using the standard chat model."""
 
-    history_service.append_message(chat_id, "user", req.message)
+    memory_manager.append_message(chat_id, "user", req.message)
     stream = standard_chat.send_prompt("", req.message, stream=True)
 
     def _generate() -> Iterator[str]:
@@ -520,7 +449,9 @@ def send_chat_message(chat_id: str, req: ChatRequest):
             text = chunk.get("text", "")
             yield text + "\n"
             parts.append(text)
-        history_service.append_message(chat_id, "<|im_start|>assistant<|im_end|>", "".join(parts))
+        memory_manager.append_message(
+            chat_id, "<|im_start|>assistant<|im_end|>", "".join(parts)
+        )
 
     return StreamingResponse(_generate(), media_type="text/plain")
 
@@ -531,7 +462,7 @@ def run_cli_command(chat_id: str, req: ChatRequest):
 
     from .call_templates import standard_chat
 
-    history_service.append_message(chat_id, "user", req.message)
+    memory_manager.append_message(chat_id, "user", req.message)
     stream = standard_chat.send_cli_command(req.message, stream=True)
 
     def _generate() -> Iterator[str]:
@@ -540,7 +471,7 @@ def run_cli_command(chat_id: str, req: ChatRequest):
             text = chunk.get("text", "")
             parts.append(text)
             yield text
-        history_service.append_message(chat_id, "assistant", "".join(parts))
+        memory_manager.append_message(chat_id, "assistant", "".join(parts))
 
     return StreamingResponse(_generate(), media_type="text/plain")
 
@@ -549,11 +480,12 @@ def run_cli_command(chat_id: str, req: ChatRequest):
 def append_assistant_message(
     chat_id: str,
     data: Dict[str, str],
-    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Append an assistant message to ``chat_id``."""
 
-    history.append_message(chat_id, "assistant", data.get("message", ""))
+    memory_manager.append_message(
+        chat_id, "assistant", data.get("message", "")
+    )
     return {"detail": "Message stored"}
 
 
@@ -561,11 +493,10 @@ def append_assistant_message(
 def chat_received(
     req: ChatRequest,
     runner: ChatRunner = Depends(lambda: chat_runner),
-    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Stream a model-generated reply for ``req``."""
 
-    history.append_message(req.chat_id, "user", req.message)
+    memory_manager.append_message(req.chat_id, "user", req.message)
     call = build_call(req)
     return runner.process_user_message(req.chat_id, req.message, stream=True)
 
@@ -574,11 +505,10 @@ def chat_received(
 def chat(
     req: ChatRequest,
     runner: ChatRunner = Depends(lambda: chat_runner),
-    history: ChatHistoryService = Depends(get_history_service),
 ):
     """Return a standard model-generated reply."""
 
-    history.append_message(req.chat_id, "user", req.message)
+    memory_manager.append_message(req.chat_id, "user", req.message)
     call = build_call(req)
     return runner.process_user_message(req.chat_id, req.message)
 

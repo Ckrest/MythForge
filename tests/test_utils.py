@@ -2,7 +2,6 @@ import json
 import sys
 import types
 
-from mythforge.utils import load_json
 from mythforge.main import ChatRequest
 from mythforge.call_core import build_call, parse_response, stream_parsed
 from mythforge.call_templates import (
@@ -13,21 +12,17 @@ from mythforge.call_templates import (
 from mythforge import memory
 
 
-def test_load_json_basic(tmp_path):
-    path = tmp_path / "data.json"
-    path.write_text("[1, 2, 3]")
-    assert load_json(str(path)) == [1, 2, 3]
-
-
-def test_load_json_missing(tmp_path):
-    path = tmp_path / "missing.json"
-    assert load_json(str(path)) == []
+def test_memory_history_basic(tmp_path):
+    mgr = memory.MemoryManager(root_dir=str(tmp_path))
+    mgr.save_history("c1", [])
+    mgr.append_message("c1", "user", "hello")
+    assert mgr.load_history("c1") == [{"role": "user", "content": "hello"}]
 
 
 def test_build_call(tmp_path, monkeypatch):
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir()
-    monkeypatch.setattr("mythforge.utils.GLOBAL_PROMPTS_DIR", str(prompt_dir))
+    monkeypatch.setattr(memory.MEMORY_MANAGER, "prompts_dir", str(prompt_dir))
     data = {"name": "Example", "content": "Hello"}
     (prompt_dir / "Example.json").write_text(json.dumps(data))
     req = ChatRequest(chat_id="1", message="hi")
@@ -42,7 +37,7 @@ def test_build_call(tmp_path, monkeypatch):
 def test_memory_global_prompt(tmp_path, monkeypatch):
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir()
-    monkeypatch.setattr("mythforge.utils.GLOBAL_PROMPTS_DIR", str(prompt_dir))
+    monkeypatch.setattr(memory.MEMORY_MANAGER, "prompts_dir", str(prompt_dir))
     data = {"name": "Example", "content": "Hello"}
     (prompt_dir / "Example.json").write_text(json.dumps(data))
     memory.initialize()
@@ -56,7 +51,7 @@ def test_memory_global_prompt(tmp_path, monkeypatch):
 def test_goal_generation_uses_memory_global_prompt(tmp_path, monkeypatch):
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir()
-    monkeypatch.setattr("mythforge.utils.GLOBAL_PROMPTS_DIR", str(prompt_dir))
+    monkeypatch.setattr(memory.MEMORY_MANAGER, "prompts_dir", str(prompt_dir))
     memory.initialize()
     memory.set_global_prompt("Stored")
 
@@ -86,13 +81,12 @@ def test_format_for_model_single_line():
     )
 
 
-def test_append_message_skips_blank(tmp_path, monkeypatch):
-    monkeypatch.setattr("mythforge.utils.CHATS_DIR", str(tmp_path))
-    svc = memory.ChatHistoryService()
-    svc.append_message("c1", "user", "   ")
-    assert svc.load_history("c1") == []
-    svc.append_message("c1", "user", "hello")
-    assert svc.load_history("c1") == [{"role": "user", "content": "hello"}]
+def test_append_message_skips_blank(tmp_path):
+    mgr = memory.MemoryManager(root_dir=str(tmp_path))
+    mgr.append_message("c1", "user", "   ")
+    assert mgr.load_history("c1") == []
+    mgr.append_message("c1", "user", "hello")
+    assert mgr.load_history("c1") == [{"role": "user", "content": "hello"}]
 
 
 def test_logic_check_invocation(monkeypatch):

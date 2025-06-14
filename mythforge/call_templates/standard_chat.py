@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from ..model import model_launch
 from .. import memory
 from ..call_core import format_for_model
-from ..utils import log_server_call, log_prepared_prompts
+from ..memory import MEMORY_MANAGER
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from ..call_core import CallData
@@ -50,7 +50,9 @@ def _reset_timer() -> None:
     global _inactivity_timer
     if _inactivity_timer is not None:
         _inactivity_timer.cancel()
-    _inactivity_timer = threading.Timer(INACTIVITY_TIMEOUT_SECONDS, _terminate_chat)
+    _inactivity_timer = threading.Timer(
+        INACTIVITY_TIMEOUT_SECONDS, _terminate_chat
+    )
     _inactivity_timer.daemon = True
     _inactivity_timer.start()
 
@@ -111,7 +113,7 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     prep_standard_chat()
     _reset_timer()
     formatted_prompt = format_for_model(system_text, user_text)
-    log_server_call(formatted_prompt)
+    MEMORY_MANAGER.log_event("model_calls", formatted_prompt)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
@@ -141,7 +143,7 @@ def chat(chat_id: str, user_text: str) -> str:
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
-    log_server_call(user_text)
+    MEMORY_MANAGER.log_event("model_calls", user_text)
     _chat_process.stdin.write(user_text + "\n")
     _chat_process.stdin.flush()
     output: list[str] = []
@@ -156,7 +158,7 @@ def send_cli_command(command: str, *, stream: bool = False):
     prep_standard_chat()
     _reset_timer()
     formatted_prompt = command
-    log_server_call(formatted_prompt)
+    MEMORY_MANAGER.log_event("model_calls", formatted_prompt)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
@@ -179,7 +181,9 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
+        call.global_prompt = (
+            memory.MEMORY.global_prompt or _default_global_prompt()
+        )
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data
@@ -205,14 +209,18 @@ def prepare_user_text(history: List[Dict[str, Any]]) -> str:
 
 def prepare(call: CallData) -> tuple[str, str]:
     """Return prompts for a standard chat call."""
-    from ..memory import ChatHistoryService
-
-    history_service = ChatHistoryService()
-    history = history_service.load_history(call.chat_id)
+    history = MEMORY_MANAGER.load_history(call.chat_id)
 
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(history)
-    log_prepared_prompts(call.call_type, system_text, user_text)
+    MEMORY_MANAGER.log_event(
+        "prepared_prompts",
+        {
+            "call_type": call.call_type,
+            "system_text": system_text,
+            "user_text": user_text,
+        },
+    )
     return system_text, user_text
 
 
