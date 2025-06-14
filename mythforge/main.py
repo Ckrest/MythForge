@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import json
-
-import os
 from typing import Dict, List, Iterator
 
 from fastapi import FastAPI, HTTPException, APIRouter, Depends
@@ -21,9 +18,7 @@ from .call_core import ChatRunner, build_call
 from .call_templates import standard_chat
 from .call_templates.standard_chat import prep_standard_chat
 
-DEBUG_MODE = os.environ.get("DEBUG", "0") not in {"0", "false", "False"}
-
-app = FastAPI(title="MythForgeUI", debug=DEBUG_MODE)
+app = FastAPI(title="MythForgeUI", debug=False)
 
 memory_manager: MemoryManager = MEMORY_MANAGER
 chat_runner = ChatRunner(memory_manager)
@@ -213,8 +208,8 @@ def select_prompt(data: Dict[str, str]):
         memory_manager.update_paths(prompt_name="")
         return {"detail": "Cleared"}
 
-    content = get_global_prompt_content(name)
-    if content is None:
+    content = memory_manager.get_global_prompt(name)
+    if not content:
         raise HTTPException(status_code=404, detail="Prompt not found")
     memory_manager.update_paths(prompt_name=name)
     return {"detail": f"Selected prompt '{name}'"}
