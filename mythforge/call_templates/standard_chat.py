@@ -118,6 +118,7 @@ def chat(chat_id: str, user_text: str) -> str:
         prep_standard_chat()
     else:
         _reset_timer()
+    log_server_call(user_text)
 
     formatted = format_for_model(chat_id, user_text)
     assert _chat_process is not None
@@ -139,6 +140,7 @@ def send_cli_command(command: str, *, stream: bool = False):
 
     prep_standard_chat()
     _reset_timer()
+    log_server_call(command)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
