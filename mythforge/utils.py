@@ -138,7 +138,7 @@ def delete_global_prompt(name: str) -> None:
 
 
 def log_server_call(prompt: str) -> None:
-    """Prepend ``prompt`` to the server log list."""
+    """Prepend ``prompt`` to the server log list and print it."""
 
     os.makedirs(SERVER_LOGS_DIR, exist_ok=True)
     data = load_json(MODEL_CALLS_PATH)
@@ -146,12 +146,13 @@ def log_server_call(prompt: str) -> None:
         data = []
     data.insert(0, prompt)
     save_json(MODEL_CALLS_PATH, data)
+    print(prompt, flush=True)
 
 
 def log_prepared_prompts(
     call_type: str, system_text: str, user_text: str
 ) -> None:
-    """Prepend prepared prompt data to the server log list."""
+    """Prepend prepared prompt data to the server log list and print it."""
 
     os.makedirs(SERVER_LOGS_DIR, exist_ok=True)
     data = load_json(PREPARED_CALLS_PATH)
@@ -164,3 +165,4 @@ def log_prepared_prompts(
     }
     data.insert(0, entry)
     save_json(PREPARED_CALLS_PATH, data)
+    print(entry, flush=True)
