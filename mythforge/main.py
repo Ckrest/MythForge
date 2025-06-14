@@ -35,14 +35,24 @@ from .memory import (
 )
 from .call_core import ChatRunner, build_call, handle_chat
 from .call_templates import standard_chat
+from .call_templates.standard_chat import prep_standard_chat
 
-app = FastAPI(title="Myth Forge Server")
+DEBUG_MODE = os.environ.get("DEBUG", "0") not in {"0", "false", "False"}
+
+app = FastAPI(title="MythForgeUI", debug=DEBUG_MODE)
 
 history_service = ChatHistoryService()
 memory_manager: MemoryManager = MEMORY_MANAGER
 chat_runner = ChatRunner(history_service, memory_manager)
 
 init_memory(memory_manager)
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    """Launch the chat subprocess when the API starts."""
+
+    prep_standard_chat()
 
 
 chat_router = APIRouter()
@@ -499,14 +509,12 @@ def save_message(
 
 @chat_router.post("/{chat_id}/message")
 def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
-    """Generate a reply for ``req.message`` in ``chat_id``."""
-
-    if not standard_chat.chat_running():
-        standard_chat.prep_standard_chat()
+    """Return a reply for ``req.message`` using the standard chat model."""
 
     history_service.append_message(chat_id, "user", req.message)
-    call = build_call(req)
-    return handle_chat(call, history_service, memory_manager, stream=True)
+    response = standard_chat.chat(chat_id, req.message)
+    history_service.append_message(chat_id, "assistant", response)
+    return {"response": response}
 
 
 @chat_router.post("/{chat_id}/cli")

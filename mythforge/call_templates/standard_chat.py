@@ -3,79 +3,53 @@ from __future__ import annotations
 """Prompt helpers and interactive model utilities for standard chats."""
 
 import subprocess
-import threading
-import time
 from typing import Any, Dict, Iterable, Iterator, List
 
 from typing import TYPE_CHECKING
 
-from ..model import model_launch, MODEL_LAUNCH_PARAMS
+from ..model import model_launch
 from .. import memory
 from ..utils import myth_log
+from ..call_core import format_for_model
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from ..call_core import CallData
 
 
 _chat_process: subprocess.Popen | None = None
-_last_used: float = 0.0
-_lock = threading.Lock()
-_TIMEOUT = 20 * 60  # 20 minutes
 
 
 def chat_running() -> bool:
     """Return ``True`` if the chat model subprocess is active."""
 
-    with _lock:
-        return _chat_process is not None and _chat_process.poll() is None
+    return _chat_process is not None and _chat_process.poll() is None
 
 
 # -----------------------------------
 # Model launch parameters / arguments ORERRIDE
 # -----------------------------------
 
-MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
-    "stream": False,  # this is just a placeholder. default is also true
-}
-
-
-def _watchdog() -> None:
-    """Monitor the running model process and terminate on timeout."""
-
-    global _chat_process
-    while True:
-        time.sleep(120)
-        with _lock:
-            if not _chat_process:
-                return
-            if time.time() - _last_used < _TIMEOUT:
-                continue
-            proc = _chat_process
-            _chat_process = None
-        if proc and proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except Exception:
-                proc.kill()
-        return
+MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {"stream": False}
 
 
 def prep_standard_chat() -> None:
-    """Start the standard chat model in interactive mode if needed."""
+    """Launch the standard chat model if it is not running."""
 
-    global _chat_process, _last_used
-    with _lock:
-        alive = _chat_process and _chat_process.poll() is None
-        if alive:
-            _last_used = time.time()
-            return
+    global _chat_process
+    if chat_running():
+        return
 
-        args = model_launch(**MODEL_LAUNCH_OVERRIDE)
-        myth_log(" ".join(args))
-        _chat_process = subprocess.Popen(args, **MODEL_LAUNCH_PARAMS)
-        _last_used = time.time()
-        threading.Thread(target=_watchdog, daemon=True).start()
+    cmd = model_launch(**MODEL_LAUNCH_OVERRIDE)
+    myth_log(" ".join(cmd))
+    _chat_process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stdin=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
 
 
 def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
@@ -86,11 +60,8 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
 
-    with _lock:
-        _chat_process.stdin.write(system_text + user_text + "\n")
-        _chat_process.stdin.flush()
-        global _last_used
-        _last_used = time.time()
+    _chat_process.stdin.write(system_text + user_text + "\n")
+    _chat_process.stdin.flush()
 
     if stream:
 
@@ -104,6 +75,26 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     return {"text": line.rstrip()}
 
 
+def chat(chat_id: str, user_text: str) -> str:
+    """Return a model reply for ``user_text`` in ``chat_id``."""
+
+    if not chat_running():
+        prep_standard_chat()
+
+    formatted = format_for_model(chat_id, user_text)
+    assert _chat_process is not None
+    assert _chat_process.stdin is not None
+    assert _chat_process.stdout is not None
+    _chat_process.stdin.write(formatted + "\n")
+    _chat_process.stdin.flush()
+    output: list[str] = []
+    for line in _chat_process.stdout:
+        if line.strip() == "<|endoftext|>":
+            break
+        output.append(line)
+    return "".join(output).strip()
+
+
 def send_cli_command(command: str, *, stream: bool = False):
     """Send ``command`` directly to the interactive CLI process."""
 
@@ -112,11 +103,8 @@ def send_cli_command(command: str, *, stream: bool = False):
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
 
-    with _lock:
-        _chat_process.stdin.write(command + "\n")
-        _chat_process.stdin.flush()
-        global _last_used
-        _last_used = time.time()
+    _chat_process.stdin.write(command + "\n")
+    _chat_process.stdin.flush()
 
     if stream:
 
