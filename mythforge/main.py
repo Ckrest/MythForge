@@ -3,12 +3,10 @@ from __future__ import annotations
 import json
 
 import os
-import asyncio
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException, APIRouter, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .utils import (
@@ -49,46 +47,9 @@ chat_router = APIRouter()
 prompt_router = APIRouter()
 settings_router = APIRouter()
 
-# --- Server-Sent Events ----------------------------------------------------
-
-clients: list[asyncio.Queue[str]] = []
-
-
-async def _event_stream(queue: asyncio.Queue[str]):
-    """Yield messages from ``queue`` to SSE clients."""
-
-    try:
-        while True:
-            data = await queue.get()
-            yield data
-    finally:
-        clients.remove(queue)
-
-
-@app.get("/events")
-async def sse_events():
-    """Endpoint for subscribing to server-sent events."""
-
-    queue: asyncio.Queue[str] = asyncio.Queue()
-    clients.append(queue)
-    headers = {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-    }
-    return StreamingResponse(_event_stream(queue), headers=headers)
-
-
-async def broadcast_reload() -> None:
-    """Send a reload event to all connected clients."""
-
-    for queue in list(clients):
-        await queue.put("event: reload\ndata:\n\n")
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
-    await broadcast_reload()
+# The original implementation included server-sent events for notifying
+# the UI when the backend reloaded. This has been removed in favor of a
+# simpler stateless approach.
 
 
 def get_history_service() -> ChatHistoryService:
@@ -164,7 +125,9 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(status_code=400, detail="Chat name already exists")
+                raise HTTPException(
+                    status_code=400, detail="Chat name already exists"
+                )
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -186,11 +149,20 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(status_code=400, detail="No prompt data provided")
-                raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
+                raise HTTPException(
+                    status_code=400, detail="No prompt data provided"
+                )
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
-        memory_manager.global_prompt = prompts[0]["content"] if prompts else ""
+        if prompts:
+            memory_manager.global_prompt = prompts[0]["content"]
+            memory_manager.update_paths(prompt_name=prompts[0]["name"])
+        else:
+            memory_manager.global_prompt = ""
+            memory_manager.update_paths(prompt_name="")
         return
 
     if kind == "settings" and isinstance(data, dict):
@@ -269,12 +241,14 @@ def select_prompt(data: Dict[str, str]):
     name = data.get("name", "").strip()
     if not name:
         memory_manager.global_prompt = ""
+        memory_manager.update_paths(prompt_name="")
         return {"detail": "Cleared"}
 
     content = get_global_prompt_content(name)
     if content is None:
         raise HTTPException(status_code=404, detail="Prompt not found")
     memory_manager.global_prompt = content
+    memory_manager.update_paths(prompt_name=name)
     return {"detail": f"Selected prompt '{name}'"}
 
 
@@ -322,6 +296,7 @@ def create_chat(
         raise HTTPException(status_code=400, detail="Chat already exists")
     history.save_history(chat_id, [])
     memory.toggle_goals(False)
+    memory_manager.update_paths(chat_id=chat_id)
     return {"detail": f"Created chat '{chat_id}'", "chat_id": chat_id}
 
 
@@ -333,6 +308,7 @@ def get_history(
 ):
     history_data = history.load_history(chat_id)
     memory.load_goals(chat_id)
+    memory_manager.update_paths(chat_id=chat_id)
     return {"chat_id": chat_id, "history": history_data}
 
 
@@ -377,6 +353,7 @@ def delete_chat(
         for fname in os.listdir(chat_dir):
             os.remove(os.path.join(chat_dir, fname))
         os.rmdir(chat_dir)
+    memory_manager.update_paths(chat_id="")
     return {"detail": f"Deleted chat '{chat_id}'"}
 
 
@@ -402,6 +379,7 @@ def rename_chat(
     if os.path.exists(new_dir):
         raise HTTPException(status_code=400, detail="Chat name already exists")
     os.rename(old_dir, new_dir)
+    memory_manager.update_paths(chat_id=new_id)
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
 
@@ -446,6 +424,7 @@ def disable_goals(
     if os.path.exists(path):
         os.rename(path, disabled)
     memory.load_goals(chat_id)
+    memory_manager.update_paths(chat_id=chat_id)
     return {"detail": "Disabled"}
 
 
@@ -461,6 +440,7 @@ def enable_goals(
     if os.path.exists(disabled):
         os.rename(disabled, path)
     memory.load_goals(chat_id)
+    memory_manager.update_paths(chat_id=chat_id)
     return {"detail": "Enabled"}
 
 
@@ -521,6 +501,7 @@ def save_context_file(
             "deactive_goals": obj.get("completed", []),
         }
     )
+    memory_manager.update_paths(chat_id=chat_id)
     return {"detail": "Saved"}
 
 
@@ -532,6 +513,7 @@ def save_message(
     """Store ``req.message`` in ``req.chat_id`` without generating a reply."""
 
     history.append_message(req.chat_id, "user", req.message)
+    memory_manager.update_paths(chat_id=req.chat_id)
     return {"detail": "Message stored"}
 
 
@@ -543,6 +525,7 @@ def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
         raise HTTPException(status_code=503, detail="Model not running")
 
     history_service.append_message(chat_id, "user", req.message)
+    memory_manager.update_paths(chat_id=chat_id)
     call = build_call(req)
     return handle_chat(call, history_service, memory_manager, stream=True)
 
@@ -557,6 +540,7 @@ def run_cli_command(chat_id: str, req: ChatRequest) -> Dict[str, str]:
     result = standard_chat.send_cli_command(req.message)
     text = result.get("text", "")
     history_service.append_message(chat_id, "assistant", text)
+    memory_manager.update_paths(chat_id=chat_id)
     return {"detail": text}
 
 
@@ -569,6 +553,7 @@ def append_assistant_message(
     """Append an assistant message to ``chat_id``."""
 
     history.append_message(chat_id, "assistant", data.get("message", ""))
+    memory_manager.update_paths(chat_id=chat_id)
     return {"detail": "Message stored"}
 
 
@@ -581,6 +566,7 @@ def chat_received(
     """Stream a model-generated reply for ``req``."""
 
     history.append_message(req.chat_id, "user", req.message)
+    memory_manager.update_paths(chat_id=req.chat_id)
     call = build_call(req)
     return runner.process_user_message(req.chat_id, req.message, stream=True)
 
@@ -594,6 +580,7 @@ def chat(
     """Return a standard model-generated reply."""
 
     history.append_message(req.chat_id, "user", req.message)
+    memory_manager.update_paths(chat_id=req.chat_id)
     call = build_call(req)
     return runner.process_user_message(req.chat_id, req.message)
 
