@@ -10,7 +10,7 @@
   "main_memory_kv": false,
 
   "max_tokens": 400,
-  "temp": 0.8,
+  "temp": 1.8,
   "top_k": 40,
   "top_p": 0.95,
   "min_p": 0.05,

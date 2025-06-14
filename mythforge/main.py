@@ -518,11 +518,11 @@ def send_chat_message(chat_id: str, req: ChatRequest):
         parts: list[str] = []
         for chunk in stream:
             text = chunk.get("text", "")
+            yield text + "\n"
             parts.append(text)
-            yield json.dumps(chunk, ensure_ascii=False) + "\n"
-        history_service.append_message(chat_id, "assistant", "".join(parts))
+        history_service.append_message(chat_id, "<|im_start|>assistant<|im_end|>", "".join(parts))
 
-    return StreamingResponse(_generate(), media_type="application/json")
+    return StreamingResponse(_generate(), media_type="text/plain")
 
 
 @chat_router.post("/{chat_id}/cli")
