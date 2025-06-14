@@ -119,8 +119,7 @@ MODEL_LAUNCH_ARGS: dict[str, object] = {
     "background": False,
     "stream": True,
     **GENERATION_CONFIG,
-
-# testing currently
+    # testing currently
     "interactive_first": True,
     "no_warmup": True,
     "no_conversation": True,
@@ -131,6 +130,7 @@ MODEL_LAUNCH_ARGS: dict[str, object] = {
 # ``subprocess.Popen`` parameters for launching the model process
 MODEL_LAUNCH_PARAMS: dict[str, object] = {
     "stdout": subprocess.PIPE,
+    "stdin": subprocess.PIPE,
     "stderr": subprocess.STDOUT,
     "text": True,
     "encoding": "utf-8",

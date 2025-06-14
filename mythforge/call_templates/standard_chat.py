@@ -73,10 +73,7 @@ def prep_standard_chat() -> None:
 
         args = model_launch(**MODEL_LAUNCH_OVERRIDE)
         myth_log(" ".join(args))
-        popen_args = MODEL_LAUNCH_PARAMS.copy()
-        popen_args["stdin"] = subprocess.PIPE
-        popen_args["stdout"] = subprocess.PIPE
-        _chat_process = subprocess.Popen(args, **popen_args)
+        _chat_process = subprocess.Popen(args, **MODEL_LAUNCH_PARAMS)
         _last_used = time.time()
         threading.Thread(target=_watchdog, daemon=True).start()
 
@@ -88,12 +85,9 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
-    from ..call_core import format_for_model
 
     with _lock:
-        _chat_process.stdin.write(
-            format_for_model(system_text, user_text) + "\n"
-        )
+        _chat_process.stdin.write(system_text + user_text + "\n")
         _chat_process.stdin.flush()
         global _last_used
         _last_used = time.time()
