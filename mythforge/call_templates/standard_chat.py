@@ -128,7 +128,8 @@ def chat(chat_id: str, user_text: str) -> str:
         prep_standard_chat()
     else:
         _reset_timer()
-    formatted_prompt = user_text
+    formatted_prompt = format_for_model("", user_text)
+    log_server_call(formatted_prompt)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
