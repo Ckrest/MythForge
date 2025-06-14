@@ -166,7 +166,7 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
     params.update(overrides)
 
     background = params.pop("background", False)
-    stream = params.pop("stream", False)
+    stream = params.pop("stream", True)
 
     cmd = model_launch(user_prompt, background=background, **params)
 
