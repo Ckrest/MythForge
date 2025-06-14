@@ -3,6 +3,7 @@ from __future__ import annotations
 """Prompt helpers and interactive model utilities for standard chats."""
 
 import subprocess
+import threading
 from typing import Any, Dict, Iterable, Iterator, List
 
 from typing import TYPE_CHECKING
@@ -17,12 +18,44 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 
 
 _chat_process: subprocess.Popen | None = None
+_inactivity_timer: threading.Timer | None = None
+
+INACTIVITY_TIMEOUT_SECONDS = 20 * 60
 
 
 def chat_running() -> bool:
     """Return ``True`` if the chat model subprocess is active."""
 
     return _chat_process is not None and _chat_process.poll() is None
+
+
+def _terminate_chat() -> None:
+    """Terminate the running chat subprocess."""
+
+    global _chat_process, _inactivity_timer
+    if _chat_process is None:
+        return
+    myth_log("chat_timeout")
+    try:
+        _chat_process.terminate()
+        _chat_process.wait(timeout=5)
+    except Exception:
+        _chat_process.kill()
+    _chat_process = None
+    _inactivity_timer = None
+
+
+def _reset_timer() -> None:
+    """Restart the inactivity timer."""
+
+    global _inactivity_timer
+    if _inactivity_timer is not None:
+        _inactivity_timer.cancel()
+    _inactivity_timer = threading.Timer(
+        INACTIVITY_TIMEOUT_SECONDS, _terminate_chat
+    )
+    _inactivity_timer.daemon = True
+    _inactivity_timer.start()
 
 
 # -----------------------------------
@@ -37,6 +70,7 @@ def prep_standard_chat() -> None:
 
     global _chat_process
     if chat_running():
+        _reset_timer()
         return
 
     cmd = model_launch(**MODEL_LAUNCH_OVERRIDE)
@@ -50,12 +84,14 @@ def prep_standard_chat() -> None:
         encoding="utf-8",
         errors="replace",
     )
+    _reset_timer()
 
 
 def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     """Send prompts to the interactive model process."""
 
     prep_standard_chat()
+    _reset_timer()
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
@@ -80,6 +116,8 @@ def chat(chat_id: str, user_text: str) -> str:
 
     if not chat_running():
         prep_standard_chat()
+    else:
+        _reset_timer()
 
     formatted = format_for_model(chat_id, user_text)
     assert _chat_process is not None
@@ -99,6 +137,7 @@ def send_cli_command(command: str, *, stream: bool = False):
     """Send ``command`` directly to the interactive CLI process."""
 
     prep_standard_chat()
+    _reset_timer()
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
