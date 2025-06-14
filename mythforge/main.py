@@ -3,12 +3,11 @@ from __future__ import annotations
 import json
 
 import os
-import asyncio
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException, APIRouter, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse
+
 from pydantic import BaseModel
 
 from .utils import (
@@ -45,50 +44,10 @@ chat_runner = ChatRunner(history_service, memory_manager)
 
 init_memory(memory_manager)
 
+
 chat_router = APIRouter()
 prompt_router = APIRouter()
 settings_router = APIRouter()
-
-# --- Server-Sent Events ----------------------------------------------------
-
-clients: list[asyncio.Queue[str]] = []
-
-
-async def _event_stream(queue: asyncio.Queue[str]):
-    """Yield messages from ``queue`` to SSE clients."""
-
-    try:
-        while True:
-            data = await queue.get()
-            yield data
-    finally:
-        clients.remove(queue)
-
-
-@app.get("/events")
-async def sse_events():
-    """Endpoint for subscribing to server-sent events."""
-
-    queue: asyncio.Queue[str] = asyncio.Queue()
-    clients.append(queue)
-    headers = {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-    }
-    return StreamingResponse(_event_stream(queue), headers=headers)
-
-
-async def broadcast_reload() -> None:
-    """Send a reload event to all connected clients."""
-
-    for queue in list(clients):
-        await queue.put("event: reload\ndata:\n\n")
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
-    await broadcast_reload()
 
 
 def get_history_service() -> ChatHistoryService:
@@ -253,12 +212,14 @@ def rename_prompt(name: str, data: Dict[str, str]):
         return {"detail": f"Renamed prompt '{name}'"}
 
     save_item("prompts", name, new_name=new_name)
+    memory_manager.update_paths(prompt_name=new_name)
     return {"detail": f"Renamed prompt '{name}'"}
 
 
 @prompt_router.delete("/{name}")
 def remove_prompt(name: str):
     save_item("prompts", name, delete=True)
+    memory_manager.update_paths(prompt_name="")
     return {"detail": f"Deleted prompt '{name}'"}
 
 
@@ -269,12 +230,14 @@ def select_prompt(data: Dict[str, str]):
     name = data.get("name", "").strip()
     if not name:
         memory_manager.global_prompt = ""
+        memory_manager.update_paths(prompt_name="")
         return {"detail": "Cleared"}
 
     content = get_global_prompt_content(name)
     if content is None:
         raise HTTPException(status_code=404, detail="Prompt not found")
     memory_manager.global_prompt = content
+    memory_manager.update_paths(prompt_name=name)
     return {"detail": f"Selected prompt '{name}'"}
 
 
@@ -322,6 +285,7 @@ def create_chat(
         raise HTTPException(status_code=400, detail="Chat already exists")
     history.save_history(chat_id, [])
     memory.toggle_goals(False)
+    memory.update_paths(chat_id=chat_id)
     return {"detail": f"Created chat '{chat_id}'", "chat_id": chat_id}
 
 
@@ -377,6 +341,7 @@ def delete_chat(
         for fname in os.listdir(chat_dir):
             os.remove(os.path.join(chat_dir, fname))
         os.rmdir(chat_dir)
+    memory_manager.update_paths(chat_id="")
     return {"detail": f"Deleted chat '{chat_id}'"}
 
 
@@ -402,6 +367,7 @@ def rename_chat(
     if os.path.exists(new_dir):
         raise HTTPException(status_code=400, detail="Chat name already exists")
     os.rename(old_dir, new_dir)
+    memory_manager.update_paths(chat_id=new_id)
     return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
 
 
