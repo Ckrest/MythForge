@@ -60,7 +60,9 @@ def _reset_timer() -> None:
 # Model launch parameters / arguments ORERRIDE
 # -----------------------------------
 
-MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {"stream": False}
+MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
+    "stream": True
+    }
 
 
 def prep_standard_chat() -> None:
