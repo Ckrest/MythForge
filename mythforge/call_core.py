@@ -16,13 +16,7 @@ from .model import (
     DEFAULT_N_GPU_LAYERS,
     call_llm,
 )
-from .utils import (
-    CHATS_DIR,
-    chat_file,
-    load_global_prompts,
-    log_prepared_prompts,
-)
-from .memory import ChatHistoryService, MemoryManager, MEMORY_MANAGER
+from .memory import MemoryManager, MEMORY_MANAGER
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from .main import ChatRequest
@@ -39,7 +33,7 @@ class CallData:
 
 
 def _default_global_prompt() -> str:
-    prompts = load_global_prompts()
+    prompts = MEMORY_MANAGER.load_global_prompts()
     if prompts:
         return prompts[0]["content"]
     return ""
@@ -130,30 +124,6 @@ def format_for_model(system_text: str, user_text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _state_path(chat_id: str) -> str:
-    return os.path.join(CHATS_DIR, chat_id, "goal_state.json")
-
-
-def _load_goal_state(chat_id: str) -> Dict[str, Any]:
-    path = _state_path(chat_id)
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                return data
-        except Exception:
-            pass
-    return {"goals": [], "completed_goals": [], "messages_since_goal_eval": 0}
-
-
-def _save_goal_state(chat_id: str, state: Dict[str, Any]) -> None:
-    path = _state_path(chat_id)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2, ensure_ascii=False)
-
-
 def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
     """Attempt to parse valid goal objects from model output."""
 
@@ -207,7 +177,6 @@ def _dedupe_new_goals(
 def _maybe_generate_goals(
     chat_id: str,
     global_prompt: str,
-    history_service: ChatHistoryService,
     memory: MemoryManager = MEMORY_MANAGER,
 ) -> None:
     from .call_types import CALL_HANDLERS
@@ -218,19 +187,19 @@ def _maybe_generate_goals(
     character = goals.character
     setting = goals.setting
 
-    state = _load_goal_state(chat_id)
+    state = memory.load_goal_state(chat_id)
     state["messages_since_goal_eval"] = (
         state.get("messages_since_goal_eval", 0) + 1
     )
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     if state["messages_since_goal_eval"] < refresh:
-        _save_goal_state(chat_id, state)
+        memory.save_goal_state(chat_id, state)
         return
 
     goal_limit = GENERATION_CONFIG.get("goal_limit", 3)
 
-    history = history_service.load_history(chat_id)
+    history = memory.load_history(chat_id)
     user_text = "\n".join(m.get("content", "") for m in history)
 
     system_parts = [p for p in (global_prompt, character, setting) if p]
@@ -259,7 +228,14 @@ Do not include any explanation, commentary, or other text. If no goals are curre
     system_parts.append(textwrap.dedent(goal_prompt).strip())
     system_text = "\n".join(system_parts)
 
-    log_prepared_prompts("goal_generation", system_text, user_text)
+    memory.log_event(
+        "prepared_prompts",
+        {
+            "call_type": "goal_generation",
+            "system_text": system_text,
+            "user_text": user_text,
+        },
+    )
 
     from .call_types import CALL_HANDLERS
     from .call_templates import goal_generation
@@ -275,18 +251,18 @@ Do not include any explanation, commentary, or other text. If no goals are curre
 
     goals = _parse_goals_from_response(text)
     if not goals:
-        _save_goal_state(chat_id, state)
+        memory.save_goal_state(chat_id, state)
         return
 
     goals = _dedupe_new_goals(goals, state.get("goals", []))
     if not goals:
-        _save_goal_state(chat_id, state)
+        memory.save_goal_state(chat_id, state)
         return
 
     combined = state.get("goals", []) + goals
     state["goals"] = combined[:goal_limit]
     state["messages_since_goal_eval"] = 0
-    _save_goal_state(chat_id, state)
+    memory.save_goal_state(chat_id, state)
 
 
 # ---------------------------------------------------------------------------
@@ -295,26 +271,23 @@ Do not include any explanation, commentary, or other text. If no goals are curre
 def _finalize_chat(
     reply: str,
     call: CallData,
-    history_service: ChatHistoryService,
     memory: MemoryManager = MEMORY_MANAGER,
     prompt: str | None = None,
 ) -> None:
     """Store assistant reply and queue background work."""
 
-    history_service.append_message(call.chat_id, "assistant", reply)
+    memory.append_message(call.chat_id, "assistant", reply)
     enqueue_task(
         "goal_generation",
         _maybe_generate_goals,
         call.chat_id,
         call.global_prompt,
-        history_service,
         memory,
     )
 
 
 def handle_chat(
     call: CallData,
-    history_service: ChatHistoryService,
     memory: MemoryManager = MEMORY_MANAGER,
     stream: bool = False,
     *,
@@ -375,7 +348,6 @@ def handle_chat(
             _finalize_chat(
                 assistant_reply,
                 call,
-                history_service,
                 memory,
                 prompt=current_prompt,
             )
@@ -388,7 +360,6 @@ def handle_chat(
     _finalize_chat(
         assistant_reply,
         call,
-        history_service,
         memory,
         prompt=current_prompt,
     )
@@ -401,10 +372,8 @@ class ChatRunner:
 
     def __init__(
         self,
-        history_service: ChatHistoryService,
         memory: MemoryManager = MEMORY_MANAGER,
     ) -> None:
-        self.history_service = history_service
         self.memory = memory
         self.current_chat_id: str | None = None
         self.current_prompt: str | None = None
@@ -415,7 +384,6 @@ class ChatRunner:
         call = CallData(chat_id=chat_id, message=message)
         result = handle_chat(
             call,
-            self.history_service,
             self.memory,
             stream=stream,
             current_chat_id=self.current_chat_id,

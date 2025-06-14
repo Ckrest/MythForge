@@ -8,14 +8,15 @@ import platform
 import subprocess
 from typing import Dict, Iterator
 
-from .utils import ROOT_DIR, log_server_call
+from .memory import MEMORY_MANAGER
+
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
 MODELS_DIR = os.path.join(ROOT_DIR, "models")
-MODEL_SETTINGS_PATH = os.path.join(ROOT_DIR, "model_settings.json")
 
 
-def load_model_settings(path: str = MODEL_SETTINGS_PATH) -> Dict[str, object]:
+def load_model_settings(path: str) -> Dict[str, object]:
     """Load the model settings from ``path`` if it exists."""
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -26,7 +27,7 @@ def load_model_settings(path: str = MODEL_SETTINGS_PATH) -> Dict[str, object]:
     return {}
 
 
-MODEL_SETTINGS = load_model_settings()
+MODEL_SETTINGS = load_model_settings(MEMORY_MANAGER.settings_path)
 
 # ---------------------------------------------------------------------------
 # Default values
@@ -142,7 +143,9 @@ MODEL_LAUNCH_PARAMS: dict[str, object] = {
 }
 
 
-def model_launch(prompt: str = "", background: bool = False, **overrides) -> list[str]:
+def model_launch(
+    prompt: str = "", background: bool = False, **overrides
+) -> list[str]:
     """Return a command list for launching the model."""
 
     params = MODEL_LAUNCH_ARGS.copy()
