@@ -11,7 +11,6 @@ CHATS_DIR = os.path.join(ROOT_DIR, "chats")
 GLOBAL_PROMPTS_DIR = os.path.join(ROOT_DIR, "global_prompts")
 SERVER_LOGS_DIR = os.path.join(ROOT_DIR, "server_logs")
 MODEL_CALLS_PATH = os.path.join(SERVER_LOGS_DIR, "model_calls.json")
-VERBOSE_MODE = False
 
 
 def load_json(path: str) -> List[Any]:
@@ -37,26 +36,6 @@ def save_json(path: str, data: Any) -> None:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def read_text_file(path: str) -> str:
-    """Return text loaded from ``path`` if it exists."""
-
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read()
-        except Exception as e:  # pragma: no cover - best effort
-            print(f"Failed to read text from '{path}': {e}")
-    return ""
-
-
-def write_text_file(path: str, text: str) -> None:
-    """Write ``text`` to ``path`` creating parents as needed."""
-
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
-
-
 def chat_file(chat_id: str, filename: str) -> str:
     """Return the path for ``filename`` within ``chat_id``'s directory."""
 
@@ -75,13 +54,6 @@ def goals_path(chat_id: str) -> str:
     """Return the path to ``chat_id``'s goals JSON file."""
 
     return chat_file(chat_id, "goals.json")
-
-
-def goals_exists(chat_id: str) -> bool:
-    """Return ``True`` if goals are enabled for ``chat_id``."""
-
-    path = goals_path(chat_id)
-    return os.path.exists(path)
 
 
 def _prompt_path(name: str) -> str:
