@@ -170,6 +170,7 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
 
     cmd = model_launch(user_prompt, background=background, **params)
     myth_log("call_llm_start", cmd=" ".join(cmd))
+    myth_log("cli_input", text=user_prompt)
 
     try:
         process = subprocess.Popen(cmd, **MODEL_LAUNCH_PARAMS)

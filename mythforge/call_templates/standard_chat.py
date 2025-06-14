@@ -96,7 +96,9 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
 
-    _chat_process.stdin.write(system_text + user_text + "\n")
+    prompt_text = system_text + user_text
+    myth_log("cli_input", text=prompt_text)
+    _chat_process.stdin.write(prompt_text + "\n")
     _chat_process.stdin.flush()
 
     if stream:
