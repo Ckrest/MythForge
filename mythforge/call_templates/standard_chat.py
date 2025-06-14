@@ -50,22 +50,28 @@ def _reset_timer() -> None:
     global _inactivity_timer
     if _inactivity_timer is not None:
         _inactivity_timer.cancel()
-    _inactivity_timer = threading.Timer(
-        INACTIVITY_TIMEOUT_SECONDS, _terminate_chat
-    )
+    _inactivity_timer = threading.Timer(INACTIVITY_TIMEOUT_SECONDS, _terminate_chat)
     _inactivity_timer.daemon = True
     _inactivity_timer.start()
 
 
 def _stream_output(stop_token: str) -> Iterator[dict[str, str]]:
-    """Yield CLI output lines until ``stop_token`` is seen."""
+    """Yield CLI output lines once the model is ready."""
 
     assert _chat_process is not None
     assert _chat_process.stdout is not None
 
+    start_marker = "== Running in interactive mode. =="
+    end_marker = "<|im_start|>assistant"
+    capturing = False
+
     for line in _chat_process.stdout:
         text = line.rstrip("\n")
-        if text == stop_token:
+        if not capturing:
+            if text == start_marker:
+                capturing = True
+            continue
+        if text in (stop_token, end_marker):
             return
         print(line, end="", flush=True)
         yield {"text": text}
@@ -173,9 +179,7 @@ def prepare_system_text(call: CallData) -> str:
     if not call.global_prompt:
         from ..call_core import _default_global_prompt
 
-        call.global_prompt = (
-            memory.MEMORY.global_prompt or _default_global_prompt()
-        )
+        call.global_prompt = memory.MEMORY.global_prompt or _default_global_prompt()
 
     parts = [call.global_prompt]
     goals = memory.MEMORY.goals_data
