@@ -508,13 +508,21 @@ def save_message(
 
 
 @chat_router.post("/{chat_id}/message")
-def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
-    """Return a reply for ``req.message`` using the standard chat model."""
+def send_chat_message(chat_id: str, req: ChatRequest):
+    """Stream a reply for ``req.message`` using the standard chat model."""
 
     history_service.append_message(chat_id, "user", req.message)
-    response = standard_chat.chat(chat_id, req.message)
-    history_service.append_message(chat_id, "assistant", response)
-    return {"response": response}
+    stream = standard_chat.send_prompt("", req.message, stream=True)
+
+    def _generate() -> Iterator[str]:
+        parts: list[str] = []
+        for chunk in stream:
+            text = chunk.get("text", "")
+            parts.append(text)
+            yield json.dumps(chunk, ensure_ascii=False) + "\n"
+        history_service.append_message(chat_id, "assistant", "".join(parts))
+
+    return StreamingResponse(_generate(), media_type="application/json")
 
 
 @chat_router.post("/{chat_id}/cli")
