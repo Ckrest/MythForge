@@ -21,12 +21,20 @@ _last_used: float = 0.0
 _lock = threading.Lock()
 _TIMEOUT = 20 * 60  # 20 minutes
 
+
+def chat_running() -> bool:
+    """Return ``True`` if the chat model subprocess is active."""
+
+    with _lock:
+        return _chat_process is not None and _chat_process.poll() is None
+
+
 # -----------------------------------
 # Model launch parameters / arguments ORERRIDE
 # -----------------------------------
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
-    "stream": True, # this is just a placeholder. default is also true
+    "stream": True,  # this is just a placeholder. default is also true
 }
 
 

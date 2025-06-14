@@ -35,6 +35,7 @@ from .memory import (
     initialize as init_memory,
 )
 from .call_core import ChatRunner, build_call, handle_chat
+from .call_templates import standard_chat
 
 app = FastAPI(title="Myth Forge Server")
 
@@ -163,9 +164,7 @@ def save_item(
             if not os.path.isdir(old_dir):
                 raise HTTPException(status_code=404, detail="Chat not found")
             if os.path.exists(new_dir):
-                raise HTTPException(
-                    status_code=400, detail="Chat name already exists"
-                )
+                raise HTTPException(status_code=400, detail="Chat name already exists")
             os.rename(old_dir, new_dir)
             return
         ensure_chat_dir(name)
@@ -187,12 +186,8 @@ def save_item(
             os.rename(old_path, new_path)
         else:
             if data is None:
-                raise HTTPException(
-                    status_code=400, detail="No prompt data provided"
-                )
-                raise HTTPException(
-                    status_code=400, detail="No prompt data provided"
-                )
+                raise HTTPException(status_code=400, detail="No prompt data provided")
+                raise HTTPException(status_code=400, detail="No prompt data provided")
             save_global_prompt({"name": name, "content": str(data)})
         prompts = load_global_prompts()
         memory_manager.global_prompt = prompts[0]["content"] if prompts else ""
@@ -543,6 +538,9 @@ def save_message(
 @chat_router.post("/{chat_id}/message")
 def send_chat_message(chat_id: str, req: ChatRequest) -> Dict[str, str]:
     """Generate a reply for ``req.message`` in ``chat_id``."""
+
+    if not standard_chat.chat_running():
+        raise HTTPException(status_code=503, detail="Model not running")
 
     history_service.append_message(chat_id, "user", req.message)
     call = build_call(req)
