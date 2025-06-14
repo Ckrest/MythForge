@@ -182,7 +182,7 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
         def _stream() -> Iterator[dict[str, str]]:
             assert process.stdout is not None
             for line in process.stdout:
-                print(line.rstrip())
+                yield {"text": line.rstrip()}
             myth_log("call_llm_exit", code=process.wait())
 
         return _stream()
