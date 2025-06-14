@@ -1,0 +1,4 @@
+[2025-06-14T07:37:02.449664] prep_standard_chat
+C:\MythForgeProject\MythForge\dependencies\llama-cli.exe --n-gpu-layers 13 --temp 0.8 --top-k 40 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --no-warmup --conversation --model C:\MythForgeProject\MythForge\models\unsloth_no_template.gguf
+[2025-06-14T07:41:56.675532] prep_standard_chat
+C:\MythForgeProject\MythForge\dependencies\llama-cli.exe --n-gpu-layers 13 --temp 0.8 --top-k 40 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --no-warmup --conversation --model C:\MythForgeProject\MythForge\models\unsloth_no_template.gguf
