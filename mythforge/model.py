@@ -8,7 +8,7 @@ import platform
 import subprocess
 from typing import Dict, Iterator
 
-from .utils import ROOT_DIR, myth_log
+from .utils import ROOT_DIR
 
 
 MODELS_DIR = os.path.join(ROOT_DIR, "models")
@@ -169,13 +169,10 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
     stream = params.pop("stream", False)
 
     cmd = model_launch(user_prompt, background=background, **params)
-    myth_log("call_llm_start", cmd=" ".join(cmd))
-    myth_log("cli_input", text=user_prompt)
 
     try:
         process = subprocess.Popen(cmd, **MODEL_LAUNCH_PARAMS)
     except Exception as exc:  # pragma: no cover - best effort
-        myth_log("call_llm_error", error=str(exc))
         raise RuntimeError(f"Failed to start process: {exc}") from exc
 
     if stream:
@@ -184,12 +181,11 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
             assert process.stdout is not None
             for line in process.stdout:
                 yield {"text": line.rstrip()}
-            myth_log("call_llm_exit", code=process.wait())
+            process.wait()
 
         return _stream()
 
     output, _ = process.communicate()
-    myth_log("call_llm_exit", code=process.returncode)
     if process.returncode != 0:
         raise RuntimeError(f"Subprocess exited with code {process.returncode}")
     return {"text": output.rstrip()}

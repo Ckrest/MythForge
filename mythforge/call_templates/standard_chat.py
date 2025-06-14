@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 from ..model import model_launch
 from .. import memory
-from ..utils import myth_log
 from ..call_core import format_for_model
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
@@ -35,7 +34,6 @@ def _terminate_chat() -> None:
     global _chat_process, _inactivity_timer
     if _chat_process is None:
         return
-    myth_log("chat_timeout")
     try:
         _chat_process.terminate()
         _chat_process.wait(timeout=5)
@@ -74,7 +72,6 @@ def prep_standard_chat() -> None:
         return
 
     cmd = model_launch(**MODEL_LAUNCH_OVERRIDE)
-    myth_log(" ".join(cmd))
     _chat_process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -97,7 +94,6 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     assert _chat_process.stdout is not None
 
     prompt_text = system_text + user_text
-    myth_log("cli_input", text=prompt_text)
     _chat_process.stdin.write(prompt_text + "\n")
     _chat_process.stdin.flush()
 
