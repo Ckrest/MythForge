@@ -114,9 +114,9 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     _chat_process.stdin.flush()
 
     if stream:
-        return _stream_output("<|endoftext|>")
+        return _stream_output("<|im_end|>")
     output: list[str] = []
-    for chunk in _stream_output("<|endoftext|>"):
+    for chunk in _stream_output("<|im_end|>"):
         output.append(chunk["text"])
     return {"text": "".join(output).strip()}
 
@@ -128,14 +128,13 @@ def chat(chat_id: str, user_text: str) -> str:
         prep_standard_chat()
     else:
         _reset_timer()
-    formatted_prompt = user_text
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
-    _chat_process.stdin.write(formatted_prompt + "\n")
+    _chat_process.stdin.write(user_text + "\n")
     _chat_process.stdin.flush()
     output: list[str] = []
-    for chunk in _stream_output("<|endoftext|>"):
+    for chunk in _stream_output("<|im_end|>"):
         output.append(chunk["text"])
     return "".join(output).strip()
 
@@ -155,10 +154,10 @@ def send_cli_command(command: str, *, stream: bool = False):
     _chat_process.stdin.flush()
 
     if stream:
-        return _stream_output("<|endoftext|>")
+        return _stream_output("<|im_end|>")
 
     output: list[str] = []
-    for chunk in _stream_output("<|endoftext|>"):
+    for chunk in _stream_output("<|im_end|>"):
         output.append(chunk["text"])
     return {"text": "".join(output).strip()}
 
