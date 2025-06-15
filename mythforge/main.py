@@ -14,10 +14,10 @@ from .memory import (
     MEMORY_MANAGER,
     initialize as init_memory,
 )
-from .call_core import ChatRunner
+from .call_core import ChatRunner, CallData
+from .call_templates import standard_chat
 from .prompt_preparer import PromptPreparer
 from .invoker import LLMInvoker
-from .logger import LOGGER
 from .logger import LOGGER
 
 app = FastAPI(title="MythForgeUI", debug=False)
@@ -31,6 +31,13 @@ init_memory(memory_manager)
 @app.on_event("startup")
 async def startup_event() -> None:
     """Launch the chat subprocess when the API starts."""
+    try:
+        call = CallData(
+            chat_name="startup", message="", options={"stream": False}
+        )
+        standard_chat.prep_standard_chat(call)
+    except Exception as exc:  # pragma: no cover - best effort
+        LOGGER.log_error(exc)
 
 
 chat_router = APIRouter()
@@ -63,7 +70,9 @@ class ChatRequest(BaseModel):
 
 
 @prompt_router.get("/")
-def list_prompts(names_only: int = 0, chat_name: str = "", prompt_name: str = ""):
+def list_prompts(
+    names_only: int = 0, chat_name: str = "", prompt_name: str = ""
+):
     memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     if names_only:
         return {"prompts": memory_manager.list_prompt_names()}
@@ -80,14 +89,18 @@ def get_prompt(name: str, chat_name: str = "", prompt_name: str = ""):
 
 
 @prompt_router.post("/")
-def create_prompt(item: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
+def create_prompt(
+    item: Dict[str, str], chat_name: str = "", prompt_name: str = ""
+):
     memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     memory_manager.set_global_prompt(item["name"], item.get("content", ""))
     return {"detail": "Created"}
 
 
 @prompt_router.put("/{name}")
-def update_prompt(name: str, item: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
+def update_prompt(
+    name: str, item: Dict[str, str], chat_name: str = "", prompt_name: str = ""
+):
     memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     if item.get("name") != name:
         raise HTTPException(status_code=400, detail="Name mismatch")
@@ -96,7 +109,9 @@ def update_prompt(name: str, item: Dict[str, str], chat_name: str = "", prompt_n
 
 
 @prompt_router.put("/{name}/rename")
-def rename_prompt(name: str, data: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
+def rename_prompt(
+    name: str, data: Dict[str, str], chat_name: str = "", prompt_name: str = ""
+):
     memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     new_name = data.get("new_name", "").strip()
     if not new_name:
@@ -125,7 +140,9 @@ def remove_prompt(name: str, chat_name: str = "", prompt_name: str = ""):
 
 
 @prompt_router.post("/select")
-def select_prompt(data: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
+def select_prompt(
+    data: Dict[str, str], chat_name: str = "", prompt_name: str = ""
+):
     memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     """Set the active global prompt to ``data['name']``."""
 
@@ -408,7 +425,9 @@ def send_chat_message(
 def run_cli_command(chat_name: str, req: ChatRequest):
     """Stream ``req.message`` to the running CLI process."""
 
-    memory_manager.update_paths(chat_name=chat_name, prompt_name=req.prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, prompt_name=req.prompt_name
+    )
     history = memory_manager.load_history(chat_name)
     history.append({"role": "user", "content": req.message})
     memory_manager.save_history(chat_name, history)
