@@ -13,8 +13,13 @@ class LoggerManager:
     def __init__(self, memory_manager=MEMORY_MANAGER) -> None:
         self.memory_manager = memory_manager
 
+    def _path(self, event_type: str) -> str:
+        """Return the log file path for ``event_type``."""
+
+        return self.memory_manager.get_log_path(event_type)
+
     def log(self, event_type: str, payload: Any) -> None:
-        path = self.memory_manager.get_log_path(event_type)
+        path = self._path(event_type)
         data = _load_json(path)
         if not isinstance(data, list):
             data = []
