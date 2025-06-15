@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from .logger import LOGGER
+
 from .model import call_llm
 
 
@@ -22,6 +24,14 @@ class LLMInvoker:
         """Invoke the language model with ``prompt`` and ``options``."""
 
         opts = options or {}
+        LOGGER.log(
+            "chat_flow",
+            {
+                "function": "LLMInvoker.invoke",
+                "prompt": prompt,
+                "options": opts,
+            },
+        )
         return call_llm("", prompt, **opts)
 
 

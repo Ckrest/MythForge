@@ -43,8 +43,6 @@ def _default_global_prompt() -> str:
     return ""
 
 
-
-
 # --- Background task queue -------------------------------------------------
 
 _task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
@@ -83,8 +81,6 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 
     cleaned = text.replace("<|eot_id|>", "")
     return cleaned.strip() if trim else cleaned
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +143,15 @@ def _maybe_generate_goals(
     global_prompt: str,
     memory: MemoryManager = MEMORY_MANAGER,
 ) -> None:
+    LOGGER.log(
+        "chat_flow",
+        {
+            "function": "_maybe_generate_goals",
+            "chat_id": chat_id,
+            "global_prompt": global_prompt,
+            "memory_root": memory.root_dir,
+        },
+    )
     goals = memory.load_goals(chat_id)
     if not memory.goals_active:
         return
@@ -238,6 +243,21 @@ def _finalize_chat(
 ) -> None:
     """Store assistant reply and queue background work."""
 
+    LOGGER.log(
+        "chat_flow",
+        {
+            "function": "_finalize_chat",
+            "chat_id": call.chat_id,
+            "reply": reply,
+            "prompt": prompt,
+            "message": call.message,
+            "global_prompt": call.global_prompt,
+            "call_type": call.call_type,
+            "options": call.options,
+            "memory_root": memory.root_dir,
+        },
+    )
+
     history = memory.load_history(call.chat_id)
     history.append({"role": "assistant", "content": reply})
     memory.save_history(call.chat_id, history)
@@ -259,6 +279,22 @@ def handle_chat(
     current_prompt: str | None = None,
 ):
     """Process ``call`` and return a model reply."""
+
+    LOGGER.log(
+        "chat_flow",
+        {
+            "function": "handle_chat",
+            "chat_id": current_chat_id or call.chat_id,
+            "message": call.message,
+            "global_prompt": call.global_prompt,
+            "call_type": call.call_type,
+            "options": call.options,
+            "stream": stream,
+            "current_chat_id": current_chat_id,
+            "current_prompt": current_prompt,
+            "memory_root": memory.root_dir,
+        },
+    )
 
     from .call_templates import standard_chat, logic_check
 
@@ -318,7 +354,20 @@ class ChatRunner:
     def process_user_message(
         self, chat_id: str, message: str, stream: bool = False
     ):
-        call = CallData(chat_id=chat_id, message=message, options={"stream": stream})
+        LOGGER.log(
+            "chat_flow",
+            {
+                "function": "ChatRunner.process_user_message",
+                "chat_id": chat_id,
+                "message": message,
+                "stream": stream,
+                "current_chat_id": self.current_chat_id,
+                "current_prompt": self.current_prompt,
+            },
+        )
+        call = CallData(
+            chat_id=chat_id, message=message, options={"stream": stream}
+        )
         result = handle_chat(
             call,
             self.memory,

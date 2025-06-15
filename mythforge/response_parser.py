@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Iterator
 
+from .logger import LOGGER
+
 
 class ResponseParser:
     """Parse text or streaming model output."""
@@ -14,11 +16,26 @@ class ResponseParser:
     def load(self, raw: Any) -> "ResponseParser":
         """Store ``raw`` output to be parsed."""
 
+        LOGGER.log(
+            "chat_flow",
+            {
+                "function": "ResponseParser.load",
+                "raw": str(raw),
+            },
+        )
         self.raw = raw
         return self
 
     def parse(self) -> Any:
         """Return parsed output from :meth:`load`."""
+
+        LOGGER.log(
+            "chat_flow",
+            {
+                "function": "ResponseParser.parse",
+                "raw": str(self.raw),
+            },
+        )
 
         if isinstance(self.raw, Iterable) and not isinstance(
             self.raw, (str, bytes, dict)

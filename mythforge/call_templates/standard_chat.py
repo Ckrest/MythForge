@@ -9,6 +9,7 @@ from typing import Iterator
 from ..response_parser import ResponseParser
 from ..prompt_preparer import PromptPreparer
 from ..invoker import LLMInvoker
+from ..logger import LOGGER
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from ..call_core import CallData
@@ -16,6 +17,18 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 
 def prepare_and_chat(call: "CallData"):
     """Return parsed chat output for ``call``."""
+
+    LOGGER.log(
+        "chat_flow",
+        {
+            "function": "prepare_and_chat",
+            "chat_id": call.chat_id,
+            "message": call.message,
+            "global_prompt": call.global_prompt,
+            "call_type": call.call_type,
+            "options": call.options,
+        },
+    )
 
     prepared = PromptPreparer().prepare(call.global_prompt, call.message)
     raw = LLMInvoker().invoke(prepared, call.options)
