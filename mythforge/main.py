@@ -14,8 +14,9 @@ from .memory import (
     MEMORY_MANAGER,
     initialize as init_memory,
 )
-from .call_core import ChatRunner, build_call
-from .call_templates import standard_chat
+from .call_core import ChatRunner
+from .prompt_preparer import PromptPreparer
+from .invoker import LLMInvoker
 from .call_templates.standard_chat import prep_standard_chat
 
 app = FastAPI(title="MythForgeUI", debug=False)
@@ -343,7 +344,9 @@ def save_message(
 ):
     """Store ``req.message`` in ``req.chat_id`` without generating a reply."""
 
-    memory_manager.append_message(req.chat_id, "user", req.message)
+    history = memory_manager.load_history(req.chat_id)
+    history.append({"role": "user", "content": req.message})
+    memory_manager.save_history(req.chat_id, history)
     return {"detail": "Message stored"}
 
 
@@ -351,8 +354,11 @@ def save_message(
 def send_chat_message(chat_id: str, req: ChatRequest):
     """Stream a reply for ``req.message`` using the standard chat model."""
 
-    memory_manager.append_message(chat_id, "user", req.message)
-    stream = standard_chat.send_prompt("", req.message, stream=True)
+    history = memory_manager.load_history(chat_id)
+    history.append({"role": "user", "content": req.message})
+    memory_manager.save_history(chat_id, history)
+    prepared = PromptPreparer().prepare("", req.message)
+    stream = LLMInvoker().invoke(prepared, {"stream": True})
 
     def _generate() -> Iterator[str]:
         parts: list[str] = []
@@ -360,9 +366,9 @@ def send_chat_message(chat_id: str, req: ChatRequest):
             text = chunk.get("text", "")
             yield text + "\n"
             parts.append(text)
-        memory_manager.append_message(
-            chat_id, "<|im_start|>assistant<|im_end|>", "".join(parts)
-        )
+        history = memory_manager.load_history(chat_id)
+        history.append({"role": "assistant", "content": "".join(parts)})
+        memory_manager.save_history(chat_id, history)
 
     return StreamingResponse(_generate(), media_type="text/plain")
 
@@ -371,10 +377,11 @@ def send_chat_message(chat_id: str, req: ChatRequest):
 def run_cli_command(chat_id: str, req: ChatRequest):
     """Stream ``req.message`` to the running CLI process."""
 
-    from .call_templates import standard_chat
-
-    memory_manager.append_message(chat_id, "user", req.message)
-    stream = standard_chat.send_cli_command(req.message, stream=True)
+    history = memory_manager.load_history(chat_id)
+    history.append({"role": "user", "content": req.message})
+    memory_manager.save_history(chat_id, history)
+    prepared = PromptPreparer().prepare("", req.message)
+    stream = LLMInvoker().invoke(prepared, {"stream": True})
 
     def _generate() -> Iterator[str]:
         parts: list[str] = []
@@ -382,7 +389,9 @@ def run_cli_command(chat_id: str, req: ChatRequest):
             text = chunk.get("text", "")
             parts.append(text)
             yield text
-        memory_manager.append_message(chat_id, "assistant", "".join(parts))
+        history = memory_manager.load_history(chat_id)
+        history.append({"role": "assistant", "content": "".join(parts)})
+        memory_manager.save_history(chat_id, history)
 
     return StreamingResponse(_generate(), media_type="text/plain")
 
@@ -394,7 +403,9 @@ def append_assistant_message(
 ):
     """Append an assistant message to ``chat_id``."""
 
-    memory_manager.append_message(chat_id, "assistant", data.get("message", ""))
+    history = memory_manager.load_history(chat_id)
+    history.append({"role": "assistant", "content": data.get("message", "")})
+    memory_manager.save_history(chat_id, history)
     return {"detail": "Message stored"}
 
 
@@ -405,8 +416,9 @@ def chat_received(
 ):
     """Stream a model-generated reply for ``req``."""
 
-    memory_manager.append_message(req.chat_id, "user", req.message)
-    call = build_call(req)
+    history = memory_manager.load_history(req.chat_id)
+    history.append({"role": "user", "content": req.message})
+    memory_manager.save_history(req.chat_id, history)
     return runner.process_user_message(req.chat_id, req.message, stream=True)
 
 
@@ -417,8 +429,9 @@ def chat(
 ):
     """Return a standard model-generated reply."""
 
-    memory_manager.append_message(req.chat_id, "user", req.message)
-    call = build_call(req)
+    history = memory_manager.load_history(req.chat_id)
+    history.append({"role": "user", "content": req.message})
+    memory_manager.save_history(req.chat_id, history)
     return runner.process_user_message(req.chat_id, req.message)
 
 

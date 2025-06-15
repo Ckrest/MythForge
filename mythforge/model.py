@@ -8,6 +8,7 @@ import subprocess
 from typing import Dict, Iterator
 
 from .memory import MEMORY_MANAGER
+from .logger import LOGGER
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -153,7 +154,7 @@ def model_launch(prompt: str = "", background: bool = False, **overrides) -> lis
 def call_llm(system_prompt: str, user_prompt: str, **overrides):
     """Return output from :data:`LLAMA_CLI` for the given prompts."""
 
-    log_server_call(user_prompt)
+    LOGGER.log("model_calls", user_prompt)
 
     params = MODEL_LAUNCH_ARGS.copy()
     params.update(overrides)
