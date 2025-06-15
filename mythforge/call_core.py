@@ -271,8 +271,6 @@ def handle_chat(
             call.options,
         )
     else:
-        if call.chat_id != current_chat_id:
-            current_chat_id = call.chat_id
         processed = standard_chat.prepare_and_chat(call)
 
     if stream:
