@@ -20,7 +20,7 @@ def test_memory_history_basic(tmp_path):
 
 def test_prepare_call(monkeypatch):
     call = CallData(
-        chat_id="1", message="hi", global_prompt="Hello", options={}
+        chat_name="1", message="hi", global_prompt="Hello", options={}
     )
 
     invoked = {}
@@ -38,7 +38,7 @@ def test_prepare_call(monkeypatch):
 
 def test_global_prompt_usage(monkeypatch):
     call = CallData(
-        chat_id="1", message="hi", global_prompt="Custom", options={}
+        chat_name="1", message="hi", global_prompt="Custom", options={}
     )
 
     monkeypatch.setattr(

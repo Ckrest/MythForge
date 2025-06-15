@@ -8,7 +8,7 @@ from mythforge import model
 
 
 def test_handle_chat_invokes_llm(monkeypatch):
-    call = CallData(chat_id="c1", message="hi", options={"stream": False})
+    call = CallData(chat_name="c1", message="hi", options={"stream": False})
     count = {"n": 0}
 
     def fake_invoke(self, prompt, opts=None):
