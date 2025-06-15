@@ -1041,10 +1041,11 @@
                     if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
                     await refreshGlobalPromptList();
                     if(state.currentPrompt===name){
-                        state.currentPrompt = state.prompts.length? state.prompts[0]:'';
-                        localStorage.setItem('lastGlobalPrompt', state.currentPrompt);
+                        const next = state.prompts.length ? state.prompts[0] : '';
+                        await selectPrompt(next);
+                    }else{
+                        renderPromptList();
                     }
-                    renderPromptList();
                 }catch(e){ alert('Failed to delete prompt: '+e.message); }
             });
         }

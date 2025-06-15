@@ -18,6 +18,7 @@ from .call_core import ChatRunner
 from .prompt_preparer import PromptPreparer
 from .invoker import LLMInvoker
 from .logger import LOGGER
+from .logger import LOGGER
 
 app = FastAPI(title="MythForgeUI", debug=False)
 

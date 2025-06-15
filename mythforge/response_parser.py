@@ -6,6 +6,8 @@ from typing import Any, Iterable, Iterator
 
 from .logger import LOGGER
 
+from .logger import LOGGER
+
 
 class ResponseParser:
     """Parse text or streaming model output."""

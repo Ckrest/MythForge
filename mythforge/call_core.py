@@ -164,6 +164,15 @@ def _maybe_generate_goals(
     )
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
+    LOGGER.log(
+        "goal_state_check",
+        {
+            "chat_id": chat_id,
+            "current": state["messages_since_goal_eval"],
+            "refresh_rate": refresh,
+            "generate": state["messages_since_goal_eval"] >= refresh,
+        },
+    )
     if state["messages_since_goal_eval"] < refresh:
         memory.save_goal_state(chat_id, state)
         return

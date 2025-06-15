@@ -23,6 +23,12 @@ class LLMInvoker:
     def invoke(self, prompt: str, options: Dict[str, Any] | None = None):
         """Invoke the language model with ``prompt`` and ``options``."""
 
+        LOGGER.log(
+            "chat_flow",
+            {
+                "function": "LLMInvoker.invoke",
+            },
+        )
         opts = options or {}
         LOGGER.log(
             "chat_flow",

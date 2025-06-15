@@ -10,6 +10,7 @@ from ..response_parser import ResponseParser
 from ..prompt_preparer import PromptPreparer
 from ..invoker import LLMInvoker
 from ..logger import LOGGER
+from ..logger import LOGGER
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from ..call_core import CallData
