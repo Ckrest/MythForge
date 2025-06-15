@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Iterator
 
 from ..response_parser import ResponseParser
 from ..prompt_preparer import PromptPreparer
@@ -20,7 +20,18 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 def generate_goals(global_prompt: str, message: str, options: Dict[str, Any]):
     """Return parsed goal generation result."""
 
-    system, user = PromptPreparer().prepare(global_prompt, message)
-    raw = LLMInvoker().invoke(system, options)
-    result = ResponseParser().load(raw).parse()
-    return result
+    prepared = PromptPreparer().prepare(global_prompt, message)
+    raw = LLMInvoker().invoke(prepared, options)
+    parsed = ResponseParser().load(raw).parse()
+    if isinstance(parsed, Iterator):
+        try:
+            first = next(parsed)
+        except StopIteration as exc:  # pragma: no cover - best effort
+            return str(exc.value)
+
+        def _chain() -> Iterator[str]:
+            yield first
+            yield from parsed
+
+        return _chain()
+    return parsed
