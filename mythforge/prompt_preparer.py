@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .logger import LOGGER
+
 
 class PromptPreparer:
     """Combine system and user text into a single prompt string."""
@@ -21,6 +23,13 @@ class PromptPreparer:
 
     def prepare(self, system_text: str, user_text: str) -> str:
         """Return a model ready prompt for ``system_text`` and ``user_text``."""
+
+        LOGGER.log(
+            "chat_flow",
+            {
+                "function": "PromptPreparer.prepare",
+            },
+        )
 
         system_clean = (
             system_text.replace("\n", " ").replace('"', '\\"').strip()
