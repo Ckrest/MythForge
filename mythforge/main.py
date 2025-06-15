@@ -17,6 +17,7 @@ from .memory import (
 from .call_core import ChatRunner
 from .prompt_preparer import PromptPreparer
 from .invoker import LLMInvoker
+from .logger import LOGGER
 
 app = FastAPI(title="MythForgeUI", debug=False)
 
@@ -344,6 +345,14 @@ def send_chat_message(
     runner: ChatRunner = Depends(lambda: chat_runner),
 ):
     """Stream a reply for ``req.message`` using the standard chat model."""
+
+    LOGGER.log(
+        "chat_flow",
+        {
+            "function": "send_chat_message",
+            "chat_id": chat_id,
+        },
+    )
 
     history = memory_manager.load_history(chat_id)
     history.append({"role": "user", "content": req.message})
