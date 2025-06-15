@@ -17,7 +17,6 @@ from .memory import (
 from .call_core import ChatRunner
 from .prompt_preparer import PromptPreparer
 from .invoker import LLMInvoker
-from .call_templates.standard_chat import prep_standard_chat
 
 app = FastAPI(title="MythForgeUI", debug=False)
 
@@ -30,8 +29,6 @@ init_memory(memory_manager)
 @app.on_event("startup")
 async def startup_event() -> None:
     """Launch the chat subprocess when the API starts."""
-
-    prep_standard_chat()
 
 
 chat_router = APIRouter()
@@ -103,7 +100,9 @@ def rename_prompt(name: str, data: Dict[str, str]):
     if not memory_manager.get_global_prompt(name):
         raise HTTPException(status_code=404, detail="Prompt not found")
     if memory_manager.get_global_prompt(new_name):
-        raise HTTPException(status_code=400, detail="Prompt name already exists")
+        raise HTTPException(
+            status_code=400, detail="Prompt name already exists"
+        )
     memory_manager.rename_global_prompt(name, new_name)
     memory_manager.update_paths(prompt_name=new_name)
     return {"detail": f"Renamed prompt '{name}'"}
@@ -338,39 +337,18 @@ def save_context_file(
     return {"detail": "Saved"}
 
 
-@chat_router.post("/message")
-def save_message(
-    req: ChatRequest,
-):
-    """Store ``req.message`` in ``req.chat_id`` without generating a reply."""
-
-    history = memory_manager.load_history(req.chat_id)
-    history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(req.chat_id, history)
-    return {"detail": "Message stored"}
-
-
 @chat_router.post("/{chat_id}/message")
-def send_chat_message(chat_id: str, req: ChatRequest):
+def send_chat_message(
+    chat_id: str,
+    req: ChatRequest,
+    runner: ChatRunner = Depends(lambda: chat_runner),
+):
     """Stream a reply for ``req.message`` using the standard chat model."""
 
     history = memory_manager.load_history(chat_id)
     history.append({"role": "user", "content": req.message})
     memory_manager.save_history(chat_id, history)
-    prepared = PromptPreparer().prepare("", req.message)
-    stream = LLMInvoker().invoke(prepared, {"stream": True})
-
-    def _generate() -> Iterator[str]:
-        parts: list[str] = []
-        for chunk in stream:
-            text = chunk.get("text", "")
-            yield text + "\n"
-            parts.append(text)
-        history = memory_manager.load_history(chat_id)
-        history.append({"role": "assistant", "content": "".join(parts)})
-        memory_manager.save_history(chat_id, history)
-
-    return StreamingResponse(_generate(), media_type="text/plain")
+    return runner.process_user_message(chat_id, req.message, stream=True)
 
 
 @chat_router.post("/{chat_id}/cli")
@@ -407,19 +385,6 @@ def append_assistant_message(
     history.append({"role": "assistant", "content": data.get("message", "")})
     memory_manager.save_history(chat_id, history)
     return {"detail": "Message stored"}
-
-
-@chat_router.post("/received")
-def chat_received(
-    req: ChatRequest,
-    runner: ChatRunner = Depends(lambda: chat_runner),
-):
-    """Stream a model-generated reply for ``req``."""
-
-    history = memory_manager.load_history(req.chat_id)
-    history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(req.chat_id, history)
-    return runner.process_user_message(req.chat_id, req.message, stream=True)
 
 
 @chat_router.post("/")

@@ -23,12 +23,15 @@ class ResponseParser:
         if isinstance(self.raw, Iterable) and not isinstance(
             self.raw, (str, bytes, dict)
         ):
-            for chunk in self.raw:
-                if isinstance(chunk, dict) and "text" in chunk:
-                    yield str(chunk["text"])
-                else:
-                    yield str(chunk)
-            return
+
+            def _iter() -> Iterator[str]:
+                for chunk in self.raw:
+                    if isinstance(chunk, dict) and "text" in chunk:
+                        yield str(chunk["text"])
+                    else:
+                        yield str(chunk)
+
+            return _iter()
         if isinstance(self.raw, dict) and "text" in self.raw:
             return str(self.raw["text"])
         return str(self.raw)

@@ -19,7 +19,9 @@ def test_memory_history_basic(tmp_path):
 
 
 def test_prepare_call(monkeypatch):
-    call = CallData(chat_id="1", message="hi", global_prompt="Hello", options={})
+    call = CallData(
+        chat_id="1", message="hi", global_prompt="Hello", options={}
+    )
 
     invoked = {}
 
@@ -31,15 +33,21 @@ def test_prepare_call(monkeypatch):
 
     result = standard_chat.prepare_and_chat(call)
     assert result == "ok"
-    assert invoked["prompt"].startswith('--prompt')
+    assert invoked["prompt"].startswith("--prompt")
 
 
 def test_global_prompt_usage(monkeypatch):
-    call = CallData(chat_id="1", message="hi", global_prompt="Custom", options={})
+    call = CallData(
+        chat_id="1", message="hi", global_prompt="Custom", options={}
+    )
 
-    monkeypatch.setattr(LLMInvoker, "invoke", lambda self, prompt, opts=None: {"text": "ok"})
+    monkeypatch.setattr(
+        LLMInvoker, "invoke", lambda self, prompt, opts=None: {"text": "ok"}
+    )
 
-    result = goal_generation.generate_goals(call.global_prompt, call.message, {})
+    result = goal_generation.generate_goals(
+        call.global_prompt, call.message, {}
+    )
     assert result == "ok"
 
 
@@ -54,6 +62,12 @@ def test_response_parser_stream():
     assert list(parser.parse()) == ["a", "b"]
 
 
+def test_response_parser_stream_dicts():
+    chunks = [{"text": "hello"}, {"text": "world"}]
+    parsed = ResponseParser().load(chunks).parse()
+    assert list(parsed) == ["hello", "world"]
+
+
 def test_prompt_preparer_format():
     prep = PromptPreparer().prepare("sys", "user")
     assert "\n" not in prep
@@ -61,3 +75,9 @@ def test_prompt_preparer_format():
         '--prompt "<|im_start|>sys<|im_end|><|im_start|>user user<|im_end|>'
         '<|im_start|>assistant"'
     )
+
+
+def test_prompt_preparer_escaping():
+    prep = PromptPreparer().prepare('s "s"', 'u "u" <x>')
+    assert '\\"' in prep
+    assert '<|im_start|>user u \\"u\\" <x><|im_end|>' in prep

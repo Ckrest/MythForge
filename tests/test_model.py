@@ -27,7 +27,7 @@ def test_llm_invoker_invoke(monkeypatch):
     def fake_call(system, prompt, **opts):
         return {"text": "done"}
 
-    monkeypatch.setattr(model, "call_llm", fake_call)
+    monkeypatch.setattr("mythforge.invoker.call_llm", fake_call)
     inv = LLMInvoker()
     assert inv.invoke("prompt") == {"text": "done"}
 
