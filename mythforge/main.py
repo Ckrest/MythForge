@@ -51,7 +51,8 @@ def get_memory_manager() -> MemoryManager:
 class ChatRequest(BaseModel):
     """Request model for chat-related endpoints."""
 
-    chat_id: str
+    chat_name: str
+    prompt_name: str = ""
     message: str
 
 
@@ -62,14 +63,16 @@ class ChatRequest(BaseModel):
 
 
 @prompt_router.get("/")
-def list_prompts(names_only: int = 0):
+def list_prompts(names_only: int = 0, chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     if names_only:
         return {"prompts": memory_manager.list_prompt_names()}
     return {"prompts": memory_manager.load_global_prompts()}
 
 
 @prompt_router.get("/{name}")
-def get_prompt(name: str):
+def get_prompt(name: str, chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     content = memory_manager.get_global_prompt(name)
     if not content:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -77,13 +80,15 @@ def get_prompt(name: str):
 
 
 @prompt_router.post("/")
-def create_prompt(item: Dict[str, str]):
+def create_prompt(item: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     memory_manager.set_global_prompt(item["name"], item.get("content", ""))
     return {"detail": "Created"}
 
 
 @prompt_router.put("/{name}")
-def update_prompt(name: str, item: Dict[str, str]):
+def update_prompt(name: str, item: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     if item.get("name") != name:
         raise HTTPException(status_code=400, detail="Name mismatch")
     memory_manager.set_global_prompt(name, item.get("content", ""))
@@ -91,7 +96,8 @@ def update_prompt(name: str, item: Dict[str, str]):
 
 
 @prompt_router.put("/{name}/rename")
-def rename_prompt(name: str, data: Dict[str, str]):
+def rename_prompt(name: str, data: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     new_name = data.get("new_name", "").strip()
     if not new_name:
         raise HTTPException(status_code=400, detail="New name required")
@@ -111,14 +117,16 @@ def rename_prompt(name: str, data: Dict[str, str]):
 
 
 @prompt_router.delete("/{name}")
-def remove_prompt(name: str):
+def remove_prompt(name: str, chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     memory_manager.delete_global_prompt(name)
     memory_manager.update_paths(prompt_name="")
     return {"detail": f"Deleted prompt '{name}'"}
 
 
 @prompt_router.post("/select")
-def select_prompt(data: Dict[str, str]):
+def select_prompt(data: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     """Set the active global prompt to ``data['name']``."""
 
     name = data.get("name", "").strip()
@@ -137,12 +145,16 @@ def select_prompt(data: Dict[str, str]):
 
 
 @settings_router.get("/")
-def load_settings_endpoint():
+def load_settings_endpoint(chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     return memory_manager.load_settings()
 
 
 @settings_router.put("/")
-def update_settings_endpoint(data: Dict[str, object]):
+def update_settings_endpoint(
+    data: Dict[str, object], chat_name: str = "", prompt_name: str = ""
+):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     updated = memory_manager.update_settings(data)
     return {"detail": "Updated", "settings": updated}
 
@@ -151,7 +163,8 @@ def update_settings_endpoint(data: Dict[str, object]):
 
 
 @app.get("/response_prompt_status")
-def response_prompt_status():
+def response_prompt_status(chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     return {"pending": 0}
 
 
@@ -159,102 +172,114 @@ def response_prompt_status():
 
 
 @chat_router.get("/")
-def list_chats():
+def list_chats(chat_name: str = "", prompt_name: str = ""):
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     return {"chats": memory_manager.list_chats()}
 
 
-@chat_router.post("/{chat_id}")
+@chat_router.post("/{chat_name}")
 def create_chat(
-    chat_id: str,
+    chat_name: str,
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    """Create an empty chat directory for ``chat_id``."""
-    if chat_id in memory_manager.list_chats():
+    """Create an empty chat directory for ``chat_name``."""
+    if chat_name in memory_manager.list_chats():
         raise HTTPException(status_code=400, detail="Chat already exists")
-    memory_manager.save_history(chat_id, [])
+    memory_manager.save_history(chat_name, [])
     memory.toggle_goals(False)
-    memory.update_paths(chat_name=chat_id)
-    return {"detail": f"Created chat '{chat_id}'", "chat_id": chat_id}
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    return {"detail": f"Created chat '{chat_name}'", "chat_name": chat_name}
 
 
-@chat_router.get("/{chat_id}/history")
+@chat_router.get("/{chat_name}/history")
 def load_history_endpoint(
-    chat_id: str,
+    chat_name: str,
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    history_data = memory.load_history(chat_id)
-    memory.load_goals(chat_id)
-    return {"chat_id": chat_id, "history": history_data}
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    history_data = memory.load_history(chat_name)
+    memory.load_goals(chat_name)
+    return {"chat_name": chat_name, "history": history_data}
 
 
-@chat_router.put("/{chat_id}/history/{index}")
+@chat_router.put("/{chat_name}/history/{index}")
 def save_message_endpoint(
-    chat_id: str,
+    chat_name: str,
     index: int,
     data: Dict[str, str],
+    prompt_name: str = "",
 ):
-    """Update the content of a message at ``index`` in ``chat_id``."""
-    full = memory_manager.load_history(chat_id)
+    """Update the content of a message at ``index`` in ``chat_name``."""
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    full = memory_manager.load_history(chat_name)
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full[index]["content"] = data.get("content", "")
-    memory_manager.save_history(chat_id, full)
+    memory_manager.save_history(chat_name, full)
     return {"detail": "Updated"}
 
 
-@chat_router.delete("/{chat_id}/history/{index}")
+@chat_router.delete("/{chat_name}/history/{index}")
 def delete_message_endpoint(
-    chat_id: str,
+    chat_name: str,
     index: int,
+    prompt_name: str = "",
 ):
-    """Remove the message at ``index`` from ``chat_id``."""
-    full = memory_manager.load_history(chat_id)
+    """Remove the message at ``index`` from ``chat_name``."""
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    full = memory_manager.load_history(chat_name)
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full.pop(index)
-    memory_manager.save_history(chat_id, full)
+    memory_manager.save_history(chat_name, full)
     return {"detail": "Deleted"}
 
 
-@chat_router.delete("/{chat_id}")
+@chat_router.delete("/{chat_name}")
 def delete_chat(
-    chat_id: str,
+    chat_name: str,
+    prompt_name: str = "",
 ):
-    memory_manager.delete_chat(chat_id)
-    memory_manager.update_paths(chat_name="")
-    return {"detail": f"Deleted chat '{chat_id}'"}
+    memory_manager.delete_chat(chat_name)
+    memory_manager.update_paths(chat_name="", prompt_name=prompt_name)
+    return {"detail": f"Deleted chat '{chat_name}'"}
 
 
-@chat_router.put("/{chat_id}")
+@chat_router.put("/{chat_name}")
 def rename_chat(
-    chat_id: str,
+    chat_name: str,
     data: Dict[str, str],
+    prompt_name: str = "",
 ):
-    """Rename an existing chat ``chat_id`` to ``data['new_id']``."""
+    """Rename an existing chat ``chat_name`` to ``data['new_id']``."""
 
     new_id = data.get("new_id", "").strip()
     if not new_id:
         raise HTTPException(status_code=400, detail="New chat id required")
 
-    if new_id == chat_id:
-        return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
+    if new_id == chat_name:
+        return {"detail": f"Renamed chat '{chat_name}' to '{new_id}'"}
 
-    if chat_id not in memory_manager.list_chats():
+    if chat_name not in memory_manager.list_chats():
         raise HTTPException(status_code=404, detail="Chat not found")
     if new_id in memory_manager.list_chats():
         raise HTTPException(status_code=400, detail="Chat name already exists")
-    memory_manager.rename_chat(chat_id, new_id)
-    memory_manager.update_paths(chat_name=new_id)
-    return {"detail": f"Renamed chat '{chat_id}' to '{new_id}'"}
+    memory_manager.rename_chat(chat_name, new_id)
+    memory_manager.update_paths(chat_name=new_id, prompt_name=prompt_name)
+    return {"detail": f"Renamed chat '{chat_name}' to '{new_id}'"}
 
 
-@chat_router.get("/{chat_id}/goals")
+@chat_router.get("/{chat_name}/goals")
 def get_goals(
-    chat_id: str,
+    chat_name: str,
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    """Return goals data for ``chat_id`` including progress lists."""
-    goals = memory.load_goals(chat_id)
+    """Return goals data for ``chat_name`` including progress lists."""
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    goals = memory.load_goals(chat_name)
     return {
         "exists": memory.goals_active,
         "character": goals.character,
@@ -264,84 +289,96 @@ def get_goals(
     }
 
 
-@chat_router.put("/{chat_id}/goals")
+@chat_router.put("/{chat_name}/goals")
 def save_goals(
-    chat_id: str,
+    chat_name: str,
     data: Dict[str, object],
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    """Save goals for ``chat_id`` including progress tracking."""
+    """Save goals for ``chat_name`` including progress tracking."""
 
-    memory.save_goals(chat_id, data)
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    memory.save_goals(chat_name, data)
     return {"detail": "Saved"}
 
 
-@chat_router.post("/{chat_id}/goals/disable")
+@chat_router.post("/{chat_name}/goals/disable")
 def disable_goals(
-    chat_id: str,
+    chat_name: str,
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    """Disable goals for ``chat_id`` by renaming the JSON file."""
+    """Disable goals for ``chat_name`` by renaming the JSON file."""
 
-    memory.disable_goals(chat_id)
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    memory.disable_goals(chat_name)
     return {"detail": "Disabled"}
 
 
-@chat_router.post("/{chat_id}/goals/enable")
+@chat_router.post("/{chat_name}/goals/enable")
 def enable_goals(
-    chat_id: str,
+    chat_name: str,
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    """Re-enable goals for ``chat_id`` if a disabled JSON file exists."""
+    """Re-enable goals for ``chat_name`` if a disabled JSON file exists."""
 
-    memory.enable_goals(chat_id)
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    memory.enable_goals(chat_name)
     return {"detail": "Enabled"}
 
 
-@chat_router.get("/{chat_id}/goals_enabled")
+@chat_router.get("/{chat_name}/goals_enabled")
 def goals_enabled_endpoint(
-    chat_id: str,
+    chat_name: str,
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    """Return whether goals exist for ``chat_id``."""
+    """Return whether goals exist for ``chat_name``."""
 
-    memory.load_goals(chat_id)
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    memory.load_goals(chat_name)
     return {"enabled": memory.goals_active}
 
 
-@chat_router.get("/{chat_id}/context")
+@chat_router.get("/{chat_name}/context")
 def get_context_file(
-    chat_id: str,
+    chat_name: str,
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    """Return the character/setting context for ``chat_id``."""
-    goals = memory.load_goals(chat_id)
+    """Return the character/setting context for ``chat_name``."""
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    goals = memory.load_goals(chat_name)
     return {"character": goals.character, "setting": goals.setting}
 
 
-@chat_router.put("/{chat_id}/context")
+@chat_router.put("/{chat_name}/context")
 def save_context_file(
-    chat_id: str,
+    chat_name: str,
     data: Dict[str, str],
     memory: MemoryManager = Depends(get_memory_manager),
+    prompt_name: str = "",
 ):
-    """Save character/setting context for ``chat_id`` preserving progress."""
+    """Save character/setting context for ``chat_name`` preserving progress."""
 
     obj = {
         "character": data.get("character", ""),
         "setting": data.get("setting", ""),
     }
-    existing = memory.load_goals(chat_id)
+    memory.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    existing = memory.load_goals(chat_name)
     if existing.active_goals or existing.deactive_goals:
         obj["in_progress"] = existing.active_goals
         obj["completed"] = existing.deactive_goals
-    memory.save_goals(chat_id, obj)
+    memory.save_goals(chat_name, obj)
     return {"detail": "Saved"}
 
 
-@chat_router.post("/{chat_id}/message")
+@chat_router.post("/{chat_name}/message")
 def send_chat_message(
-    chat_id: str,
+    chat_name: str,
     req: ChatRequest,
     runner: ChatRunner = Depends(lambda: chat_runner),
 ):
@@ -351,26 +388,30 @@ def send_chat_message(
         "chat_flow",
         {
             "function": "send_chat_message",
-            "chat_id": chat_id,
+            "chat_name": chat_name,
             "message": req.message,
-            "runner_chat_id": runner.current_chat_id,
+            "runner_chat_name": runner.current_chat_name,
             "runner_prompt": runner.current_prompt,
         },
     )
 
-    history = memory_manager.load_history(chat_id)
+    memory_manager.update_paths(
+        chat_name=chat_name, prompt_name=req.prompt_name
+    )
+    history = memory_manager.load_history(chat_name)
     history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(chat_id, history)
-    return runner.process_user_message(chat_id, req.message, stream=True)
+    memory_manager.save_history(chat_name, history)
+    return runner.process_user_message(chat_name, req.message, stream=True)
 
 
-@chat_router.post("/{chat_id}/cli")
-def run_cli_command(chat_id: str, req: ChatRequest):
+@chat_router.post("/{chat_name}/cli")
+def run_cli_command(chat_name: str, req: ChatRequest):
     """Stream ``req.message`` to the running CLI process."""
 
-    history = memory_manager.load_history(chat_id)
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=req.prompt_name)
+    history = memory_manager.load_history(chat_name)
     history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(chat_id, history)
+    memory_manager.save_history(chat_name, history)
     prepared = PromptPreparer().prepare("", req.message)
     stream = LLMInvoker().invoke(prepared, {"stream": True})
 
@@ -380,23 +421,25 @@ def run_cli_command(chat_id: str, req: ChatRequest):
             text = chunk.get("text", "")
             parts.append(text)
             yield text
-        history = memory_manager.load_history(chat_id)
+        history = memory_manager.load_history(chat_name)
         history.append({"role": "assistant", "content": "".join(parts)})
-        memory_manager.save_history(chat_id, history)
+        memory_manager.save_history(chat_name, history)
 
     return StreamingResponse(_generate(), media_type="text/plain")
 
 
-@chat_router.post("/{chat_id}/assistant")
+@chat_router.post("/{chat_name}/assistant")
 def append_assistant_message(
-    chat_id: str,
+    chat_name: str,
     data: Dict[str, str],
+    prompt_name: str = "",
 ):
-    """Append an assistant message to ``chat_id``."""
+    """Append an assistant message to ``chat_name``."""
 
-    history = memory_manager.load_history(chat_id)
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    history = memory_manager.load_history(chat_name)
     history.append({"role": "assistant", "content": data.get("message", "")})
-    memory_manager.save_history(chat_id, history)
+    memory_manager.save_history(chat_name, history)
     return {"detail": "Message stored"}
 
 
@@ -407,10 +450,13 @@ def chat(
 ):
     """Return a standard model-generated reply."""
 
-    history = memory_manager.load_history(req.chat_id)
+    memory_manager.update_paths(
+        chat_name=req.chat_name, prompt_name=req.prompt_name
+    )
+    history = memory_manager.load_history(req.chat_name)
     history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(req.chat_id, history)
-    return runner.process_user_message(req.chat_id, req.message)
+    memory_manager.save_history(req.chat_name, history)
+    return runner.process_user_message(req.chat_name, req.message)
 
 
 # --- Static UI Mount ------------------------------------------------------

@@ -335,14 +335,27 @@
         const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
         const CONFIG = { apiUrl: window.location.origin + basePath };
 
-        function apiFetch(path, options){
+        function apiFetch(path, options={}){
             const base = CONFIG.apiUrl.replace(/\/$/, '');
             const rel = path.startsWith('/') ? path : '/' + path;
-            return fetch(base + rel, options);
+            const method = (options.method||'GET').toUpperCase();
+            if(method==='GET'){
+                const url = new URL(base+rel);
+                url.searchParams.set('chat_name', state.currentChatName);
+                url.searchParams.set('prompt_name', state.currentPrompt);
+                return fetch(url, options);
+            }
+            options.headers = options.headers||{'Content-Type':'application/json'};
+            let payload={};
+            try{ if(options.body) payload=JSON.parse(options.body); }catch{}
+            payload.chat_name = state.currentChatName;
+            payload.prompt_name = state.currentPrompt;
+            options.body = JSON.stringify(payload);
+            return fetch(base+rel, options);
         }
         const state = {
             chats: [],
-            currentChatId: '',
+            currentChatName: '',
             prompts: [],
             currentPrompt: '',
             settings: {
@@ -658,7 +671,7 @@
             promptTab.classList.remove('active');
             moreTab.classList.remove('active');
             fetchChatList().then(()=>{
-                if(state.currentChatId) loadChat(state.currentChatId);
+                if(state.currentChatName) loadChat(state.currentChatName);
             });
         }
 
@@ -682,7 +695,7 @@
             promptTab.classList.add('active');
             moreTab.classList.remove('active');
             refreshGlobalPromptList().then(()=>{
-                const last = localStorage.getItem('lastGlobalPrompt');
+                const last = localStorage.getItem('lastPromptName');
                 if(last) selectPrompt(last);
             });
         }
@@ -700,7 +713,7 @@
                 const div = document.createElement('div');
                 div.className = 'chat-history-item';
 
-                if(id === state.currentChatId) div.classList.add('active');
+                if(id === state.currentChatName) div.classList.add('active');
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'chat-name';
@@ -730,7 +743,7 @@
             const items = historyContainer.querySelectorAll('.chat-history-item');
             items.forEach(div=>{
                 const name = div.querySelector('.chat-name').textContent;
-                if(name === state.currentChatId){
+                if(name === state.currentChatName){
                     div.classList.add('active');
                 }else{
                     div.classList.remove('active');
@@ -743,19 +756,19 @@
                 const res = await apiFetch('/chats/');
                 const json = await res.json();
                 state.chats = json.chats.sort((a,b)=>a.localeCompare(b));
-                const last = localStorage.getItem('lastChatId');
+                const last = localStorage.getItem('lastChatName');
                 if(last && state.chats.includes(last)){
-                    state.currentChatId = last;
-                }else if(state.chats.length && !state.currentChatId){
-                    state.currentChatId = state.chats[0];
+                    state.currentChatName = last;
+                }else if(state.chats.length && !state.currentChatName){
+                    state.currentChatName = state.chats[0];
                 }
                 renderHistory();
             }catch(e){ console.error('Failed to fetch chats:', e); }
         }
 
         async function loadChat(id){
-            state.currentChatId = id;
-            localStorage.setItem('lastChatId', id);
+            state.currentChatName = id;
+            localStorage.setItem('lastChatName', id);
             updateActiveChat();
             chatContainer.innerHTML='';
             systemPrompt.textContent='';
@@ -766,9 +779,9 @@
                 const data = await res.json();
                 let msgs = data;
                 if(!Array.isArray(data)){
-                    if(data.chat_id){
-                        state.currentChatId = data.chat_id;
-                        localStorage.setItem('lastChatId', data.chat_id);
+                    if(data.chat_name){
+                        state.currentChatName = data.chat_name;
+                        localStorage.setItem('lastChatName', data.chat_name);
                         updateActiveChat();
                     }
                     msgs = data.history || [];
@@ -811,7 +824,7 @@
                 const res = await apiFetch('/prompts/?names_only=1');
                 const json = await res.json();
                 state.prompts = json.prompts.sort((a,b)=>a.localeCompare(b));
-                const last = localStorage.getItem('lastGlobalPrompt');
+                const last = localStorage.getItem('lastPromptName');
                 if(last && state.prompts.includes(last)){
                     await selectPrompt(last);
                 }else{
@@ -865,7 +878,7 @@
                 state.prompts = state.prompts.filter(p=>p!==editingPromptName);
                 if(state.currentPrompt===editingPromptName){
                     state.currentPrompt = '';
-                    localStorage.setItem('lastGlobalPrompt','');
+                    localStorage.setItem('lastPromptName','');
                 }
                 renderPromptList();
             }
@@ -928,26 +941,26 @@
                     return;
                 }
                 const data = await res.json().catch(()=>({}));
-                name = data.chat_id || name;
+                name = data.chat_name || name;
             }catch(e){ console.error('Failed to create chat:', e); return; }
             await fetchChatList();
-            state.currentChatId = name;
-            localStorage.setItem('lastChatId', name);
+            state.currentChatName = name;
+            localStorage.setItem('lastChatName', name);
             renderHistory();
             chatContainer.innerHTML = '';
             systemPrompt.textContent = '';
             systemToggle.style.display = 'none';
         }
 
-        async function deleteChat(chatId = state.currentChatId){
+        async function deleteChat(chatId = state.currentChatName){
             if(!chatId) return alert('Nothing to delete.');
             confirmDialog('Are you sure you want to delete this chat?', async ()=>{
                 try{
                 const res = await apiFetch(`/chats/${encodeURIComponent(chatId)}`, {method:'DELETE'});
                 if(!res.ok){ if(res.status===404) throw new Error('Chat not found on server.'); else throw new Error('Unknown server error.'); }
                 await fetchChatList();
-                state.currentChatId = state.chats.length ? state.chats[0] : '';
-                localStorage.setItem('lastChatId', state.currentChatId);
+                state.currentChatName = state.chats.length ? state.chats[0] : '';
+                localStorage.setItem('lastChatName', state.currentChatName);
                 renderHistory();
                 chatContainer.innerHTML = '';
                 systemPrompt.textContent = '';
@@ -989,8 +1002,8 @@
                             }
                         }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); return; }
                         await fetchChatList();
-                        state.currentChatId = trimmed;
-                        localStorage.setItem('lastChatId', trimmed);
+                        state.currentChatName = trimmed;
+                        localStorage.setItem('lastChatName', trimmed);
                         renderHistory();
                     }
                     if(document.getElementById('goals-context').style.display!=='none'){
@@ -1023,7 +1036,7 @@
 
         async function selectPrompt(name){
             state.currentPrompt = name;
-            localStorage.setItem('lastGlobalPrompt', name);
+            localStorage.setItem('lastPromptName', name);
             renderPromptList();
             try{
                 await apiFetch('/prompts/select', {
@@ -1067,13 +1080,13 @@
         async function editMessage(index, current){
             promptTextarea('Edit message:', current, async (text)=>{
                 try{
-                    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatId)}/history/${index}`, {
+                    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatName)}/history/${index}`, {
                         method:'PUT',
                         headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({content:text})
                     });
                     if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                    await loadChat(state.currentChatId);
+                    await loadChat(state.currentChatName);
                 }catch(e){ alert('Failed to edit: '+e.message); }
             });
         }
@@ -1081,9 +1094,9 @@
         async function deleteMessage(index){
             confirmDialog('Delete this message?', async ()=>{
                 try{
-                    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatId)}/history/${index}`, {method:'DELETE'});
+                    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatName)}/history/${index}`, {method:'DELETE'});
                     if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
-                    await loadChat(state.currentChatId);
+                    await loadChat(state.currentChatName);
                 }catch(e){ alert('Failed to delete: '+e.message); }
             });
         }
@@ -1172,7 +1185,7 @@
         async function sendMessage(allowEmpty=false){
             const text = userInput.value.trim();
             if(state.isGenerating) return;
-            if(!state.currentChatId){
+            if(!state.currentChatName){
                 await startNewChat();
             }
             if(text==='' && !allowEmpty) return;
@@ -1185,10 +1198,10 @@
                 state.isProcessing=true;
                 updateBusyUI();
                 try{
-                    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatId)}/cli`, {
+                    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatName)}/cli`, {
                         method:'POST',
                         headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({chat_id: state.currentChatId, message: text})
+                        body: JSON.stringify({message: text})
                     });
                     const data = await res.json();
                     appendMessageToUI('assistant', data.detail || '');
@@ -1209,13 +1222,10 @@
             updateBusyUI();
             abortController = new AbortController();
             try{
-                const response = await apiFetch(`/chats/${encodeURIComponent(state.currentChatId)}/message`, {
+                const response = await apiFetch(`/chats/${encodeURIComponent(state.currentChatName)}/message`, {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({
-                        chat_id: state.currentChatId,
-                        message: text
-                    }),
+                    body: JSON.stringify({message: text}),
                     signal: abortController.signal
                 });
                 if(!response.ok) throw new Error(`Server returned ${response.status}`);
@@ -1299,7 +1309,7 @@
         async function sendMessageNoGen(){
             const text = userInput.value.trim();
             if(text==='' || state.isGenerating) return;
-            if(!state.currentChatId){
+            if(!state.currentChatName){
                 await startNewChat();
             }
             userInput.value=''; autoResize();
@@ -1309,7 +1319,7 @@
                 await apiFetch('/chats/message', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({chat_id: state.currentChatId, message: text})
+                    body: JSON.stringify({message: text})
                 });
             }catch(err){
                 console.error('Send only failed:', err);
@@ -1367,7 +1377,7 @@
             showChatTab();
             await refreshGlobalPromptList();
             await fetchChatList();
-            if(state.currentChatId) await loadChat(state.currentChatId);
+            if(state.currentChatName) await loadChat(state.currentChatName);
             await loadServerSettings();
             autoResize();
             updateBusyUI();
