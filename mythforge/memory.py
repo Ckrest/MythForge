@@ -7,7 +7,6 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from . import model
 
 
 def _load_json(path: str) -> list[Any] | dict[str, Any] | list:
@@ -17,7 +16,12 @@ def _load_json(path: str) -> list[Any] | dict[str, Any] | list:
                 content = f.read().strip()
                 return json.loads(content) if content else []
         except Exception as e:  # pragma: no cover - best effort
-            print(f"Failed to load JSON from '{path}': {e}")
+            try:
+                from .logger import LOGGER
+            except Exception:
+                LOGGER = None
+            if LOGGER is not None:
+                LOGGER.log_error(e)
     return []
 
 
@@ -166,6 +170,8 @@ class MemoryManager:
     ) -> Dict[str, Any]:
         """Merge ``delta`` into :attr:`model_settings` and optionally save."""
 
+        from . import model
+
         self.model_settings.update(delta)
         model.MODEL_SETTINGS.update(delta)
         for key in ("temp", "top_k", "top_p", "min_p", "repeat_penalty"):
@@ -293,6 +299,8 @@ def set_global_prompt(prompt: str) -> None:
 
 def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
     """Populate ``manager`` with default values."""
+    from . import model
+
     manager.model_settings = manager.load_settings() or model.MODEL_SETTINGS.copy()
     manager.goals_active = False
     manager.update_paths(chat_name="", prompt_name="")
