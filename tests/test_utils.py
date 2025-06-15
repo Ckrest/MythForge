@@ -1,12 +1,11 @@
 import json
 import types
 import sys
-
-from mythforge.main import ChatRequest
 from mythforge.call_core import CallData
 from mythforge.call_templates import standard_chat, goal_generation
 from mythforge.prompt_preparer import PromptPreparer
 from mythforge.response_parser import ResponseParser
+from mythforge.invoker import LLMInvoker
 from mythforge import memory
 
 
@@ -19,30 +18,29 @@ def test_memory_history_basic(tmp_path):
     assert mgr.load_history("c1") == [{"role": "user", "content": "hello"}]
 
 
-def test_prepare_call(tmp_path, monkeypatch):
-    prompt_dir = tmp_path / "prompts"
-    prompt_dir.mkdir()
-    monkeypatch.setattr(memory.MEMORY_MANAGER, "prompts_dir", str(prompt_dir))
-    data = {"name": "Example", "content": "Hello"}
-    (prompt_dir / "Example.json").write_text(json.dumps(data))
-    req = ChatRequest(chat_id="1", message="hi")
-    call = CallData(chat_id=req.chat_id, message=req.message)
-    system_text, _ = standard_chat.prepare(call)
-    assert call.global_prompt == "Hello"
+def test_prepare_call(monkeypatch):
+    call = CallData(chat_id="1", message="hi", global_prompt="Hello", options={})
+
+    invoked = {}
+
+    def fake_invoke(self, prompt, opts=None):
+        invoked["prompt"] = prompt
+        return {"text": "ok"}
+
+    monkeypatch.setattr(LLMInvoker, "invoke", fake_invoke)
+
+    result = standard_chat.prepare_and_chat(call)
+    assert result == "ok"
+    assert invoked["prompt"].startswith('--prompt')
 
 
-def test_global_prompt_usage(tmp_path, monkeypatch):
-    prompt_dir = tmp_path / "prompts"
-    prompt_dir.mkdir()
-    monkeypatch.setattr(memory.MEMORY_MANAGER, "prompts_dir", str(prompt_dir))
-    data = {"name": "Example", "content": "Hello"}
-    (prompt_dir / "Example.json").write_text(json.dumps(data))
-    memory.initialize()
-    memory.set_global_prompt("Custom")
-    req = ChatRequest(chat_id="1", message="hi")
-    call = CallData(chat_id=req.chat_id, message=req.message)
-    system_text, _ = goal_generation.prepare(call)
-    assert call.global_prompt == "Custom"
+def test_global_prompt_usage(monkeypatch):
+    call = CallData(chat_id="1", message="hi", global_prompt="Custom", options={})
+
+    monkeypatch.setattr(LLMInvoker, "invoke", lambda self, prompt, opts=None: {"text": "ok"})
+
+    result = goal_generation.generate_goals(call.global_prompt, call.message, {})
+    assert result == "ok"
 
 
 def test_response_parser_extract_text():

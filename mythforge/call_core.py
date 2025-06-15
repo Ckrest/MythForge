@@ -33,6 +33,7 @@ class CallData:
     message: str
     global_prompt: str = ""
     call_type: str = "standard_chat"
+    options: Dict[str, Any] = None
 
 
 def _default_global_prompt() -> str:
@@ -146,8 +147,6 @@ def _maybe_generate_goals(
     global_prompt: str,
     memory: MemoryManager = MEMORY_MANAGER,
 ) -> None:
-    from .call_types import CALL_HANDLERS
-
     goals = memory.load_goals(chat_id)
     if not memory.goals_active:
         return
@@ -204,17 +203,13 @@ Do not include any explanation, commentary, or other text. If no goals are curre
         },
     )
 
-    from .call_types import CALL_HANDLERS
     from .call_templates import goal_generation
 
-    handler = CALL_HANDLERS["goal_generation"]
-    system_prompt, user_prompt = handler.prompt(system_text, user_text)
-    prepared = PromptPreparer().prepare(system_prompt, user_prompt)
-    raw = LLMInvoker().invoke(
-        prepared,
+    text = goal_generation.generate_goals(
+        system_text,
+        user_text,
         {**goal_generation.MODEL_LAUNCH_OVERRIDE},
     )
-    text = ResponseParser().load(raw).parse()
 
     goals = _parse_goals_from_response(text)
     if not goals:
@@ -265,35 +260,26 @@ def handle_chat(
 ):
     """Process ``call`` and return a model reply."""
 
-    from .call_types import CALL_HANDLERS
+    from .call_templates import standard_chat, logic_check
 
-    handler = CALL_HANDLERS.get(call.call_type, CALL_HANDLERS["standard_chat"])
+    call.options = call.options or {"stream": stream}
 
-    system_text, user_text = handler.prepare(call)
-
-    if call.chat_id != current_chat_id or system_text != (
-        current_prompt or ""
-    ):
-        current_chat_id = call.chat_id
-        current_prompt = system_text
-
-    system_prompt, user_prompt = handler.prompt(system_text, user_text)
-    prepared = PromptPreparer().prepare(system_prompt, user_prompt)
-    raw = LLMInvoker().invoke(prepared, {"stream": stream})
-    processed = ResponseParser().load(raw).parse()
+    if call.call_type == "logic_check":
+        processed = logic_check.logic_check(
+            call.global_prompt,
+            call.message,
+            call.options,
+        )
+    else:
+        if call.chat_id != current_chat_id:
+            current_chat_id = call.chat_id
+        processed = standard_chat.prepare_and_chat(call)
 
     if stream:
 
         def _generate():
-            meta = json.dumps(
-                {"system_prompt": system_prompt, "prompt": user_prompt},
-                ensure_ascii=False,
-            )
-            yield meta + "\n"
-
             parts: list[str] = []
             for text in processed:
-                print(text, end="", flush=True)
                 parts.append(text)
                 yield text
 
@@ -334,7 +320,7 @@ class ChatRunner:
     def process_user_message(
         self, chat_id: str, message: str, stream: bool = False
     ):
-        call = CallData(chat_id=chat_id, message=message)
+        call = CallData(chat_id=chat_id, message=message, options={"stream": stream})
         result = handle_chat(
             call,
             self.memory,
