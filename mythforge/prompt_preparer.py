@@ -22,8 +22,10 @@ class PromptPreparer:
     def prepare(self, system_text: str, user_text: str) -> str:
         """Return a model ready prompt for ``system_text`` and ``user_text``."""
 
-        system_clean = system_text.replace("\n", " ").strip()
-        user_clean = user_text.replace("\n", " ").strip()
+        system_clean = (
+            system_text.replace("\n", " ").replace('"', '\\"').strip()
+        )
+        user_clean = user_text.replace("\n", " ").replace('"', '\\"').strip()
         prompt = (
             f"<|im_start|>{system_clean}<|im_end|>"
             f"<|im_start|>user {user_clean}<|im_end|>"
