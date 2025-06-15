@@ -135,12 +135,12 @@ def select_prompt(data: Dict[str, str]):
 
 
 @settings_router.get("/")
-def get_settings():
+def load_settings_endpoint():
     return memory_manager.load_settings()
 
 
 @settings_router.put("/")
-def update_settings(data: Dict[str, object]):
+def update_settings_endpoint(data: Dict[str, object]):
     updated = memory_manager.update_settings(data)
     return {"detail": "Updated", "settings": updated}
 
@@ -176,7 +176,7 @@ def create_chat(
 
 
 @chat_router.get("/{chat_id}/history")
-def get_history(
+def load_history_endpoint(
     chat_id: str,
     memory: MemoryManager = Depends(get_memory_manager),
 ):
@@ -186,7 +186,7 @@ def get_history(
 
 
 @chat_router.put("/{chat_id}/history/{index}")
-def edit_message(
+def save_message_endpoint(
     chat_id: str,
     index: int,
     data: Dict[str, str],
@@ -201,7 +201,7 @@ def edit_message(
 
 
 @chat_router.delete("/{chat_id}/history/{index}")
-def delete_message(
+def delete_message_endpoint(
     chat_id: str,
     index: int,
 ):
