@@ -3,23 +3,18 @@ from __future__ import annotations
 """Simple JSON file logger used across the project."""
 
 from typing import Any
-import os
 
 from .memory import MEMORY_MANAGER, _load_json, _save_json
 
 
 class LoggerManager:
-    """Persist log events under ``root_dir``."""
+    """Persist log events using :class:`MemoryManager`."""
 
-    def __init__(self, root_dir: str) -> None:
-        self.root_dir = root_dir
-
-    def _path(self, name: str) -> str:
-        return os.path.join(self.root_dir, f"{name}.json")
+    def __init__(self, memory_manager=MEMORY_MANAGER) -> None:
+        self.memory_manager = memory_manager
 
     def log(self, event_type: str, payload: Any) -> None:
-        os.makedirs(self.root_dir, exist_ok=True)
-        path = self._path(event_type)
+        path = self.memory_manager.get_log_path(event_type)
         data = _load_json(path)
         if not isinstance(data, list):
             data = []
@@ -30,4 +25,4 @@ class LoggerManager:
         self.log("errors", {"error": str(err)})
 
 
-LOGGER = LoggerManager(MEMORY_MANAGER.logs_dir)
+LOGGER = LoggerManager(MEMORY_MANAGER)

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ..model import _select_model_path
-from ..call_core import format_for_model, parse_response
-from ..memory import MEMORY_MANAGER
 from ..logger import LOGGER
+from ..prompt_preparer import PromptPreparer
+from ..response_parser import ResponseParser
+from ..invoker import LLMInvoker
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "background": True,
@@ -17,32 +17,6 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 }
 
 
-def send_prompt(system_text: str, user_text: str) -> dict[str, str]:
-    """Return raw model output for ``system_text`` and ``user_text``."""
-    from llama_cpp import Llama
-
-    prompt = format_for_model(system_text, user_text)
-    LOGGER.log("model_calls", prompt)
-
-    llm = Llama(
-        model_path=_select_model_path(background=True),
-        n_ctx=MODEL_LAUNCH_OVERRIDE["n_ctx"],
-    )
-
-    result = llm(prompt, max_tokens=MODEL_LAUNCH_OVERRIDE["max_tokens"])
-    text = ""
-    if isinstance(result, dict):
-        choices = result.get("choices", [{}])
-        if choices:
-            text = str(choices[0].get("text", ""))
-    return {"text": text}
-
-
-def run_logic_check(system_text: str, user_text: str) -> str:
-    """Return a parsed model reply for ``system_text`` and ``user_text``."""
-
-    raw = send_prompt(system_text, user_text)
-    return parse_response(raw)
 
 
 # CallType helpers -----------------------------------------------------------
@@ -72,4 +46,4 @@ def prompt(system_text: str, user_text: str) -> tuple[str, str]:
 def response(result: Any) -> str:
     """Return a single parsed model response."""
 
-    return parse_response(result)
+    return ResponseParser().load(result).parse()

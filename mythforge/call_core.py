@@ -14,8 +14,10 @@ from fastapi.responses import StreamingResponse
 from .model import (
     GENERATION_CONFIG,
     DEFAULT_N_GPU_LAYERS,
-    call_llm,
 )
+from .invoker import LLMInvoker
+from .prompt_preparer import PromptPreparer
+from .response_parser import ResponseParser
 from .memory import MemoryManager, MEMORY_MANAGER
 from .logger import LOGGER
 
@@ -40,13 +42,6 @@ def _default_global_prompt() -> str:
     return ""
 
 
-def build_call(req: "ChatRequest") -> CallData:
-    """Return :class:`CallData` populated from ``req`` and defaults."""
-
-    return CallData(
-        chat_id=req.chat_id,
-        message=req.message,
-    )
 
 
 # --- Background task queue -------------------------------------------------
@@ -89,35 +84,6 @@ def clean_text(text: str, *, trim: bool = False) -> str:
     return cleaned.strip() if trim else cleaned
 
 
-def parse_response(output: Any) -> str:
-    """Return ``output`` as plain text."""
-
-    if isinstance(output, dict) and "text" in output:
-        return str(output["text"])
-    return str(output)
-
-
-def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
-    """Yield plain text from streaming model output."""
-
-    for chunk in chunks:
-        if isinstance(chunk, dict) and "text" in chunk:
-            yield str(chunk["text"])
-        else:
-            yield str(chunk)
-
-
-def format_for_model(system_text: str, user_text: str) -> str:
-    """Return CLI prompt string for ``system_text`` and ``user_text``."""
-
-    system_clean = system_text.replace("\n", " ").strip()
-    user_clean = user_text.replace("\n", " ").strip()
-    prompt = (
-        f"<|im_start|>{system_clean}<|im_end|>"
-        f"<|im_start|>user {user_clean}<|im_end|>"
-        f"<|im_start|>assistant"
-    )
-    return f'--prompt "{prompt}"'
 
 
 # ---------------------------------------------------------------------------
@@ -243,12 +209,12 @@ Do not include any explanation, commentary, or other text. If no goals are curre
 
     handler = CALL_HANDLERS["goal_generation"]
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
-    raw = call_llm(
-        system_prompt,
-        user_prompt,
-        **goal_generation.MODEL_LAUNCH_OVERRIDE,
+    prepared = PromptPreparer().prepare(system_prompt, user_prompt)
+    raw = LLMInvoker().invoke(
+        prepared,
+        {**goal_generation.MODEL_LAUNCH_OVERRIDE},
     )
-    text = handler.response(raw)
+    text = ResponseParser().load(raw).parse()
 
     goals = _parse_goals_from_response(text)
     if not goals:
@@ -277,7 +243,9 @@ def _finalize_chat(
 ) -> None:
     """Store assistant reply and queue background work."""
 
-    memory.append_message(call.chat_id, "assistant", reply)
+    history = memory.load_history(call.chat_id)
+    history.append({"role": "assistant", "content": reply})
+    memory.save_history(call.chat_id, history)
     enqueue_task(
         "goal_generation",
         _maybe_generate_goals,
@@ -310,25 +278,9 @@ def handle_chat(
         current_prompt = system_text
 
     system_prompt, user_prompt = handler.prompt(system_text, user_text)
-    if call.call_type == "standard_chat":
-        from .call_templates import standard_chat
-
-        raw = standard_chat.send_prompt(
-            system_prompt,
-            user_prompt,
-            stream=stream,
-        )
-    elif call.call_type == "logic_check":
-        from .call_templates import logic_check
-
-        raw = logic_check.send_prompt(system_prompt, user_prompt)
-    else:
-        raw = call_llm(
-            system_prompt,
-            user_prompt,
-            stream=stream,
-        )
-    processed = handler.response(raw)
+    prepared = PromptPreparer().prepare(system_prompt, user_prompt)
+    raw = LLMInvoker().invoke(prepared, {"stream": stream})
+    processed = ResponseParser().load(raw).parse()
 
     if stream:
 

@@ -94,24 +94,6 @@ class MemoryManager:
         self.update_paths(chat_name=chat_id)
         self._write_json(self._chat_file(chat_id, "full.json"), history)
 
-    def append_message(self, chat_id: str, role: str, content: str) -> None:
-        if not content.strip():
-            return
-        history = self.load_history(chat_id)
-        history.append({"role": role, "content": content})
-        self.save_history(chat_id, history)
-
-    def edit_message(self, chat_id: str, index: int, content: str) -> None:
-        history = self.load_history(chat_id)
-        if 0 <= index < len(history):
-            history[index]["content"] = content
-            self.save_history(chat_id, history)
-
-    def delete_message(self, chat_id: str, index: int) -> None:
-        history = self.load_history(chat_id)
-        if 0 <= index < len(history):
-            history.pop(index)
-            self.save_history(chat_id, history)
 
     def list_chats(self) -> List[str]:
         os.makedirs(self.chats_dir, exist_ok=True)

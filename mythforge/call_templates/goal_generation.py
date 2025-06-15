@@ -6,6 +6,7 @@ from ..call_core import CallData, _default_global_prompt
 from .. import memory
 from ..memory import MEMORY_MANAGER
 from ..logger import LOGGER
+from ..response_parser import ResponseParser
 
 # -----------------------------------
 # Model launch parameters / arguments ORERRIDE
@@ -18,26 +19,14 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 }
 
 
-def prepare_system_text(call: CallData) -> str:
-    """Return the system prompt for ``call``."""
-
+def prepare(call: CallData) -> tuple[str, str]:
+    """Return prompts for goal generation calls."""
     if not call.global_prompt:
         call.global_prompt = (
             memory.MEMORY.global_prompt or _default_global_prompt()
         )
-    return call.global_prompt
-
-
-def prepare_user_text(call: CallData) -> str:
-    """Return the user prompt for ``call``."""
-
-    return call.message
-
-
-def prepare(call: CallData) -> tuple[str, str]:
-    """Return prompts for goal generation calls."""
-    system_text = prepare_system_text(call)
-    user_text = prepare_user_text(call)
+    system_text = call.global_prompt
+    user_text = call.message
     LOGGER.log(
         "prepared_prompts",
         {
@@ -57,9 +46,6 @@ def prompt(system_text: str, user_text: str) -> tuple[str, str]:
 
 def response(result: Any) -> str:
     """Return a single parsed model response."""
-
-    from ..call_core import parse_response
-
     if isinstance(result, Iterable):
         result = next(iter(result), {})
-    return parse_response(result)
+    return ResponseParser().load(result).parse()
