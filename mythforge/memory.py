@@ -200,15 +200,10 @@ class MemoryManager:
     # ------------------------------------------------------------------
     # Logging
     # ------------------------------------------------------------------
-    def log_event(self, event_type: str, payload: Any) -> None:
-        os.makedirs(self.logs_dir, exist_ok=True)
-        path = os.path.join(self.logs_dir, f"{event_type}.json")
-        data = self._read_json(path)
-        if not isinstance(data, list):
-            data = []
-        data.insert(0, payload)
-        self._write_json(path, data)
-        print(payload, flush=True)
+    def get_log_path(self, event_type: str) -> str:
+        """Return path for the ``event_type`` log file."""
+
+        return os.path.join(self.logs_dir, f"{event_type}.json")
 
     def update_paths(
         self, chat_name: str | None = None, prompt_name: str | None = None

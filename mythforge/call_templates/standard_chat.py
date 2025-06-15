@@ -12,6 +12,7 @@ from ..model import model_launch
 from .. import memory
 from ..call_core import format_for_model
 from ..memory import MEMORY_MANAGER
+from ..logger import LOGGER
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from ..call_core import CallData
@@ -113,7 +114,7 @@ def send_prompt(system_text: str, user_text: str, *, stream: bool = False):
     prep_standard_chat()
     _reset_timer()
     formatted_prompt = format_for_model(system_text, user_text)
-    MEMORY_MANAGER.log_event("model_calls", formatted_prompt)
+    LOGGER.log("model_calls", formatted_prompt)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
@@ -143,7 +144,7 @@ def chat(chat_id: str, user_text: str) -> str:
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
-    MEMORY_MANAGER.log_event("model_calls", user_text)
+    LOGGER.log("model_calls", user_text)
     _chat_process.stdin.write(user_text + "\n")
     _chat_process.stdin.flush()
     output: list[str] = []
@@ -158,7 +159,7 @@ def send_cli_command(command: str, *, stream: bool = False):
     prep_standard_chat()
     _reset_timer()
     formatted_prompt = command
-    MEMORY_MANAGER.log_event("model_calls", formatted_prompt)
+    LOGGER.log("model_calls", formatted_prompt)
     assert _chat_process is not None
     assert _chat_process.stdin is not None
     assert _chat_process.stdout is not None
@@ -213,7 +214,7 @@ def prepare(call: CallData) -> tuple[str, str]:
 
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(history)
-    MEMORY_MANAGER.log_event(
+    LOGGER.log(
         "prepared_prompts",
         {
             "call_type": call.call_type,

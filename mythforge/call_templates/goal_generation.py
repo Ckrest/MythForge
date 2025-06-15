@@ -5,6 +5,7 @@ from typing import Any, Iterable, Dict
 from ..call_core import CallData, _default_global_prompt
 from .. import memory
 from ..memory import MEMORY_MANAGER
+from ..logger import LOGGER
 
 # -----------------------------------
 # Model launch parameters / arguments ORERRIDE
@@ -37,7 +38,7 @@ def prepare(call: CallData) -> tuple[str, str]:
     """Return prompts for goal generation calls."""
     system_text = prepare_system_text(call)
     user_text = prepare_user_text(call)
-    MEMORY_MANAGER.log_event(
+    LOGGER.log(
         "prepared_prompts",
         {
             "call_type": call.call_type,

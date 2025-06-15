@@ -7,6 +7,7 @@ from typing import Any, Dict
 from ..model import _select_model_path
 from ..call_core import format_for_model, parse_response
 from ..memory import MEMORY_MANAGER
+from ..logger import LOGGER
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "background": True,
@@ -21,7 +22,7 @@ def send_prompt(system_text: str, user_text: str) -> dict[str, str]:
     from llama_cpp import Llama
 
     prompt = format_for_model(system_text, user_text)
-    MEMORY_MANAGER.log_event("model_calls", prompt)
+    LOGGER.log("model_calls", prompt)
 
     llm = Llama(
         model_path=_select_model_path(background=True),
@@ -51,7 +52,7 @@ def prepare(call: "CallData") -> tuple[str, str]:
     """Return prompts for ``call`` without modifications."""
     system_text = call.global_prompt
     user_text = call.message
-    MEMORY_MANAGER.log_event(
+    LOGGER.log(
         "prepared_prompts",
         {
             "call_type": call.call_type,

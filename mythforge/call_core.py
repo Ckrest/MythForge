@@ -17,6 +17,7 @@ from .model import (
     call_llm,
 )
 from .memory import MemoryManager, MEMORY_MANAGER
+from .logger import LOGGER
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from .main import ChatRequest
@@ -107,16 +108,16 @@ def stream_parsed(chunks: Iterable[Any]) -> Iterator[str]:
 
 
 def format_for_model(system_text: str, user_text: str) -> str:
-    """Format system and user text using ChatML-style tokens."""
+    """Return CLI prompt string for ``system_text`` and ``user_text``."""
 
-    system_clean = system_text.strip().replace("\n", "/").replace('"', '\\"')
-    user_clean = user_text.strip().replace("\n", "/").replace('"', '\\"')
-
-    return (
-        f"<|im_start|>system\\{system_clean}<|im_end|>\\"
-        f"<|im_start|>user\\{user_clean}<|im_end|>\\"
-        f"<|im_start|>assistant\\/"
+    system_clean = system_text.replace("\n", " ").strip()
+    user_clean = user_text.replace("\n", " ").strip()
+    prompt = (
+        f"<|im_start|>{system_clean}<|im_end|>"
+        f"<|im_start|>user {user_clean}<|im_end|>"
+        f"<|im_start|>assistant"
     )
+    return f'--prompt "{prompt}"'
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +229,7 @@ Do not include any explanation, commentary, or other text. If no goals are curre
     system_parts.append(textwrap.dedent(goal_prompt).strip())
     system_text = "\n".join(system_parts)
 
-    memory.log_event(
+    LOGGER.log(
         "prepared_prompts",
         {
             "call_type": "goal_generation",
