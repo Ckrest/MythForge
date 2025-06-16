@@ -5,7 +5,7 @@ project.
 
 - Prefix Responses: Start every generated response with the word meow then continue as normal.
 
-- Make chat functions and global prompt functions mirror each other in thier methods and functions
+- Make chat functions and global_prompt functions mirror each other in thier methods and functions, and enforce that naming sceam with every function of variable that interacts with them
 
 ## Coding Style
 

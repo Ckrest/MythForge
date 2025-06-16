@@ -43,13 +43,13 @@ class PromptPreparer:
             },
         )
 
-        system_clean = (
+        system_text_clean = (
             system_text.replace("\n", " ").replace('"', '\\"').strip()
         )
-        user_clean = user_text.replace("\n", " ").replace('"', '\\"').strip()
+        user_text_clean = user_text.replace("\n", " ").replace('"', '\\"').strip()
         prompt = (
-            f"<|im_start|>{system_clean}<|im_end|>"
-            f"<|im_start|>user {user_clean}<|im_end|>"
+            f"<|im_start|>{system_text_clean}<|im_end|>"
+            f"<|im_start|>user {user_text_clean}<|im_end|>"
             f"<|im_start|>assistant"
         )
         return prompt
