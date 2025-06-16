@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 
-
 def _load_json(path: str) -> list[Any] | dict[str, Any] | list:
     """Read JSON content from ``path`` returning defaults on error."""
 
@@ -67,6 +66,7 @@ class MemoryManager:
         self.logs_dir = os.path.join(self.root_dir, "server_logs")
         self.settings_path = os.path.join(self.root_dir, "model_settings.json")
 
+        self._settings_template: Dict[str, Any] = {}
         self.model_settings: Dict[str, Any] = self.load_settings()
         self.chat_name: str = ""
         self.global_prompt_name: str = ""
@@ -90,7 +90,9 @@ class MemoryManager:
     def _prompt_path(self, name: str) -> str:
         """Return filesystem path for the given prompt ``name``."""
 
-        safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
+        safe = "".join(
+            c if c.isalnum() or c in ("-", "_") else "_" for c in name
+        )
         return os.path.join(self.prompts_dir, f"{safe}.json")
 
     def _goals_path(self, chat_name: str) -> str:
@@ -126,13 +128,14 @@ class MemoryManager:
         self.update_paths(chat_name=chat_name)
         return list(self._read_json(self._chat_file(chat_name, "full.json")))
 
-    def save_history(self, chat_name: str, history: List[Dict[str, Any]]) -> None:
+    def save_history(
+        self, chat_name: str, history: List[Dict[str, Any]]
+    ) -> None:
         """Persist ``history`` for ``chat_name``."""
 
         self._ensure_chat_dir(chat_name)
         self.update_paths(chat_name=chat_name)
         self._write_json(self._chat_file(chat_name, "full.json"), history)
-
 
     def list_chats(self) -> List[str]:
         """Return a list of existing chat identifiers."""
@@ -208,12 +211,39 @@ class MemoryManager:
         """Retrieve persisted application settings."""
 
         data = self._read_json(self.settings_path)
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            self._settings_template = {}
+            return {}
+
+        self._settings_template = data
+        flattened: Dict[str, Any] = {}
+        for group in data.values():
+            if not isinstance(group, dict):
+                continue
+            for key, val in group.items():
+                if isinstance(val, dict) and "value" in val:
+                    flattened[key] = val.get("value")
+                else:
+                    flattened[key] = val
+        return flattened
 
     def save_settings(self, full_payload: Dict[str, Any]) -> None:
         """Persist ``full_payload`` and update :attr:`model_settings`."""
 
-        self._write_json(self.settings_path, full_payload)
+        if self._settings_template:
+            for group in self._settings_template.values():
+                if not isinstance(group, dict):
+                    continue
+                for key, val in group.items():
+                    if (
+                        isinstance(val, dict)
+                        and "value" in val
+                        and key in full_payload
+                    ):
+                        val["value"] = full_payload[key]
+            self._write_json(self.settings_path, self._settings_template)
+        else:
+            self._write_json(self.settings_path, full_payload)
         self.model_settings.update(full_payload)
 
     def update_settings(
@@ -318,7 +348,9 @@ class MemoryManager:
         """Write a new prompt file and mark it active."""
 
         os.makedirs(self.prompts_dir, exist_ok=True)
-        self._write_json(self._prompt_path(name), {"name": name, "content": content})
+        self._write_json(
+            self._prompt_path(name), {"name": name, "content": content}
+        )
         self.update_paths(prompt_name=name)
 
     def delete_global_prompt(self, name: str) -> None:
@@ -346,7 +378,9 @@ class MemoryManager:
                 continue
             data = self._read_json(os.path.join(self.prompts_dir, fname))
             if isinstance(data, dict) and "name" in data and "content" in data:
-                prompts.append({"name": data["name"], "content": data["content"]})
+                prompts.append(
+                    {"name": data["name"], "content": data["content"]}
+                )
         return prompts
 
     def list_prompt_names(self) -> List[str]:
@@ -374,7 +408,9 @@ def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
     """Ensure directories exist and load default prompts."""
     from . import model
 
-    manager.model_settings = manager.load_settings() or model.MODEL_SETTINGS.copy()
+    manager.model_settings = (
+        manager.load_settings() or model.MODEL_SETTINGS.copy()
+    )
     manager.goals_active = False
     manager.update_paths(chat_name="", prompt_name="")
     prompts = manager.load_global_prompts()
