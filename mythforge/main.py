@@ -471,7 +471,6 @@ def chat_message(chat_name: str, req: ChatRequest):
         global_prompt,
         memory=memory_manager,
         stream=True,
-        current_chat_name=chat_name,
         current_global_prompt=req.global_prompt_name,
     )
 
@@ -502,7 +501,6 @@ def send_chat(req: SendChatRequest):
         global_prompt,
         memory=memory_manager,
         stream=True,
-        current_chat_name=chat_name,
         current_global_prompt=global_prompt_name,
     )
 
