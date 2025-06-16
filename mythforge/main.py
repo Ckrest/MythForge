@@ -55,7 +55,6 @@ def get_memory_manager() -> MemoryManager:
 class ChatRequest(BaseModel):
     """Request model for chat-related endpoints."""
 
-    chat_name: str
     message: str
     prompt_name: str | None = None
 

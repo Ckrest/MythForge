@@ -15,7 +15,6 @@ return fetch(url, options);
     options.headers = options.headers||{'Content-Type':'application/json'};
     let payload={};
     try{ if(options.body) payload=JSON.parse(options.body); }catch{}
-    payload.chat_name = state.currentChatName;
     payload.prompt_name = state.currentPrompt;
     options.body = JSON.stringify(payload);
     return fetch(base+rel, options);
