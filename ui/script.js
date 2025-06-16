@@ -560,7 +560,7 @@ async function savePromptEdit(){
     if(!nameTrim) return alert('Name cannot be empty.');
     if(contTrim==='') return alert('Prompt content cannot be empty.');
     try{
-if(editingPromptIsNew){
+    if(editingPromptIsNew){
     const createRes = await apiFetch('/prompts/', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -569,6 +569,8 @@ if(editingPromptIsNew){
     if(!createRes.ok){ const err=await createRes.json(); return alert('Error: '+err.detail); }
     editingPromptIsNew = false;
     editingPromptName = nameTrim;
+    state.currentPrompt = nameTrim;
+    localStorage.setItem('lastPromptName', nameTrim);
 }else{
     if(nameTrim !== editingPromptName){
         const renameRes = await apiFetch(`/prompts/${encodeURIComponent(editingPromptName)}/rename`, {
@@ -579,6 +581,7 @@ if(editingPromptIsNew){
         if(!renameRes.ok){ const err=await renameRes.json(); return alert('Error: '+err.detail); }
         editingPromptName = nameTrim;
         state.currentPrompt = nameTrim;
+        localStorage.setItem('lastPromptName', nameTrim);
     }
     const updateRes = await apiFetch(`/prompts/${encodeURIComponent(nameTrim)}`, {
         method:'PUT',
