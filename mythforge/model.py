@@ -95,7 +95,6 @@ MODEL_LAUNCH_ARGS: Dict[str, object] = {
     "background": False,
     "stream": True,
     "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
-    "max_tokens": DEFAULT_MAX_TOKENS,
     **GENERATION_CONFIG,
 }
 
