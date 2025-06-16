@@ -16,22 +16,27 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "stream": True,
 }
 
-def standard_chat(call: "CallData") -> Iterator[str]:
+def standard_chat(
+    chat_name: str,
+    message: str,
+    global_prompt: str,
+    options: Dict[str, Any],
+) -> Iterator[str]:
     """Apply the standard template, invoke the model and return a reply."""
 
     LOGGER.log(
         "chat_flow",
         {
             "function": "prepare_and_chat",
-            "chat_name": call.chat_name,
-            "message": call.message,
-            "global_prompt": call.global_prompt,
-            "call_type": call.call_type,
-            "options": call.options,
+            "chat_name": chat_name,
+            "message": message,
+            "global_prompt": global_prompt,
+            "call_type": "standard_chat",
+            "options": options,
         },
     )
 
-    prepared = PromptPreparer().prepare(call.global_prompt, call.message)
-    raw = LLMInvoker().invoke(prepared, call.options)
+    prepared = PromptPreparer().prepare(global_prompt, message)
+    raw = LLMInvoker().invoke(prepared, options)
     return ResponseParser().load(raw).parse()
 

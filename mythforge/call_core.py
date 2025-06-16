@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import textwrap
-from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Iterator, List
 import json
 
@@ -16,15 +15,6 @@ from .memory import MemoryManager, MEMORY_MANAGER
 from .logger import LOGGER
 
 
-@dataclass
-class CallData:
-    """Container for information used when calling the model."""
-
-    chat_name: str
-    message: str
-    global_prompt: str = ""
-    call_type: str = "standard_chat"
-    options: Dict[str, Any] = None
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +139,11 @@ Do not include any explanation, commentary, or other text. If no goals are curre
 
 def _finalize_chat(
     reply: str,
-    call: CallData,
+    chat_name: str,
+    message: str,
+    global_prompt: str,
+    call_type: str,
+    options: Dict[str, Any] | None,
     memory: MemoryManager = MEMORY_MANAGER,
     prompt: str | None = None,
 ) -> None:
@@ -159,25 +153,29 @@ def _finalize_chat(
         "chat_flow",
         {
             "function": "_finalize_chat",
-            "chat_name": call.chat_name,
+            "chat_name": chat_name,
             "reply": reply,
             "prompt": prompt,
-            "message": call.message,
-            "global_prompt": call.global_prompt,
-            "call_type": call.call_type,
-            "options": call.options,
+            "message": message,
+            "global_prompt": global_prompt,
+            "call_type": call_type,
+            "options": options,
             "memory_root": memory.root_dir,
         },
     )
 
-    history = memory.load_history(call.chat_name)
+    history = memory.load_history(chat_name)
     history.append({"role": "assistant", "content": reply})
-    memory.save_history(call.chat_name, history)
-    _maybe_generate_goals(call.chat_name, call.global_prompt, memory)
+    memory.save_history(chat_name, history)
+    _maybe_generate_goals(chat_name, global_prompt, memory)
 
 
 def handle_chat(
-    call: CallData,
+    chat_name: str,
+    message: str,
+    global_prompt: str,
+    call_type: str = "standard_chat",
+    options: Dict[str, Any] | None = None,
     memory: MemoryManager = MEMORY_MANAGER,
     stream: bool = False,
     *,
@@ -190,11 +188,11 @@ def handle_chat(
         "chat_flow",
         {
             "function": "handle_chat",
-            "chat_name": current_chat_name or call.chat_name,
-            "message": call.message,
-            "global_prompt": call.global_prompt,
-            "call_type": call.call_type,
-            "options": call.options,
+            "chat_name": current_chat_name or chat_name,
+            "message": message,
+            "global_prompt": global_prompt,
+            "call_type": call_type,
+            "options": options,
             "stream": stream,
             "current_chat_name": current_chat_name,
             "current_prompt": current_prompt,
@@ -204,22 +202,24 @@ def handle_chat(
 
     from .call_templates import standard_chat, logic_check
 
-    call.options = call.options or {"stream": stream}
+    options = options or {"stream": stream}
 
     call_map = {
-        "logic_check": lambda c: logic_check.logic_check(
-            c.global_prompt, c.message, c.options
+        "logic_check": lambda: logic_check.logic_check(
+            global_prompt, message, options
         ),
-        "standard_chat": lambda c: standard_chat.standard_chat(c),
+        "standard_chat": lambda: standard_chat.standard_chat(
+            chat_name, message, global_prompt, options
+        ),
     }
 
-    handler = call_map.get(call.call_type, call_map["standard_chat"])
-    processed = handler(call)
+    handler = call_map.get(call_type, call_map["standard_chat"])
+    processed = handler()
 
     if stream:
 
         def _generate():
-            meta = {"prompt": current_prompt or call.global_prompt}
+            meta = {"prompt": current_prompt or global_prompt}
             yield json.dumps(meta, ensure_ascii=False) + "\n"
 
             parts: list[str] = []
@@ -230,7 +230,11 @@ def handle_chat(
             assistant_reply = "".join(parts).strip()
             _finalize_chat(
                 assistant_reply,
-                call,
+                chat_name,
+                message,
+                global_prompt,
+                call_type,
+                options,
                 memory,
                 prompt=current_prompt,
             )
@@ -240,7 +244,11 @@ def handle_chat(
     assistant_reply = "".join(list(processed)).strip()
     _finalize_chat(
         assistant_reply,
-        call,
+        chat_name,
+        message,
+        global_prompt,
+        call_type,
+        options,
         memory,
         prompt=current_prompt,
     )
