@@ -36,7 +36,7 @@ async def startup_event() -> None:
 
 
 chat_router = APIRouter()
-prompt_router = APIRouter()
+global_prompt_router = APIRouter()
 settings_router = APIRouter()
 
 
@@ -72,16 +72,16 @@ class SendChatRequest(ChatRequest):
 # --- Prompt Endpoints -----------------------------------------------------
 
 
-@prompt_router.get("/")
+@global_prompt_router.get("/")
 def list_prompts(names_only: int = 0, chat_name: str = "", global_prompt_name: str = ""):
     """Return all stored prompt entries or just their names."""
     memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
     if names_only:
-        return {"prompts": memory_manager.list_prompt_names()}
+        return {"prompts": memory_manager.list_global_prompt_names()}
     return {"prompts": memory_manager.load_global_prompts()}
 
 
-@prompt_router.get("/{name}")
+@global_prompt_router.get("/{name}")
 def get_prompt(name: str, chat_name: str = "", global_prompt_name: str = ""):
     """Fetch the full content for ``name``."""
     memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
@@ -91,7 +91,7 @@ def get_prompt(name: str, chat_name: str = "", global_prompt_name: str = ""):
     return {"name": name, "content": content}
 
 
-@prompt_router.post("/")
+@global_prompt_router.post("/")
 def create_prompt(item: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""):
     """Create a new prompt file from ``item``."""
     memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
@@ -99,7 +99,7 @@ def create_prompt(item: Dict[str, str], chat_name: str = "", global_prompt_name:
     return {"detail": "Created"}
 
 
-@prompt_router.put("/{name}")
+@global_prompt_router.put("/{name}")
 def update_prompt(
     name: str, item: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""
 ):
@@ -111,7 +111,7 @@ def update_prompt(
     return {"detail": "Updated"}
 
 
-@prompt_router.put("/{name}/rename")
+@global_prompt_router.put("/{name}/rename")
 def rename_prompt(
     name: str, data: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""
 ):
@@ -133,7 +133,7 @@ def rename_prompt(
     return {"detail": f"Renamed prompt '{name}'"}
 
 
-@prompt_router.delete("/{name}")
+@global_prompt_router.delete("/{name}")
 def remove_prompt(name: str, chat_name: str = "", global_prompt_name: str = ""):
     """Delete the prompt identified by ``name``."""
     memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
@@ -142,7 +142,7 @@ def remove_prompt(name: str, chat_name: str = "", global_prompt_name: str = ""):
     return {"detail": f"Deleted prompt '{name}'"}
 
 
-@prompt_router.post("/select")
+@global_prompt_router.post("/select")
 def select_prompt(data: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""):
     memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
     """Set ``data['name']`` as the active system prompt."""
@@ -497,7 +497,7 @@ def append_user_message(req: ChatRequest):
 # --- Static UI Mount ------------------------------------------------------
 
 app.include_router(chat_router, prefix="/chats")
-app.include_router(prompt_router, prefix="/prompts")
+app.include_router(global_prompt_router, prefix="/prompts")
 app.include_router(settings_router, prefix="/settings")
 
 app.mount("/", StaticFiles(directory="ui", html=True), name="static")

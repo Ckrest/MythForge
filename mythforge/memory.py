@@ -62,7 +62,7 @@ class MemoryManager:
             os.path.join(os.path.dirname(__file__), "..")
         )
         self.chats_dir = os.path.join(self.root_dir, "chats")
-        self.prompts_dir = os.path.join(self.root_dir, "global_prompts")
+        self.global_prompts_dir = os.path.join(self.root_dir, "global_prompts")
         self.logs_dir = os.path.join(self.root_dir, "server_logs")
         self.settings_path = os.path.join(self.root_dir, "model_settings.json")
 
@@ -87,11 +87,11 @@ class MemoryManager:
         os.makedirs(path, exist_ok=True)
         return path
 
-    def _prompt_path(self, name: str) -> str:
-        """Return filesystem path for the given prompt ``name``."""
+    def _global_prompt_path(self, name: str) -> str:
+        """Return filesystem path for the given global prompt ``name``."""
 
         safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
-        return os.path.join(self.prompts_dir, f"{safe}.json")
+        return os.path.join(self.global_prompts_dir, f"{safe}.json")
 
     def _goals_path(self, chat_name: str) -> str:
         """Path to the goals file for ``chat_name``."""
@@ -332,47 +332,47 @@ class MemoryManager:
         name = global_prompt_name or self.global_prompt_name
         if not name:
             return ""
-        path = self._prompt_path(name)
+        path = self._global_prompt_path(name)
         data = self._read_json(path)
         return str(data.get("content", "")) if isinstance(data, dict) else ""
 
     def set_global_prompt(self, name: str, content: str) -> None:
         """Write a new prompt file and mark it active."""
 
-        os.makedirs(self.prompts_dir, exist_ok=True)
-        self._write_json(self._prompt_path(name), {"name": name, "content": content})
+        os.makedirs(self.global_prompts_dir, exist_ok=True)
+        self._write_json(self._global_prompt_path(name), {"name": name, "content": content})
         self.update_paths(global_prompt_name=name)
 
     def delete_global_prompt(self, name: str) -> None:
         """Remove the prompt file identified by ``name``."""
 
-        path = self._prompt_path(name)
+        path = self._global_prompt_path(name)
         if os.path.exists(path):
             os.remove(path)
 
     def rename_global_prompt(self, old: str, new: str) -> None:
         """Rename a prompt file from ``old`` to ``new``."""
 
-        old_path = self._prompt_path(old)
-        new_path = self._prompt_path(new)
+        old_path = self._global_prompt_path(old)
+        new_path = self._global_prompt_path(new)
         if os.path.exists(old_path) and not os.path.exists(new_path):
             os.rename(old_path, new_path)
 
     def load_global_prompts(self) -> List[dict[str, str]]:
         """Return all stored global prompts."""
 
-        os.makedirs(self.prompts_dir, exist_ok=True)
+        os.makedirs(self.global_prompts_dir, exist_ok=True)
         prompts: List[dict[str, str]] = []
-        for fname in sorted(os.listdir(self.prompts_dir)):
+        for fname in sorted(os.listdir(self.global_prompts_dir)):
             if not fname.lower().endswith(".json"):
                 continue
-            data = self._read_json(os.path.join(self.prompts_dir, fname))
+            data = self._read_json(os.path.join(self.global_prompts_dir, fname))
             if isinstance(data, dict) and "name" in data and "content" in data:
                 prompts.append({"name": data["name"], "content": data["content"]})
         return prompts
 
-    def list_prompt_names(self) -> List[str]:
-        """Return only the names of available prompts."""
+    def list_global_prompt_names(self) -> List[str]:
+        """Return only the names of available global prompts."""
 
         return [p["name"] for p in self.load_global_prompts()]
 
@@ -387,9 +387,9 @@ MEMORY_MANAGER = MemoryManager()
 MEMORY = MEMORY_MANAGER
 
 
-def set_global_prompt(prompt: str) -> None:
+def set_global_prompt(global_prompt: str) -> None:
     """Convenience alias for :meth:`MemoryManager.set_global_prompt`."""
-    MEMORY_MANAGER.set_global_prompt("current_prompt", prompt)
+    MEMORY_MANAGER.set_global_prompt("current_prompt", global_prompt)
 
 
 def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
