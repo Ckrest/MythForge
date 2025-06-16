@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, Iterator
+from typing import Dict, Iterator, List
 
 from llama_cpp import Llama
 
@@ -99,7 +99,7 @@ MODEL_LAUNCH_ARGS: Dict[str, object] = {
 }
 
 
-def call_llm(prompt: str, **overrides):
+def call_llm(prompt: str | list[dict[str, str]], **overrides):
     """Route ``prompt`` through ``llama_cpp`` and return the response."""
 
     params = MODEL_LAUNCH_ARGS.copy()
@@ -114,11 +114,25 @@ def call_llm(prompt: str, **overrides):
     if stream:
 
         def _stream() -> Iterator[dict[str, str]]:
-            for chunk in llm.create_completion(prompt, stream=True, **params):
-                text = chunk["choices"][0]["text"]
-                yield {"text": text}
+            if isinstance(prompt, list):
+                for chunk in llm.create_chat_completion(messages=prompt, stream=True, **params):
+                    choice = chunk.get("choices", [{}])[0]
+                    delta = choice.get("delta", {})
+                    text = delta.get("content", "")
+                    yield {"text": text}
+            else:
+                for chunk in llm.create_completion(prompt, stream=True, **params):
+                    text = chunk["choices"][0]["text"]
+                    yield {"text": text}
 
         return _stream()
+
+    if isinstance(prompt, list):
+        result = llm.create_chat_completion(messages=prompt, stream=False, **params)
+        choice = result.get("choices", [{}])[0]
+        message = choice.get("message", {})
+        text = message.get("content", "")
+        return {"text": text}
 
     result = llm.create_completion(prompt, stream=False, **params)
     return {"text": result["choices"][0]["text"]}

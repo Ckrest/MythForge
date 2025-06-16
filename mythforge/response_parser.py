@@ -48,15 +48,33 @@ class ResponseParser:
 
             def _iter() -> Iterator[str]:
                 for chunk in self.raw:
-                    if isinstance(chunk, dict) and "text" in chunk:
-                        yield str(chunk["text"])
+                    if isinstance(chunk, dict):
+                        if "text" in chunk:
+                            yield str(chunk["text"])
+                        elif "choices" in chunk:
+                            choice = chunk.get("choices", [{}])[0]
+                            delta = choice.get("delta", {})
+                            if "content" in delta:
+                                yield str(delta["content"])
+                            else:
+                                message = choice.get("message", {})
+                                yield str(message.get("content", ""))
+                        else:
+                            yield str(chunk)
                     else:
                         yield str(chunk)
 
             return _iter()
 
-        if isinstance(self.raw, dict) and "text" in self.raw:
-            text = str(self.raw["text"])
+        if isinstance(self.raw, dict):
+            if "text" in self.raw:
+                text = str(self.raw["text"])
+            elif "choices" in self.raw:
+                choice = self.raw.get("choices", [{}])[0]
+                message = choice.get("message", {})
+                text = str(message.get("content", ""))
+            else:
+                text = str(self.raw)
         else:
             text = str(self.raw)
 
