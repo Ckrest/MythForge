@@ -14,7 +14,7 @@ from .memory import (
     MEMORY_MANAGER,
     initialize as init_memory,
 )
-from .call_core import CallData
+from .call_core import CallData, handle_chat
 from .prompt_preparer import PromptPreparer
 from .invoker import LLMInvoker
 from .logger import LOGGER
@@ -427,19 +427,40 @@ def run_cli_command(chat_name: str, req: ChatRequest):
     return StreamingResponse(_generate(), media_type="text/plain")
 
 
-@chat_router.post("/{chat_name}/assistant")
-def append_assistant_message(
-    chat_name: str,
-    data: Dict[str, str],
-    prompt_name: str = "",
-):
-    """Add an assistant response without calling the model."""
+@chat_router.post("/{chat_name}/message")
+def chat_message(chat_name: str, req: ChatRequest):
+    """Receive ``req.message`` and stream the assistant reply."""
 
-    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=req.prompt_name)
     history = memory_manager.load_history(chat_name)
-    history.append({"role": "assistant", "content": data.get("message", "")})
+    history.append({"role": "user", "content": req.message})
     memory_manager.save_history(chat_name, history)
-    return {"detail": "Message stored"}
+    call = CallData(
+        chat_name=chat_name,
+        message=req.message,
+        global_prompt=req.prompt_name or "",
+    )
+    return handle_chat(
+        call,
+        memory_manager,
+        stream=True,
+        current_chat_name=chat_name,
+        current_prompt=req.prompt_name,
+    )
+
+
+@chat_router.post("/message")
+def append_user_message(data: Dict[str, str]):
+    """Store a user message without generating a reply."""
+
+    chat_name = memory_manager.chat_name
+    if not chat_name:
+        raise HTTPException(status_code=400, detail="No active chat")
+    history = memory_manager.load_history(chat_name)
+    history.append({"role": "user", "content": data.get("message", "")})
+    memory_manager.save_history(chat_name, history)
+    return {"detail": "Message stored", "chat_name": chat_name}
+
 
 
 # --- Static UI Mount ------------------------------------------------------
