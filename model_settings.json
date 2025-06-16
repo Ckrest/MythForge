@@ -38,7 +38,7 @@
       "value": 400,
       "description": "Maximum number of tokens to generate"
     },
-    "temp": {
+    "temperature": {
       "value": 1.8,
       "description": "Sampling temperature"
     },

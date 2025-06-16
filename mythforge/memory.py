@@ -90,9 +90,7 @@ class MemoryManager:
     def _prompt_path(self, name: str) -> str:
         """Return filesystem path for the given prompt ``name``."""
 
-        safe = "".join(
-            c if c.isalnum() or c in ("-", "_") else "_" for c in name
-        )
+        safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
         return os.path.join(self.prompts_dir, f"{safe}.json")
 
     def _goals_path(self, chat_name: str) -> str:
@@ -128,9 +126,7 @@ class MemoryManager:
         self.update_paths(chat_name=chat_name)
         return list(self._read_json(self._chat_file(chat_name, "full.json")))
 
-    def save_history(
-        self, chat_name: str, history: List[Dict[str, Any]]
-    ) -> None:
+    def save_history(self, chat_name: str, history: List[Dict[str, Any]]) -> None:
         """Persist ``history`` for ``chat_name``."""
 
         self._ensure_chat_dir(chat_name)
@@ -235,11 +231,7 @@ class MemoryManager:
                 if not isinstance(group, dict):
                     continue
                 for key, val in group.items():
-                    if (
-                        isinstance(val, dict)
-                        and "value" in val
-                        and key in full_payload
-                    ):
+                    if isinstance(val, dict) and "value" in val and key in full_payload:
                         val["value"] = full_payload[key]
             self._write_json(self.settings_path, self._settings_template)
         else:
@@ -255,7 +247,7 @@ class MemoryManager:
 
         self.model_settings.update(delta)
         model.MODEL_SETTINGS.update(delta)
-        for key in ("temp", "top_k", "top_p", "min_p", "repeat_penalty"):
+        for key in ("temperature", "top_k", "top_p", "min_p", "repeat_penalty"):
             if key in delta:
                 model.GENERATION_CONFIG[key] = model.MODEL_SETTINGS[key]
         if "max_tokens" in delta:
@@ -348,9 +340,7 @@ class MemoryManager:
         """Write a new prompt file and mark it active."""
 
         os.makedirs(self.prompts_dir, exist_ok=True)
-        self._write_json(
-            self._prompt_path(name), {"name": name, "content": content}
-        )
+        self._write_json(self._prompt_path(name), {"name": name, "content": content})
         self.update_paths(prompt_name=name)
 
     def delete_global_prompt(self, name: str) -> None:
@@ -378,9 +368,7 @@ class MemoryManager:
                 continue
             data = self._read_json(os.path.join(self.prompts_dir, fname))
             if isinstance(data, dict) and "name" in data and "content" in data:
-                prompts.append(
-                    {"name": data["name"], "content": data["content"]}
-                )
+                prompts.append({"name": data["name"], "content": data["content"]})
         return prompts
 
     def list_prompt_names(self) -> List[str]:
@@ -408,9 +396,7 @@ def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
     """Ensure directories exist and load default prompts."""
     from . import model
 
-    manager.model_settings = (
-        manager.load_settings() or model.MODEL_SETTINGS.copy()
-    )
+    manager.model_settings = manager.load_settings() or model.MODEL_SETTINGS.copy()
     manager.goals_active = False
     manager.update_paths(chat_name="", prompt_name="")
     prompts = manager.load_global_prompts()

@@ -34,7 +34,7 @@ SUMMARIZE_BATCH = MODEL_SETTINGS.get("summarize_batch", 12)
 
 # Generation settings
 GENERATION_CONFIG = {
-    "temp": MODEL_SETTINGS.get("temp", 0.8),
+    "temperature": MODEL_SETTINGS.get("temperature", 0.8),
     "top_k": MODEL_SETTINGS.get("top_k", 40),
     "top_p": MODEL_SETTINGS.get("top_p", 0.95),
     "min_p": MODEL_SETTINGS.get("min_p", 0.05),
@@ -99,16 +99,11 @@ MODEL_LAUNCH_ARGS: Dict[str, object] = {
 }
 
 
-
-
 def call_llm(system_prompt: str, user_prompt: str, **overrides):
     """Route a prompt through ``llama_cpp`` and return the response."""
 
     params = MODEL_LAUNCH_ARGS.copy()
     params.update(overrides)
-
-    if "temp" in params:
-        params["temperature"] = params.pop("temp")
 
     background = params.pop("background", False)
     stream = params.pop("stream", True)
