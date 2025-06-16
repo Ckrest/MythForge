@@ -205,12 +205,16 @@ def handle_chat(
         },
     )
 
-    from .call_templates import standard_chat, logic_check
+    from .call_templates import standard_chat, logic_goblin_evaluate_goals
 
     options = options or {"stream": stream}
 
     call_map = {
-        "logic_check": lambda: logic_check.logic_check(global_prompt, message, options),
+        "logic_check": lambda: logic_goblin_evaluate_goals.logic_goblin_evaluate_goals(
+            global_prompt,
+            message,
+            options,
+        ),
         "standard_chat": lambda: standard_chat.standard_chat(
             chat_name, message, global_prompt, options
         ),
