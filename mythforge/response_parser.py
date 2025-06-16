@@ -31,8 +31,8 @@ class ResponseParser:
         self.raw = raw
         return self
 
-    def parse(self) -> Any:
-        """Extract structured data from ``self.raw``."""
+    def parse(self) -> Iterator[str]:
+        """Yield text fragments extracted from ``self.raw``."""
 
         LOGGER.log(
             "chat_flow",
@@ -54,9 +54,16 @@ class ResponseParser:
                         yield str(chunk)
 
             return _iter()
+
         if isinstance(self.raw, dict) and "text" in self.raw:
-            return str(self.raw["text"])
-        return str(self.raw)
+            text = str(self.raw["text"])
+        else:
+            text = str(self.raw)
+
+        def _single() -> Iterator[str]:
+            yield text
+
+        return _single()
 
 def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
     """Extract individual goal entries from ``text``."""

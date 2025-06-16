@@ -16,7 +16,7 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "stream": True,
 }
 
-def standard_chat(call: "CallData"):
+def standard_chat(call: "CallData") -> Iterator[str]:
     """Apply the standard template, invoke the model and return a reply."""
 
     LOGGER.log(
@@ -33,17 +33,5 @@ def standard_chat(call: "CallData"):
 
     prepared = PromptPreparer().prepare(call.global_prompt, call.message)
     raw = LLMInvoker().invoke(prepared, call.options)
-    parsed = ResponseParser().load(raw).parse()
-    if isinstance(parsed, Iterator):
-        try:
-            first = next(parsed)
-        except StopIteration as exc:  # pragma: no cover - best effort
-            return str(exc.value)
-
-        def _chain() -> Iterator[str]:
-            yield first
-            yield from parsed
-
-        return _chain()
-    return parsed
+    return ResponseParser().load(raw).parse()
 
