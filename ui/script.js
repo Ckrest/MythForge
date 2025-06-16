@@ -977,8 +977,7 @@ if(handleScroll){
 }
 state.isGenerating=false;
 updateBusyUI();
-userInput.focus();
-startPromptMonitor();
+    userInput.focus();
     }
 }
 

@@ -13,6 +13,7 @@ from .prompt_preparer import PromptPreparer
 from .response_parser import ResponseParser, _parse_goals_from_response
 from .memory import MemoryManager, MEMORY_MANAGER
 from .logger import LOGGER
+from .background import schedule_task, has_pending_tasks
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +33,7 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 
-def evaluate_goals(
+def _evaluate_goals(
     chat_name: str,
     global_prompt: str,
     memory: MemoryManager = MEMORY_MANAGER,
@@ -113,6 +114,22 @@ Do not include any explanation, commentary, or other text. If no goals are curre
     combined = state.get("goals", []) + new_goals
     state["goals"] = combined[:goal_limit]
     memory.save_goal_state(chat_name, state)
+
+
+def evaluate_goals(
+    chat_name: str,
+    global_prompt: str,
+    memory: MemoryManager = MEMORY_MANAGER,
+    *,
+    background: bool = True,
+) -> None:
+    """Schedule or run goal evaluation."""
+
+    if background:
+        schedule_task(_evaluate_goals, chat_name, global_prompt, memory)
+        return
+
+    _evaluate_goals(chat_name, global_prompt, memory)
 
 
 # ---------------------------------------------------------------------------
