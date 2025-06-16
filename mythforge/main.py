@@ -56,6 +56,7 @@ class ChatRequest(BaseModel):
     """Request model for chat-related endpoints."""
 
     message: str
+    chat_name: str | None = None
     prompt_name: str | None = None
 
 
@@ -436,6 +437,33 @@ def chat_message(chat_name: str, req: ChatRequest):
     )
 
 
+@app.post("/chat/send")
+def send_chat(req: ChatRequest):
+    """Handle a chat message using JSON body for identifiers."""
+
+    memory_manager.chat_name = req.chat_name or ""
+    memory_manager.prompt_name = req.prompt_name or ""
+    memory_manager.update_paths(
+        chat_name=memory_manager.chat_name, prompt_name=memory_manager.prompt_name
+    )
+    history = memory_manager.load_history(memory_manager.chat_name)
+    history.append({"role": "user", "content": req.message})
+    memory_manager.save_history(memory_manager.chat_name, history)
+    system_text = memory_manager.get_global_prompt(req.prompt_name or "")
+    call = CallData(
+        chat_name=memory_manager.chat_name,
+        message=req.message,
+        global_prompt=system_text,
+    )
+    return handle_chat(
+        call,
+        memory_manager,
+        stream=True,
+        current_chat_name=memory_manager.chat_name,
+        current_prompt=req.prompt_name,
+    )
+
+
 @chat_router.post("/{chat_name}/assistant")
 def append_assistant_message(
     chat_name: str,
@@ -451,14 +479,17 @@ def append_assistant_message(
 
 
 @chat_router.post("/message")
-def append_user_message(data: Dict[str, str]):
+def append_user_message(req: ChatRequest):
     """Store a user message without generating a reply."""
 
-    chat_name = memory_manager.chat_name
+    chat_name = req.chat_name or memory_manager.chat_name
     if not chat_name:
         raise HTTPException(status_code=400, detail="No active chat")
+    memory_manager.chat_name = chat_name
+    memory_manager.prompt_name = req.prompt_name or memory_manager.prompt_name
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=memory_manager.prompt_name)
     history = memory_manager.load_history(chat_name)
-    history.append({"role": "user", "content": data.get("message", "")})
+    history.append({"role": "user", "content": req.message})
     memory_manager.save_history(chat_name, history)
     return {"detail": "Message stored", "chat_name": chat_name}
 
