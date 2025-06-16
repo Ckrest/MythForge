@@ -14,6 +14,7 @@ from ..logger import LOGGER
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "n_ctx": 4096,
     "stream": True,
+    "verbose": True,
 }
 
 def standard_chat(
@@ -37,6 +38,7 @@ def standard_chat(
     )
 
     prepared = PromptPreparer().prepare(global_prompt, message)
-    raw = LLMInvoker().invoke(prepared, options)
+    opts = {**MODEL_LAUNCH_OVERRIDE, **options}
+    raw = LLMInvoker().invoke(prepared, opts)
     return ResponseParser().load(raw).parse()
 

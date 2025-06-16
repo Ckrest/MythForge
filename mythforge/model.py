@@ -76,7 +76,7 @@ def _select_model_path(background: bool = False) -> str:
 _LLAMA: Llama | None = None
 
 
-def _get_llama(background: bool = False) -> Llama:
+def _get_llama(background: bool = False, verbose: bool = False) -> Llama:
     """Instantiate and cache the Llama backend."""
 
     global _LLAMA
@@ -87,13 +87,17 @@ def _get_llama(background: bool = False) -> Llama:
             n_gpu_layers=DEFAULT_N_GPU_LAYERS,
             n_batch=DEFAULT_N_BATCH,
             n_threads=DEFAULT_N_THREADS,
+            verbose=verbose,
         )
+    elif hasattr(_LLAMA, "verbose"):
+        _LLAMA.verbose = verbose
     return _LLAMA
 
 
 MODEL_LAUNCH_ARGS: Dict[str, object] = {
     "background": False,
     "stream": True,
+    "verbose": False,
     "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
     **GENERATION_CONFIG,
 }
@@ -107,9 +111,10 @@ def call_llm(prompt: str | list[dict[str, str]], **overrides):
 
     background = params.pop("background", False)
     stream = params.pop("stream", True)
+    verbose = params.pop("verbose", False)
     params.pop("n_gpu_layers", None)
 
-    llm = _get_llama(background)
+    llm = _get_llama(background, verbose)
 
     if stream:
 

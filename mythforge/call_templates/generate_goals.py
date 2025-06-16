@@ -14,6 +14,7 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "n_gpu_layers": 0,
     "stream": False,
     "background": True,
+    "verbose": True,
 }
 
 
@@ -23,5 +24,6 @@ def generate_goals(
     """Run the goal-generation template and return parsed output."""
 
     prepared = PromptPreparer().prepare(global_prompt, message)
-    raw = LLMInvoker().invoke(prepared, options)
+    opts = {**MODEL_LAUNCH_OVERRIDE, **options}
+    raw = LLMInvoker().invoke(prepared, opts)
     return ResponseParser().load(raw).parse()
