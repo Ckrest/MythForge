@@ -6,7 +6,7 @@ import threading
 from queue import Queue, Empty
 from typing import Callable, Any, Tuple
 
-from .model import shutdown_llama
+from .model import shutdown_background_llama
 from .logger import LOGGER
 
 
@@ -26,7 +26,7 @@ def _worker() -> None:
             func(*args, **kwargs)
         finally:
             _TASK_QUEUE.task_done()
-    shutdown_llama()
+    shutdown_background_llama()
     LOGGER.log("background", {"event": "worker_exit"})
 
 
