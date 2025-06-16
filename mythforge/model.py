@@ -153,4 +153,13 @@ __all__ = [
     "GENERATION_CONFIG",
     "DEFAULT_N_GPU_LAYERS",
     "call_llm",
+    "shutdown_llama",
 ]
+
+
+def shutdown_llama() -> None:
+    """Release the cached Llama instance."""
+
+    global _LLAMA
+    _LLAMA = None
+

@@ -210,7 +210,9 @@ def response_prompt_status(chat_name: str = "", global_prompt_name: str = ""):
     memory_manager.update_paths(
         chat_name=chat_name, global_prompt_name=global_prompt_name
     )
-    return {"pending": 0}
+    from .background import has_pending_tasks
+
+    return {"pending": int(has_pending_tasks())}
 
 
 # --- Standard Chat Endpoints ---------------------------------------------
