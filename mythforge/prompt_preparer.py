@@ -11,20 +11,28 @@ class PromptPreparer:
     """Combine system and user text into a single prompt string."""
 
     def __init__(self) -> None:
-        """Load template data for prompt assembly."""
+        """No template state is stored by default."""
 
         self.template: str = ""
 
-    def load_template(self, name: str) -> str:
-        """Read the template named ``name`` from storage."""
+    def prepare(
+        self,
+        system_text: str | None = None,
+        user_text: str = "",
+        *,
+        name: str | None = None,
+    ) -> str:
+        """Return a full prompt for ``system_text`` and ``user_text``.
 
-        from .memory import MEMORY_MANAGER
+        If ``name`` is provided, ``system_text`` will be loaded from the
+        :class:`MemoryManager` using that prompt name.
+        """
 
-        self.template = MEMORY_MANAGER.get_global_prompt(name)
-        return self.template
+        if name is not None:
+            from .memory import MEMORY_MANAGER
 
-    def prepare(self, system_text: str, user_text: str) -> str:
-        """Inject texts into ``self.template`` and return the final prompt."""
+            system_text = MEMORY_MANAGER.get_global_prompt(name)
+        system_text = system_text or ""
 
         LOGGER.log(
             "chat_flow",
