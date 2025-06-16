@@ -23,7 +23,7 @@ def prepare_and_chat(call: "CallData"):
         "chat_flow",
         {
             "function": "prepare_and_chat",
-            "chat_id": call.chat_id,
+            "chat_name": call.chat_name,
             "message": call.message,
             "global_prompt": call.global_prompt,
             "call_type": call.call_type,

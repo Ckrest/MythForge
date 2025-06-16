@@ -29,7 +29,7 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 class CallData:
     """Container for information used when calling the model."""
 
-    chat_id: str
+    chat_name: str
     message: str
     global_prompt: str = ""
     call_type: str = "standard_chat"
@@ -139,7 +139,7 @@ def _dedupe_new_goals(
 
 
 def _maybe_generate_goals(
-    chat_id: str,
+    chat_name: str,
     global_prompt: str,
     memory: MemoryManager = MEMORY_MANAGER,
 ) -> None:
@@ -147,18 +147,18 @@ def _maybe_generate_goals(
         "chat_flow",
         {
             "function": "_maybe_generate_goals",
-            "chat_id": chat_id,
+            "chat_name": chat_name,
             "global_prompt": global_prompt,
             "memory_root": memory.root_dir,
         },
     )
-    goals = memory.load_goals(chat_id)
+    goals = memory.load_goals(chat_name)
     if not memory.goals_active:
         return
     character = goals.character
     setting = goals.setting
 
-    state = memory.load_goal_state(chat_id)
+    state = memory.load_goal_state(chat_name)
     state["messages_since_goal_eval"] = (
         state.get("messages_since_goal_eval", 0) + 1
     )
@@ -167,19 +167,19 @@ def _maybe_generate_goals(
     LOGGER.log(
         "goal_state_check",
         {
-            "chat_id": chat_id,
+            "chat_name": chat_name,
             "current": state["messages_since_goal_eval"],
             "refresh_rate": refresh,
             "generate": state["messages_since_goal_eval"] >= refresh,
         },
     )
     if state["messages_since_goal_eval"] < refresh:
-        memory.save_goal_state(chat_id, state)
+        memory.save_goal_state(chat_name, state)
         return
 
     goal_limit = GENERATION_CONFIG.get("goal_limit", 3)
 
-    history = memory.load_history(chat_id)
+    history = memory.load_history(chat_name)
     user_text = "\n".join(m.get("content", "") for m in history)
 
     system_parts = [p for p in (global_prompt, character, setting) if p]
@@ -227,18 +227,18 @@ Do not include any explanation, commentary, or other text. If no goals are curre
 
     goals = _parse_goals_from_response(text)
     if not goals:
-        memory.save_goal_state(chat_id, state)
+        memory.save_goal_state(chat_name, state)
         return
 
     goals = _dedupe_new_goals(goals, state.get("goals", []))
     if not goals:
-        memory.save_goal_state(chat_id, state)
+        memory.save_goal_state(chat_name, state)
         return
 
     combined = state.get("goals", []) + goals
     state["goals"] = combined[:goal_limit]
     state["messages_since_goal_eval"] = 0
-    memory.save_goal_state(chat_id, state)
+    memory.save_goal_state(chat_name, state)
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +256,7 @@ def _finalize_chat(
         "chat_flow",
         {
             "function": "_finalize_chat",
-            "chat_id": call.chat_id,
+            "chat_name": call.chat_name,
             "reply": reply,
             "prompt": prompt,
             "message": call.message,
@@ -267,13 +267,13 @@ def _finalize_chat(
         },
     )
 
-    history = memory.load_history(call.chat_id)
+    history = memory.load_history(call.chat_name)
     history.append({"role": "assistant", "content": reply})
-    memory.save_history(call.chat_id, history)
+    memory.save_history(call.chat_name, history)
     enqueue_task(
         "goal_generation",
         _maybe_generate_goals,
-        call.chat_id,
+        call.chat_name,
         call.global_prompt,
         memory,
     )
@@ -284,7 +284,7 @@ def handle_chat(
     memory: MemoryManager = MEMORY_MANAGER,
     stream: bool = False,
     *,
-    current_chat_id: str | None = None,
+    current_chat_name: str | None = None,
     current_prompt: str | None = None,
 ):
     """Process ``call`` and return a model reply."""
@@ -293,16 +293,21 @@ def handle_chat(
         "chat_flow",
         {
             "function": "handle_chat",
-            "chat_id": current_chat_id or call.chat_id,
+            "chat_name": current_chat_name or call.chat_name,
             "message": call.message,
             "global_prompt": call.global_prompt,
             "call_type": call.call_type,
             "options": call.options,
             "stream": stream,
-            "current_chat_id": current_chat_id,
+            "current_chat_name": current_chat_name,
             "current_prompt": current_prompt,
             "memory_root": memory.root_dir,
         },
+    )
+
+    memory.update_paths(
+        chat_name=current_chat_name or call.chat_name,
+        prompt_name=current_prompt or call.global_prompt,
     )
 
     from .call_templates import standard_chat, logic_check
@@ -354,5 +359,33 @@ def handle_chat(
         memory: MemoryManager = MEMORY_MANAGER,
     ) -> None:
         self.memory = memory
-        self.current_chat_id: str | None = None
+        self.current_chat_name: str | None = None
         self.current_prompt: str | None = None
+
+    def process_user_message(
+        self, chat_name: str, message: str, stream: bool = False
+    ):
+        LOGGER.log(
+            "chat_flow",
+            {
+                "function": "ChatRunner.process_user_message",
+                "chat_name": chat_name,
+                "message": message,
+                "stream": stream,
+                "current_chat_name": self.current_chat_name,
+                "current_prompt": self.current_prompt,
+            },
+        )
+        call = CallData(
+            chat_name=chat_name, message=message, options={"stream": stream}
+        )
+        result = handle_chat(
+            call,
+            self.memory,
+            stream=stream,
+            current_chat_name=self.current_chat_name,
+            current_prompt=self.current_prompt,
+        )
+        self.current_chat_name = call.chat_name
+        self.current_prompt = call.global_prompt or self.current_prompt
+        return result

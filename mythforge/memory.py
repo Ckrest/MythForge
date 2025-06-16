@@ -62,11 +62,11 @@ class MemoryManager:
     # ------------------------------------------------------------------
     # Path helpers
     # ------------------------------------------------------------------
-    def _chat_file(self, chat_id: str, filename: str) -> str:
-        return os.path.join(self.chats_dir, chat_id, filename)
+    def _chat_file(self, chat_name: str, filename: str) -> str:
+        return os.path.join(self.chats_dir, chat_name, filename)
 
-    def _ensure_chat_dir(self, chat_id: str) -> str:
-        path = os.path.join(self.chats_dir, chat_id)
+    def _ensure_chat_dir(self, chat_name: str) -> str:
+        path = os.path.join(self.chats_dir, chat_name)
         os.makedirs(path, exist_ok=True)
         return path
 
@@ -74,8 +74,14 @@ class MemoryManager:
         safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
         return os.path.join(self.prompts_dir, f"{safe}.json")
 
-    def _goals_path(self, chat_id: str) -> str:
-        return self._chat_file(chat_id, "goals.json")
+    def _goals_path(self, chat_name: str) -> str:
+        return self._chat_file(chat_name, "goals.json")
+
+    def get_chat_path(self, chat_name: str, filename: str) -> str:
+        """Return path to ``filename`` inside ``chat_name`` chat directory."""
+
+        self._ensure_chat_dir(chat_name)
+        return self._chat_file(chat_name, filename)
 
     # ------------------------------------------------------------------
     # Basic JSON file helpers
@@ -89,14 +95,14 @@ class MemoryManager:
     # ------------------------------------------------------------------
     # History helpers
     # ------------------------------------------------------------------
-    def load_history(self, chat_id: str) -> List[Dict[str, Any]]:
-        self.update_paths(chat_name=chat_id)
-        return list(self._read_json(self._chat_file(chat_id, "full.json")))
+    def load_history(self, chat_name: str) -> List[Dict[str, Any]]:
+        self.update_paths(chat_name=chat_name)
+        return list(self._read_json(self._chat_file(chat_name, "full.json")))
 
-    def save_history(self, chat_id: str, history: List[Dict[str, Any]]) -> None:
-        self._ensure_chat_dir(chat_id)
-        self.update_paths(chat_name=chat_id)
-        self._write_json(self._chat_file(chat_id, "full.json"), history)
+    def save_history(self, chat_name: str, history: List[Dict[str, Any]]) -> None:
+        self._ensure_chat_dir(chat_name)
+        self.update_paths(chat_name=chat_name)
+        self._write_json(self._chat_file(chat_name, "full.json"), history)
 
 
     def list_chats(self) -> List[str]:
@@ -107,8 +113,8 @@ class MemoryManager:
             if os.path.isdir(os.path.join(self.chats_dir, d))
         ]
 
-    def delete_chat(self, chat_id: str) -> None:
-        chat_dir = os.path.join(self.chats_dir, chat_id)
+    def delete_chat(self, chat_name: str) -> None:
+        chat_dir = os.path.join(self.chats_dir, chat_name)
         if os.path.isdir(chat_dir):
             for fname in os.listdir(chat_dir):
                 os.remove(os.path.join(chat_dir, fname))
@@ -123,8 +129,8 @@ class MemoryManager:
     # ------------------------------------------------------------------
     # Goal state helpers
     # ------------------------------------------------------------------
-    def load_goal_state(self, chat_id: str) -> Dict[str, Any]:
-        path = self._chat_file(chat_id, "goal_state.json")
+    def load_goal_state(self, chat_name: str) -> Dict[str, Any]:
+        path = self._chat_file(chat_name, "goal_state.json")
         if os.path.exists(path):
             data = self._read_json(path)
             if isinstance(data, dict):
@@ -135,22 +141,22 @@ class MemoryManager:
             "messages_since_goal_eval": 0,
         }
 
-    def save_goal_state(self, chat_id: str, state: Dict[str, Any]) -> None:
-        self._write_json(self._chat_file(chat_id, "goal_state.json"), state)
+    def save_goal_state(self, chat_name: str, state: Dict[str, Any]) -> None:
+        self._write_json(self._chat_file(chat_name, "goal_state.json"), state)
 
-    def disable_goals(self, chat_id: str) -> None:
-        path = self._goals_path(chat_id)
-        disabled = self._chat_file(chat_id, "goals_disabled.json")
+    def disable_goals(self, chat_name: str) -> None:
+        path = self._goals_path(chat_name)
+        disabled = self._chat_file(chat_name, "goals_disabled.json")
         if os.path.exists(path):
             os.rename(path, disabled)
-        self.load_goals(chat_id)
+        self.load_goals(chat_name)
 
-    def enable_goals(self, chat_id: str) -> None:
-        path = self._goals_path(chat_id)
-        disabled = self._chat_file(chat_id, "goals_disabled.json")
+    def enable_goals(self, chat_name: str) -> None:
+        path = self._goals_path(chat_name)
+        disabled = self._chat_file(chat_name, "goals_disabled.json")
         if os.path.exists(disabled):
             os.rename(disabled, path)
-        self.load_goals(chat_id)
+        self.load_goals(chat_name)
 
     # ------------------------------------------------------------------
     # Settings helpers
