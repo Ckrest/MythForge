@@ -67,9 +67,7 @@ class ChatRequest(BaseModel):
 
 
 @prompt_router.get("/")
-def list_prompts(
-    names_only: int = 0, chat_name: str = "", prompt_name: str = ""
-):
+def list_prompts(names_only: int = 0, chat_name: str = "", prompt_name: str = ""):
     """Return all stored prompt entries or just their names."""
     memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     if names_only:
@@ -88,9 +86,7 @@ def get_prompt(name: str, chat_name: str = "", prompt_name: str = ""):
 
 
 @prompt_router.post("/")
-def create_prompt(
-    item: Dict[str, str], chat_name: str = "", prompt_name: str = ""
-):
+def create_prompt(item: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
     """Create a new prompt file from ``item``."""
     memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     memory_manager.set_global_prompt(item["name"], item.get("content", ""))
@@ -125,9 +121,7 @@ def rename_prompt(
     if not memory_manager.get_global_prompt(name):
         raise HTTPException(status_code=404, detail="Prompt not found")
     if memory_manager.get_global_prompt(new_name):
-        raise HTTPException(
-            status_code=400, detail="Prompt name already exists"
-        )
+        raise HTTPException(status_code=400, detail="Prompt name already exists")
     memory_manager.rename_global_prompt(name, new_name)
     memory_manager.update_paths(prompt_name=new_name)
     return {"detail": f"Renamed prompt '{name}'"}
@@ -143,9 +137,7 @@ def remove_prompt(name: str, chat_name: str = "", prompt_name: str = ""):
 
 
 @prompt_router.post("/select")
-def select_prompt(
-    data: Dict[str, str], chat_name: str = "", prompt_name: str = ""
-):
+def select_prompt(data: Dict[str, str], chat_name: str = "", prompt_name: str = ""):
     memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
     """Set ``data['name']`` as the active system prompt."""
 
@@ -398,14 +390,11 @@ def save_context_file(
     return {"detail": "Saved"}
 
 
-
 @chat_router.post("/{chat_name}/cli")
 def run_cli_command(chat_name: str, req: ChatRequest):
     """Execute a shell command and stream its output."""
 
-    memory_manager.update_paths(
-        chat_name=chat_name, prompt_name=req.prompt_name
-    )
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=req.prompt_name)
     history = memory_manager.load_history(chat_name)
     history.append({"role": "user", "content": req.message})
     memory_manager.save_history(chat_name, history)
@@ -426,43 +415,18 @@ def run_cli_command(chat_name: str, req: ChatRequest):
 
 
 @chat_router.post("/{chat_name}/message")
-def chat_message(
-    chat_name: str,
-    data: Dict[str, str],
-    prompt_name: str = "",
-):
+def chat_message(chat_name: str, req: ChatRequest):
     """Process a user message and stream the assistant reply."""
 
-    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
-    history = memory_manager.load_history(chat_name)
-    history.append({"role": "user", "content": data.get("message", "")})
-    memory_manager.save_history(chat_name, history)
-    call = CallData(chat_name=chat_name, message=data.get("message", ""))
-    return handle_chat(
-        call,
-        memory_manager,
-        stream=True,
-        current_chat_name=chat_name,
-        current_prompt=prompt_name,
-    )
-
-
-@chat_router.post("/{chat_name}/assistant")
-def append_assistant_message(
-    chat_name: str,
-    data: Dict[str, str],
-    prompt_name: str = "",
-):
-    """Add an assistant response without calling the model."""
-
-    memory_manager.update_paths(chat_name=chat_name, prompt_name=req.prompt_name)
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=req.prompt_name or "")
     history = memory_manager.load_history(chat_name)
     history.append({"role": "user", "content": req.message})
     memory_manager.save_history(chat_name, history)
+    system_text = memory_manager.get_global_prompt(req.prompt_name or "")
     call = CallData(
         chat_name=chat_name,
         message=req.message,
-        global_prompt=req.prompt_name or "",
+        global_prompt=system_text,
     )
     return handle_chat(
         call,
@@ -471,6 +435,20 @@ def append_assistant_message(
         current_chat_name=chat_name,
         current_prompt=req.prompt_name,
     )
+
+
+@chat_router.post("/{chat_name}/assistant")
+def append_assistant_message(
+    chat_name: str,
+    req: ChatRequest,
+):
+    """Add an assistant response without calling the model."""
+
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=req.prompt_name or "")
+    history = memory_manager.load_history(chat_name)
+    history.append({"role": "assistant", "content": req.message})
+    memory_manager.save_history(chat_name, history)
+    return {"detail": "Appended"}
 
 
 @chat_router.post("/message")
@@ -484,7 +462,6 @@ def append_user_message(data: Dict[str, str]):
     history.append({"role": "user", "content": data.get("message", "")})
     memory_manager.save_history(chat_name, history)
     return {"detail": "Message stored", "chat_name": chat_name}
-
 
 
 # --- Static UI Mount ------------------------------------------------------
