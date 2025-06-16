@@ -11,18 +11,11 @@ from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING, Callable
 
 from fastapi.responses import StreamingResponse
 
-from .model import (
-    GENERATION_CONFIG,
-    DEFAULT_N_GPU_LAYERS,
-)
 from .invoker import LLMInvoker
 from .prompt_preparer import PromptPreparer
 from .response_parser import ResponseParser
 from .memory import MemoryManager, MEMORY_MANAGER
 from .logger import LOGGER
-
-if TYPE_CHECKING:  # pragma: no cover - type checking only
-    from .main import ChatRequest
 
 
 @dataclass
@@ -36,45 +29,6 @@ class CallData:
     options: Dict[str, Any] = None
 
 
-def _default_global_prompt() -> str:
-    """Return fallback system text when no global prompt is selected."""
-
-    prompts = MEMORY_MANAGER.load_global_prompts()
-    if prompts:
-        return prompts[0]["content"]
-    return ""
-
-
-# --- Background task queue -------------------------------------------------
-
-_task_queue: queue.Queue[tuple[str, Callable[..., None], tuple]] = (
-    queue.Queue()
-)
-_queued_types: set[str] = set()
-
-
-def _task_worker() -> None:
-    """Process queued background tasks serially."""
-
-    while True:
-        call_type, func, args = _task_queue.get()
-        try:
-            func(*args)
-        finally:
-            _queued_types.discard(call_type)
-            _task_queue.task_done()
-
-
-threading.Thread(target=_task_worker, daemon=True).start()
-
-
-def enqueue_task(call_type: str, func: Callable[..., None], *args) -> None:
-    """Add ``func`` to the work queue if ``call_type`` isn't queued."""
-
-    if call_type in _queued_types:
-        return
-    _queued_types.add(call_type)
-    _task_queue.put((call_type, func, args))
 
 
 # ---------------------------------------------------------------------------
@@ -92,58 +46,6 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 # ---------------------------------------------------------------------------
 # Core chat handling
 # ---------------------------------------------------------------------------
-
-
-def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
-    """Extract individual goal entries from ``text``."""
-
-    try:
-
-        # Naive direct parse first
-        parsed = json.loads(text)
-        if not isinstance(parsed, dict) or "goals" not in parsed:
-            raise ValueError("Top-level object is not a dict with 'goals'")
-        goals = parsed["goals"]
-        if not isinstance(goals, list):
-            raise ValueError("'goals' is not a list")
-    except Exception as e:
-
-        # Fallback regex to extract JSON object manually
-        try:
-            match = re.search(r"\{.*\}", text, re.DOTALL)
-            if not match:
-                raise ValueError("No JSON found in text")
-
-            parsed = json.loads(match.group())
-            goals = parsed.get("goals", [])
-        except Exception:
-            return []
-
-    filtered = []
-    for i, g in enumerate(goals):
-        desc = g.get("description", "").strip()
-        importance = g.get("importance", None)
-        if not desc or not isinstance(importance, int):
-            continue
-        filtered.append(
-            {
-                "id": str(i + 1),
-                "description": desc,
-                "importance": importance,
-                "status": "in progress",
-            }
-        )
-
-    return filtered
-
-
-def _dedupe_new_goals(
-    new: List[Dict[str, str]], existing: List[Dict[str, str]]
-) -> List[Dict[str, str]]:
-    """Remove goals from ``new`` that already appear in ``existing``."""
-
-    existing_desc = {g.get("description", "") for g in existing}
-    return [g for g in new if g.get("description", "") not in existing_desc]
 
 
 def _maybe_generate_goals(
@@ -234,15 +136,6 @@ Do not include any explanation, commentary, or other text. If no goals are curre
         {**goal_generation.MODEL_LAUNCH_OVERRIDE},
     )
 
-    goals = _parse_goals_from_response(text)
-    if not goals:
-        memory.save_goal_state(chat_name, state)
-        return
-
-    goals = _dedupe_new_goals(goals, state.get("goals", []))
-    if not goals:
-        memory.save_goal_state(chat_name, state)
-        return
 
     combined = state.get("goals", []) + goals
     state["goals"] = combined[:goal_limit]
@@ -363,42 +256,3 @@ def handle_chat(
     return {"detail": assistant_reply}
 
 
-    def __init__(
-        self,
-        memory: MemoryManager = MEMORY_MANAGER,
-    ) -> None:
-        """Initialize runner state for a chat session."""
-
-        self.memory = memory
-        self.current_chat_name: str | None = None
-        self.current_prompt: str | None = None
-
-    def process_user_message(
-        self, chat_name: str, message: str, stream: bool = False
-    ):
-        """Handle ``message`` and update tracked session info."""
-
-        LOGGER.log(
-            "chat_flow",
-            {
-                "function": "ChatRunner.process_user_message",
-                "chat_name": chat_name,
-                "message": message,
-                "stream": stream,
-                "current_chat_name": self.current_chat_name,
-                "current_prompt": self.current_prompt,
-            },
-        )
-        call = CallData(
-            chat_name=chat_name, message=message, options={"stream": stream}
-        )
-        result = handle_chat(
-            call,
-            self.memory,
-            stream=stream,
-            current_chat_name=self.current_chat_name,
-            current_prompt=self.current_prompt,
-        )
-        self.current_chat_name = call.chat_name
-        self.current_prompt = call.global_prompt or self.current_prompt
-        return result

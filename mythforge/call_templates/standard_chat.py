@@ -2,8 +2,6 @@ from __future__ import annotations
 
 """Prompt helpers for standard chat interactions."""
 
-from typing import TYPE_CHECKING
-
 from typing import Iterator
 
 from ..response_parser import ResponseParser
@@ -12,11 +10,14 @@ from ..invoker import LLMInvoker
 from ..logger import LOGGER
 from ..logger import LOGGER
 
-if TYPE_CHECKING:  # pragma: no cover - type checking only
-    from ..call_core import CallData
 
 
-def prepare_and_chat(call: "CallData"):
+MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
+    "n_ctx": 4096,
+    "stream": True,
+}
+
+def standard_chat(call: "CallData"):
     """Apply the standard template, invoke the model and return a reply."""
 
     LOGGER.log(
@@ -47,6 +48,3 @@ def prepare_and_chat(call: "CallData"):
         return _chain()
     return parsed
 
-
-# Alias used by ``main.py`` during startup.
-prep_standard_chat = prepare_and_chat

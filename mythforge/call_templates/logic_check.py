@@ -16,8 +16,6 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 }
 
 
-
-
 # CallType helpers -----------------------------------------------------------
 
 def logic_check(global_prompt: str, message: str, options: Dict[str, Any]):

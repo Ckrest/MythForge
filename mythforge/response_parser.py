@@ -6,8 +6,6 @@ from typing import Any, Iterable, Iterator
 
 from .logger import LOGGER
 
-from .logger import LOGGER
-
 
 class ResponseParser:
     """Parse text or streaming model output."""
@@ -56,3 +54,44 @@ class ResponseParser:
         if isinstance(self.raw, dict) and "text" in self.raw:
             return str(self.raw["text"])
         return str(self.raw)
+
+def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
+    """Extract individual goal entries from ``text``."""
+
+    try:
+
+        # Naive direct parse first
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict) or "goals" not in parsed:
+            raise ValueError("Top-level object is not a dict with 'goals'")
+        goals = parsed["goals"]
+        if not isinstance(goals, list):
+            raise ValueError("'goals' is not a list")
+    except Exception as e:
+
+        # Fallback regex to extract JSON object manually
+        try:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if not match:
+                raise ValueError("No JSON found in text")
+
+            parsed = json.loads(match.group())
+            goals = parsed.get("goals", [])
+        except Exception:
+            return []
+
+    filtered = []
+    for i, g in enumerate(goals):
+        desc = g.get("description", "").strip()
+        importance = g.get("importance", None)
+        if not desc or not isinstance(importance, int):
+            continue
+        filtered.append(
+            {
+                "id": str(i + 1),
+                "description": desc,
+                "importance": importance,
+                "status": "in progress",
+            }
+        )
+    return filtered

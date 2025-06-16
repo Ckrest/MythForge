@@ -23,7 +23,6 @@ from .logger import LOGGER
 app = FastAPI(title="MythForgeUI", debug=False)
 
 memory_manager: MemoryManager = MEMORY_MANAGER
-chat_runner = ChatRunner(memory_manager)
 
 init_memory(memory_manager)
 
@@ -35,7 +34,6 @@ async def startup_event() -> None:
         call = CallData(
             chat_name="startup", message="", options={"stream": False}
         )
-        standard_chat.prep_standard_chat(call)
     except Exception as exc:  # pragma: no cover - best effort
         LOGGER.log_error(exc)
 
@@ -404,33 +402,6 @@ def save_context_file(
     return {"detail": "Saved"}
 
 
-@chat_router.post("/{chat_name}/message")
-def send_chat_message(
-    chat_name: str,
-    req: ChatRequest,
-    runner: ChatRunner = Depends(lambda: chat_runner),
-):
-    """Proxy the message to :func:`handle_chat` and stream the reply."""
-
-    LOGGER.log(
-        "chat_flow",
-        {
-            "function": "send_chat_message",
-            "chat_name": chat_name,
-            "message": req.message,
-            "runner_chat_name": runner.current_chat_name,
-            "runner_prompt": runner.current_prompt,
-        },
-    )
-
-    memory_manager.update_paths(
-        chat_name=chat_name, prompt_name=req.prompt_name
-    )
-    history = memory_manager.load_history(chat_name)
-    history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(chat_name, history)
-    return runner.process_user_message(chat_name, req.message, stream=True)
-
 
 @chat_router.post("/{chat_name}/cli")
 def run_cli_command(chat_name: str, req: ChatRequest):
@@ -471,22 +442,6 @@ def append_assistant_message(
     history.append({"role": "assistant", "content": data.get("message", "")})
     memory_manager.save_history(chat_name, history)
     return {"detail": "Message stored"}
-
-
-@chat_router.post("/")
-def chat(
-    req: ChatRequest,
-    runner: ChatRunner = Depends(lambda: chat_runner),
-):
-    """Maintain a live chat channel over WebSocket."""
-
-    memory_manager.update_paths(
-        chat_name=req.chat_name, prompt_name=req.prompt_name
-    )
-    history = memory_manager.load_history(req.chat_name)
-    history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(req.chat_name, history)
-    return runner.process_user_message(req.chat_name, req.message)
 
 
 # --- Static UI Mount ------------------------------------------------------

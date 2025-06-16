@@ -6,8 +6,6 @@ from typing import Any
 
 from .logger import LOGGER
 
-from .logger import LOGGER
-
 
 class PromptPreparer:
     """Combine system and user text into a single prompt string."""
