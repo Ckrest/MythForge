@@ -300,12 +300,16 @@ class MemoryManager:
         except Exception:
             self.toggle_goals(False)
             return GoalsData()
+
         self.toggle_goals(True)
+
+        state = self.load_goal_state(name)
+
         return GoalsData(
             character=str(data.get("character", "")),
             setting=str(data.get("setting", "")),
-            active_goals=list(data.get("in_progress", [])),
-            deactive_goals=list(data.get("completed", [])),
+            active_goals=list(state.get("goals", [])),
+            deactive_goals=list(state.get("completed_goals", [])),
         )
 
     def save_goals(self, chat_name: str, data: Dict[str, Any]) -> None:
@@ -316,8 +320,6 @@ class MemoryManager:
         obj = {
             "character": data.get("character", ""),
             "setting": data.get("setting", ""),
-            "in_progress": data.get("in_progress", []),
-            "completed": data.get("completed", []),
         }
         self._write_json(self._goals_path(chat_name), obj)
         self.toggle_goals(True)

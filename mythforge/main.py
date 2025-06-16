@@ -334,12 +334,13 @@ def get_goals(
     """Load current goals associated with ``chat_name``."""
     memory.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
     goals = memory.load_goals(chat_name)
+    state = memory.load_goal_state(chat_name)
     return {
         "exists": memory.goals_active,
         "character": goals.character,
         "setting": goals.setting,
-        "in_progress": goals.active_goals,
-        "completed": goals.deactive_goals,
+        "in_progress": state.get("goals", []),
+        "completed": state.get("completed_goals", []),
     }
 
 
@@ -354,6 +355,12 @@ def save_goals(
 
     memory.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
     memory.save_goals(chat_name, data)
+    state = memory.load_goal_state(chat_name)
+    if "in_progress" in data:
+        state["goals"] = data.get("in_progress", [])
+    if "completed" in data:
+        state["completed_goals"] = data.get("completed", [])
+    memory.save_goal_state(chat_name, state)
     return {"detail": "Saved"}
 
 
@@ -422,10 +429,6 @@ def save_context_file(
         "setting": data.get("setting", ""),
     }
     memory.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
-    existing = memory.load_goals(chat_name)
-    if existing.active_goals or existing.deactive_goals:
-        obj["in_progress"] = existing.active_goals
-        obj["completed"] = existing.deactive_goals
     memory.save_goals(chat_name, obj)
     return {"detail": "Saved"}
 
