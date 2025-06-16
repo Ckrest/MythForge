@@ -26,6 +26,13 @@ class LoggerManager:
         data = _load_json(path)
         if not isinstance(data, list):
             data = []
+        if event_type == "prepared_prompts" and isinstance(payload, dict):
+            text = payload.get("prompt")
+            if isinstance(text, str):
+                payload = {
+                    **payload,
+                    "prompt": text.splitlines(),
+                }
         data.insert(0, payload)
         _save_json(path, data)
 
