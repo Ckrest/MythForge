@@ -49,6 +49,16 @@ def standard_chat_prepared_system_text(
     return "\n".join(p for p in parts if p)
 
 
+def standered_chat_prepared_system_text(
+    chat_name: str,
+    global_prompt: str,
+    memory: MemoryManager = MEMORY_MANAGER,
+) -> str:
+    """Alias for :func:`standard_chat_prepared_system_text`."""
+
+    return standard_chat_prepared_system_text(chat_name, global_prompt, memory)
+
+
 def standard_chat_prepared_user_text(
     chat_name: str,
     message: str,
@@ -61,6 +71,16 @@ def standard_chat_prepared_user_text(
     if history_text:
         return f"{history_text}\n{message}"
     return message
+
+
+def standered_chat_prepared_user_text(
+    chat_name: str,
+    message: str,
+    memory: MemoryManager = MEMORY_MANAGER,
+) -> str:
+    """Alias for :func:`standard_chat_prepared_user_text`."""
+
+    return standard_chat_prepared_user_text(chat_name, message, memory)
 
 def standard_chat(
     chat_name: str,

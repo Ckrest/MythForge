@@ -93,10 +93,10 @@ class MemoryManager:
         safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
         return os.path.join(self.global_prompts_dir, f"{safe}.json")
 
-    def _goals_path(self, chat_name: str) -> str:
-        """Path to the goals file for ``chat_name``."""
+    def _context_path(self, chat_name: str) -> str:
+        """Path to the context file for ``chat_name``."""
 
-        return self._chat_file(chat_name, "goals.json")
+        return self._chat_file(chat_name, "context.json")
 
     def get_chat_path(self, chat_name: str, filename: str) -> str:
         """Return path to ``filename`` inside ``chat_name`` chat directory."""
@@ -187,19 +187,31 @@ class MemoryManager:
     def disable_goals(self, chat_name: str) -> None:
         """Disable goal tracking for ``chat_name``."""
 
-        path = self._goals_path(chat_name)
-        disabled = self._chat_file(chat_name, "goals_disabled.json")
+        path = self._context_path(chat_name)
+        disabled = self._chat_file(chat_name, "context_disabled.json")
         if os.path.exists(path):
-            os.rename(path, disabled)
+            data = self._read_json(path)
+            obj = {
+                "character": str(data.get("character", "")),
+                "setting": str(data.get("setting", "")),
+            }
+            self._write_json(disabled, obj)
+            os.remove(path)
         self.load_goals(chat_name)
 
     def enable_goals(self, chat_name: str) -> None:
         """Re-enable goal tracking for ``chat_name``."""
 
-        path = self._goals_path(chat_name)
-        disabled = self._chat_file(chat_name, "goals_disabled.json")
+        path = self._context_path(chat_name)
+        disabled = self._chat_file(chat_name, "context_disabled.json")
         if os.path.exists(disabled):
-            os.rename(disabled, path)
+            data = self._read_json(disabled)
+            obj = {
+                "character": str(data.get("character", "")),
+                "setting": str(data.get("setting", "")),
+            }
+            self._write_json(path, obj)
+            os.remove(disabled)
         self.load_goals(chat_name)
 
     # ------------------------------------------------------------------
@@ -291,7 +303,7 @@ class MemoryManager:
 
         name = chat_name or self.chat_name
         self.update_paths(chat_name=name)
-        path = self._goals_path(name)
+        path = self._context_path(name)
         if not os.path.exists(path):
             self.toggle_goals(False)
             return GoalsData()
@@ -321,7 +333,7 @@ class MemoryManager:
             "character": data.get("character", ""),
             "setting": data.get("setting", ""),
         }
-        self._write_json(self._goals_path(chat_name), obj)
+        self._write_json(self._context_path(chat_name), obj)
         self.toggle_goals(True)
 
     @property
