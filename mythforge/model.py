@@ -113,6 +113,9 @@ def call_llm(prompt: str | list[dict[str, str]], **overrides):
     stream = params.pop("stream", True)
     verbose = params.pop("verbose", False)
     params.pop("n_gpu_layers", None)
+    params.pop("n_ctx", None)
+    params.pop("n_batch", None)
+    params.pop("n_threads", None)
 
     llm = _get_llama(background, verbose)
 
