@@ -14,7 +14,7 @@ from .memory import (
     MEMORY_MANAGER,
     initialize as init_memory,
 )
-from .call_core import CallData, handle_chat
+from .call_core import handle_chat
 from .prompt_preparer import PromptPreparer
 from .invoker import LLMInvoker
 from .logger import LOGGER
@@ -58,6 +58,12 @@ class ChatRequest(BaseModel):
     message: str
     chat_name: str | None = None
     prompt_name: str | None = None
+
+
+class SendChatRequest(ChatRequest):
+    """Extended request model for ``/chat/send``."""
+
+    global_prompt: str | None = None
 
 
 # --- Load/Save operations --------------------------------------------------
@@ -422,15 +428,12 @@ def chat_message(chat_name: str, req: ChatRequest):
     history = memory_manager.load_history(chat_name)
     history.append({"role": "user", "content": req.message})
     memory_manager.save_history(chat_name, history)
-    system_text = memory_manager.get_global_prompt(req.prompt_name or "")
-    call = CallData(
-        chat_name=chat_name,
-        message=req.message,
-        global_prompt=system_text,
-    )
+    global_prompt = memory_manager.get_global_prompt(req.prompt_name or "")
     return handle_chat(
-        call,
-        memory_manager,
+        chat_name,
+        req.message,
+        global_prompt,
+        memory=memory_manager,
         stream=True,
         current_chat_name=chat_name,
         current_prompt=req.prompt_name,
@@ -438,7 +441,7 @@ def chat_message(chat_name: str, req: ChatRequest):
 
 
 @app.post("/chat/send")
-def send_chat(req: ChatRequest):
+def send_chat(req: SendChatRequest):
     """Handle a chat message using JSON body for identifiers."""
 
     memory_manager.chat_name = req.chat_name or ""
@@ -449,15 +452,12 @@ def send_chat(req: ChatRequest):
     history = memory_manager.load_history(memory_manager.chat_name)
     history.append({"role": "user", "content": req.message})
     memory_manager.save_history(memory_manager.chat_name, history)
-    system_text = memory_manager.get_global_prompt(req.prompt_name or "")
-    call = CallData(
-        chat_name=memory_manager.chat_name,
-        message=req.message,
-        global_prompt=system_text,
-    )
+    global_prompt = req.global_prompt or ""
     return handle_chat(
-        call,
-        memory_manager,
+        memory_manager.chat_name,
+        req.message,
+        global_prompt,
+        memory=memory_manager,
         stream=True,
         current_chat_name=memory_manager.chat_name,
         current_prompt=req.prompt_name,

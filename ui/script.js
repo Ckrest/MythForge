@@ -17,6 +17,7 @@ return fetch(url, options);
     try{ if(options.body) payload=JSON.parse(options.body); }catch{}
     payload.chat_name = state.currentChatName;
     payload.prompt_name = state.currentPrompt;
+    payload.global_prompt = state.currentPromptText || '';
     options.body = JSON.stringify(payload);
     return fetch(base+rel, options);
 }
@@ -25,6 +26,7 @@ const state = {
     currentChatName: '',
     prompts: [],
     currentPrompt: '',
+    currentPromptText: '',
     settings: {
 userName: 'You',
 botName: 'Bot',
@@ -439,6 +441,7 @@ async function loadChat(id){
     updateActiveChat();
     chatContainer.innerHTML='';
     systemPrompt.textContent='';
+    state.currentPromptText='';
     systemToggle.style.display='none';
     try{
 const res = await apiFetch(`/chats/${encodeURIComponent(id)}/history`);
@@ -619,6 +622,7 @@ name = data.chat_name || name;
     renderHistory();
     chatContainer.innerHTML = '';
     systemPrompt.textContent = '';
+    state.currentPromptText = '';
     systemToggle.style.display = 'none';
 }
 
@@ -633,8 +637,9 @@ state.currentChatName = state.chats.length ? state.chats[0] : '';
 localStorage.setItem('lastChatName', state.currentChatName);
 renderHistory();
 chatContainer.innerHTML = '';
-systemPrompt.textContent = '';
-systemToggle.style.display = 'none';
+    systemPrompt.textContent = '';
+    state.currentPromptText = '';
+    systemToggle.style.display = 'none';
 showChatTab();
 }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
     });
@@ -932,6 +937,7 @@ while(true){
             try{
                 const meta = JSON.parse(metaStr);
                 systemPrompt.textContent = meta.prompt || '';
+                state.currentPromptText = meta.prompt || '';
                 systemToggle.style.display = meta.prompt ? 'block' : 'none';
             }catch{}
             gotMeta = true;
