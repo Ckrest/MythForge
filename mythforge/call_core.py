@@ -203,11 +203,6 @@ def handle_chat(
         },
     )
 
-    memory.update_paths(
-        chat_name=current_chat_name or call.chat_name,
-        prompt_name=current_prompt or memory.global_prompt_name,
-    )
-
     from .call_templates import standard_chat, logic_check
 
     call.options = call.options or {"stream": stream}
