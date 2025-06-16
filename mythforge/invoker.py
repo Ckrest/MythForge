@@ -13,15 +13,17 @@ class LLMInvoker:
     """Simple wrapper around :func:`call_llm`."""
 
     def __init__(self) -> None:
+        """Store model configuration for later use."""
+
         self.config: Dict[str, Any] = {}
 
     def load_model(self, config: Dict[str, Any]) -> None:
-        """Store ``config`` for later invocations."""
+        """Persist ``config`` to be used when invoking the model."""
 
         self.config = config
 
     def invoke(self, prompt: str, options: Dict[str, Any] | None = None):
-        """Invoke the language model with ``prompt`` and ``options``."""
+        """Send ``prompt`` to the model and return its output."""
 
         LOGGER.log(
             "chat_flow",

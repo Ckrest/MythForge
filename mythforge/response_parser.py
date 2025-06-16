@@ -13,10 +13,12 @@ class ResponseParser:
     """Parse text or streaming model output."""
 
     def __init__(self) -> None:
+        """Initialize empty parser state."""
+
         self.raw: Any = None
 
     def load(self, raw: Any) -> "ResponseParser":
-        """Store ``raw`` output to be parsed."""
+        """Load ``raw`` model output for later parsing."""
 
         LOGGER.log(
             "chat_flow",
@@ -29,7 +31,7 @@ class ResponseParser:
         return self
 
     def parse(self) -> Any:
-        """Return parsed output from :meth:`load`."""
+        """Extract structured data from ``self.raw``."""
 
         LOGGER.log(
             "chat_flow",

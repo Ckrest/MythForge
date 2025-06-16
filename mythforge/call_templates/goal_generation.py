@@ -18,7 +18,7 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 
 
 def generate_goals(global_prompt: str, message: str, options: Dict[str, Any]):
-    """Return parsed goal generation result."""
+    """Run the goal-generation template and return parsed output."""
 
     prepared = PromptPreparer().prepare(global_prompt, message)
     raw = LLMInvoker().invoke(prepared, options)

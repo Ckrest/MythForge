@@ -48,7 +48,7 @@ GENERATION_CONFIG = {
 
 
 def discover_model_path() -> str:
-    """Return path to the first ``.gguf`` model under ``MODELS_DIR``."""
+    """Search ``MODELS_DIR`` for a supported model file."""
 
     if not os.path.isdir(MODELS_DIR):
         raise FileNotFoundError(f"Models directory '{MODELS_DIR}' not found")
@@ -62,7 +62,7 @@ def discover_model_path() -> str:
 
 
 def _select_model_path(background: bool = False) -> str:
-    """Return configured model path or fallback to discovery."""
+    """Choose an explicit or discovered model path."""
 
     key = "background_model" if background else "primary_model"
     name = MODEL_SETTINGS.get(key, "")
@@ -77,7 +77,7 @@ _LLAMA: Llama | None = None
 
 
 def _get_llama(background: bool = False) -> Llama:
-    """Return a cached :class:`Llama` instance."""
+    """Instantiate and cache the Llama backend."""
 
     global _LLAMA
     if _LLAMA is None:
@@ -102,7 +102,7 @@ MODEL_LAUNCH_ARGS: Dict[str, object] = {
 
 
 def call_llm(system_prompt: str, user_prompt: str, **overrides):
-    """Return output from a :class:`llama_cpp.Llama` instance."""
+    """Route a prompt through ``llama_cpp`` and return the response."""
 
     params = MODEL_LAUNCH_ARGS.copy()
     params.update(overrides)
