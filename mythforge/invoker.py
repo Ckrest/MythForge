@@ -22,7 +22,9 @@ class LLMInvoker:
 
         self.config = config
 
-    def invoke(self, prompt: str, options: Dict[str, Any] | None = None):
+    def invoke(
+        self, prompt: str | list[dict[str, str]], options: Dict[str, Any] | None = None
+    ):
         """Send ``prompt`` to the model and return its output."""
 
         LOGGER.log(

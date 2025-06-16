@@ -21,7 +21,7 @@ class PromptPreparer:
         user_text: str = "",
         *,
         name: str | None = None,
-    ) -> str:
+    ) -> list[dict[str, str]]:
         """Return a full prompt for ``system_text`` and ``user_text``.
 
         If ``name`` is provided, ``system_text`` will be loaded from the
@@ -51,20 +51,13 @@ class PromptPreparer:
             user_text.replace("\n", " ").replace('"', '\\"').strip()
         )
 
-        # Construct the prompt according to Llama 3 chat format
-        prompt_full = [f"<|begin_of_text|>"]
+        prompt_full: list[dict[str, str]] = []
 
         if system_text_clean:
-            prompt_full.append(
-                f"<|start_header_id|>system<|end_header_id|>\n"
-                f"{system_text_clean}<|eot_id|>"
-            )
+            prompt_full.append({"role": "system", "content": system_text_clean})
 
-        prompt_full.append(
-            f"<|start_header_id|>user<|end_header_id|>\n"
-            f"{user_text_clean}<|eot_id|>"
-        )
+        prompt_full.append({"role": "user", "content": user_text_clean})
 
-        prompt_full.append(f"<|start_header_id|>assistant<|end_header_id|>\n")
+        prompt_full.append({"role": "assistant", "content": ""})
 
-        return "".join(prompt_full)
+        return prompt_full
