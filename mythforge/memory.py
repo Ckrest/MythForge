@@ -47,8 +47,6 @@ class GoalsData:
 
     character: str = ""
     setting: str = ""
-    active_goals: List[Any] = field(default_factory=list)
-    deactive_goals: List[Any] = field(default_factory=list)
     enabled: bool = False
 
 
@@ -304,8 +302,6 @@ class MemoryManager:
         return GoalsData(
             character=str(data.get("character", "")),
             setting=str(data.get("setting", "")),
-            active_goals=list(data.get("in_progress", [])),
-            deactive_goals=list(data.get("completed", [])),
         )
 
     def save_goals(self, chat_name: str, data: Dict[str, Any]) -> None:
@@ -316,8 +312,6 @@ class MemoryManager:
         obj = {
             "character": data.get("character", ""),
             "setting": data.get("setting", ""),
-            "in_progress": data.get("in_progress", []),
-            "completed": data.get("completed", []),
         }
         self._write_json(self._goals_path(chat_name), obj)
         self.toggle_goals(True)
