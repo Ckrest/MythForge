@@ -436,7 +436,7 @@ def chat_message(chat_name: str, req: ChatRequest):
         memory=memory_manager,
         stream=True,
         current_chat_name=chat_name,
-        current_prompt=req.global_prompt_name,
+        current_global_prompt=req.global_prompt_name,
     )
 
 
@@ -460,7 +460,7 @@ def send_chat(req: SendChatRequest):
         memory=memory_manager,
         stream=True,
         current_chat_name=memory_manager.chat_name,
-        current_prompt=req.global_prompt_name,
+        current_global_prompt=req.global_prompt_name,
     )
 
 

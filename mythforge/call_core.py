@@ -180,7 +180,7 @@ def handle_chat(
     stream: bool = False,
     *,
     current_chat_name: str | None = None,
-    current_prompt: str | None = None,
+    current_global_prompt: str | None = None,
 ):
     """Orchestrate a full chat cycle and persist the result."""
 
@@ -195,7 +195,7 @@ def handle_chat(
             "options": options,
             "stream": stream,
             "current_chat_name": current_chat_name,
-            "current_prompt": current_prompt,
+            "current_global_prompt": current_global_prompt,
             "memory_root": memory.root_dir,
         },
     )
@@ -219,7 +219,7 @@ def handle_chat(
     if stream:
 
         def _generate():
-            meta = {"prompt": current_prompt or global_prompt}
+            meta = {"prompt": current_global_prompt or global_prompt}
             yield json.dumps(meta, ensure_ascii=False) + "\n"
 
             parts: list[str] = []
@@ -236,7 +236,7 @@ def handle_chat(
                 call_type,
                 options,
                 memory,
-                prompt=current_prompt,
+                prompt=current_global_prompt,
             )
 
         return StreamingResponse(_generate(), media_type="text/plain")
@@ -250,7 +250,7 @@ def handle_chat(
         call_type,
         options,
         memory,
-        prompt=current_prompt,
+        prompt=current_global_prompt,
     )
 
     return {"detail": assistant_reply}

@@ -389,7 +389,7 @@ MEMORY = MEMORY_MANAGER
 
 def set_global_prompt(global_prompt: str) -> None:
     """Convenience alias for :meth:`MemoryManager.set_global_prompt`."""
-    MEMORY_MANAGER.set_global_prompt("current_prompt", global_prompt)
+    MEMORY_MANAGER.set_global_prompt("current_global_prompt", global_prompt)
 
 
 def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
