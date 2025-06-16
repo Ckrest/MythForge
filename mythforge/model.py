@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-import platform
-import subprocess
 from typing import Dict, Iterator
+
+from llama_cpp import Llama
 
 from .memory import MEMORY_MANAGER
 
@@ -73,86 +73,36 @@ def _select_model_path(background: bool = False) -> str:
     return discover_model_path()
 
 
-def _default_cli() -> str:
-    name = "llama-cli.exe" if platform.system() == "Windows" else "llama-cli"
-    return os.path.join(ROOT_DIR, "dependencies", name)
+_LLAMA: Llama | None = None
 
 
-LLAMA_CLI = os.path.abspath(MODEL_SETTINGS.get("llama_cli", _default_cli()))
+def _get_llama(background: bool = False) -> Llama:
+    """Return a cached :class:`Llama` instance."""
+
+    global _LLAMA
+    if _LLAMA is None:
+        _LLAMA = Llama(
+            model_path=_select_model_path(background),
+            n_ctx=DEFAULT_CTX_SIZE,
+            n_gpu_layers=DEFAULT_N_GPU_LAYERS,
+            n_batch=DEFAULT_N_BATCH,
+            n_threads=DEFAULT_N_THREADS,
+        )
+    return _LLAMA
 
 
-def _cli_args(**kwargs) -> list[str]:
-    """Return CLI arguments mapping Python names to binary flags."""
-
-    option_map = {}
-    args = []
-    for key, value in kwargs.items():
-        if key == "stream":
-            continue
-        opt_key = option_map.get(key, key)
-        option = f"--{opt_key.replace('_', '-')}"
-        if isinstance(value, bool):
-            if value:
-                args.append(option)
-        elif isinstance(value, (list, tuple)):
-            for item in value:
-                args.extend([option, str(item)])
-        else:
-            args.extend([option, str(value)])
-    return args
-
-
-# -----------------------------------
-# Model launch parameters / arguments
-# -----------------------------------
-
-MODEL_LAUNCH_ARGS: dict[str, object] = {
-    # "chat_template": "",
-    "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
+MODEL_LAUNCH_ARGS: Dict[str, object] = {
     "background": False,
     "stream": True,
+    "n_gpu_layers": DEFAULT_N_GPU_LAYERS,
     **GENERATION_CONFIG,
-    # testing currently
-    # "interactive_first": True,
-    "no_warmup": True,
-    "conversation": True,
-    # "conversation": True,
-    # "no_conversation": True,
-    # "single_turn": True,
-    # "interactive": False,
-    # "verbose": True,
-    # "reverse-prompt": "eval",
-}
-
-# ``subprocess.Popen`` parameters for launching the model process
-MODEL_LAUNCH_PARAMS: dict[str, object] = {
-    "stdout": subprocess.PIPE,
-    "stdin": subprocess.PIPE,
-    "stderr": subprocess.STDOUT,
-    "text": True,
-    "encoding": "utf-8",
-    "errors": "replace",
 }
 
 
-def model_launch(prompt: str = "", background: bool = False, **overrides) -> list[str]:
-    """Return a command list for launching the model."""
-
-    params = MODEL_LAUNCH_ARGS.copy()
-    params.update(overrides)
-    background = params.pop("background", background)
-    cmd = [LLAMA_CLI]
-    if prompt:
-        cmd.extend(["--prompt", prompt])
-    cmd.extend(_cli_args(**params))
-    if "model" not in params:
-        cmd.extend(["--model", _select_model_path(background)])
-    return cmd
 
 
 def call_llm(system_prompt: str, user_prompt: str, **overrides):
-    """Return output from :data:`LLAMA_CLI` for the given prompts."""
-
+    """Return output from a :class:`llama_cpp.Llama` instance."""
 
     params = MODEL_LAUNCH_ARGS.copy()
     params.update(overrides)
@@ -160,27 +110,20 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
     background = params.pop("background", False)
     stream = params.pop("stream", True)
 
-    cmd = model_launch(user_prompt, background=background, **params)
-
-    try:
-        process = subprocess.Popen(cmd, **MODEL_LAUNCH_PARAMS)
-    except Exception as exc:  # pragma: no cover - best effort
-        raise RuntimeError(f"Failed to start process: {exc}") from exc
+    llm = _get_llama(background)
+    prompt = f"{system_prompt}\n{user_prompt}".strip()
 
     if stream:
 
         def _stream() -> Iterator[dict[str, str]]:
-            assert process.stdout is not None
-            for line in process.stdout:
-                yield {"text": line.rstrip()}
-            process.wait()
+            for chunk in llm.create_completion(prompt, stream=True, **params):
+                text = chunk["choices"][0]["text"]
+                yield {"text": text}
 
         return _stream()
 
-    output, _ = process.communicate()
-    if process.returncode != 0:
-        raise RuntimeError(f"Subprocess exited with code {process.returncode}")
-    return {"text": output.rstrip()}
+    result = llm.create_completion(prompt, stream=False, **params)
+    return {"text": result["choices"][0]["text"]}
 
 
 call_llm._patched = True
@@ -189,6 +132,5 @@ call_llm._patched = True
 __all__ = [
     "GENERATION_CONFIG",
     "DEFAULT_N_GPU_LAYERS",
-    "model_launch",
     "call_llm",
 ]
