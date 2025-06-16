@@ -14,7 +14,7 @@ from .memory import (
     MEMORY_MANAGER,
     initialize as init_memory,
 )
-from .call_core import CallData
+from .call_core import CallData, handle_chat
 from .prompt_preparer import PromptPreparer
 from .invoker import LLMInvoker
 from .logger import LOGGER
@@ -425,6 +425,28 @@ def run_cli_command(chat_name: str, req: ChatRequest):
         memory_manager.save_history(chat_name, history)
 
     return StreamingResponse(_generate(), media_type="text/plain")
+
+
+@chat_router.post("/{chat_name}/message")
+def chat_message(
+    chat_name: str,
+    data: Dict[str, str],
+    prompt_name: str = "",
+):
+    """Process a user message and stream the assistant reply."""
+
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    history = memory_manager.load_history(chat_name)
+    history.append({"role": "user", "content": data.get("message", "")})
+    memory_manager.save_history(chat_name, history)
+    call = CallData(chat_name=chat_name, message=data.get("message", ""))
+    return handle_chat(
+        call,
+        memory_manager,
+        stream=True,
+        current_chat_name=chat_name,
+        current_prompt=prompt_name,
+    )
 
 
 @chat_router.post("/{chat_name}/assistant")
