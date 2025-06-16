@@ -9,15 +9,15 @@ function apiFetch(path, options={}){
     if(method==='GET'){
 const url = new URL(base+rel);
 url.searchParams.set('chat_name', state.currentChatName);
-url.searchParams.set('prompt_name', state.currentPrompt);
+url.searchParams.set('global_prompt_name', state.globalPromptName);
 return fetch(url, options);
     }
     options.headers = options.headers||{'Content-Type':'application/json'};
     let payload={};
     try{ if(options.body) payload=JSON.parse(options.body); }catch{}
     payload.chat_name = state.currentChatName;
-    payload.prompt_name = state.currentPrompt;
-    payload.global_prompt = state.currentPromptText || '';
+    payload.global_prompt_name = state.globalPromptName;
+    payload.global_prompt = state.globalPrompt || '';
     options.body = JSON.stringify(payload);
     return fetch(base+rel, options);
 }
@@ -25,8 +25,8 @@ const state = {
     chats: [],
     currentChatName: '',
     prompts: [],
-    currentPrompt: '',
-    currentPromptText: '',
+    globalPromptName: '',
+    globalPrompt: '',
     settings: {
 userName: 'You',
 botName: 'Bot',
@@ -441,7 +441,7 @@ async function loadChat(id){
     updateActiveChat();
     chatContainer.innerHTML='';
     systemPrompt.textContent='';
-    state.currentPromptText='';
+    state.globalPrompt='';
     systemToggle.style.display='none';
     try{
 const res = await apiFetch(`/chats/${encodeURIComponent(id)}/history`);
@@ -462,7 +462,7 @@ msgs.forEach(m => appendMessageToUI(m.role==='bot'?'assistant':m.role, m.content
 
 function renderPromptList(){
     promptList.innerHTML='';
-    noPromptBtn.classList.toggle('active', state.currentPrompt==='');
+    noPromptBtn.classList.toggle('active', state.globalPromptName==='');
     state.prompts.forEach(name=>{
 const div=document.createElement('div');
 div.className='chat-history-item';
@@ -470,7 +470,7 @@ const span=document.createElement('span');
 span.className='chat-name';
 span.textContent=name;
 div.appendChild(span);
-if(name===state.currentPrompt){
+if(name===state.globalPromptName){
     div.classList.add('active');
     const ren=document.createElement('button');
     ren.className='chat-action-btn';
@@ -513,7 +513,7 @@ name = `New Prompt ${idx}`;
     }
     state.prompts.push(name);
     state.prompts.sort((a,b)=>a.localeCompare(b));
-    state.currentPrompt = name;
+    state.globalPromptName = name;
     renderPromptList();
     openPromptEditor(name, true);
 }
@@ -521,7 +521,7 @@ name = `New Prompt ${idx}`;
 let editingPromptName = '';
 let editingPromptIsNew = false;
 
-async function openPromptEditor(name=state.currentPrompt, isNew=false){
+async function openPromptEditor(name=state.globalPromptName, isNew=false){
     if(!name) return alert('Select a prompt first.');
     editingPromptName = name;
     editingPromptIsNew = isNew;
@@ -546,8 +546,8 @@ promptModal.style.display = 'flex';
 function closePromptEditor(){
     if(editingPromptIsNew){
 state.prompts = state.prompts.filter(p=>p!==editingPromptName);
-if(state.currentPrompt===editingPromptName){
-    state.currentPrompt = '';
+if(state.globalPromptName===editingPromptName){
+    state.globalPromptName = '';
     localStorage.setItem('lastPromptName','');
 }
 renderPromptList();
@@ -572,7 +572,7 @@ async function savePromptEdit(){
     if(!createRes.ok){ const err=await createRes.json(); return alert('Error: '+err.detail); }
     editingPromptIsNew = false;
     editingPromptName = nameTrim;
-    state.currentPrompt = nameTrim;
+    state.globalPromptName = nameTrim;
     localStorage.setItem('lastPromptName', nameTrim);
 }else{
     if(nameTrim !== editingPromptName){
@@ -583,7 +583,7 @@ async function savePromptEdit(){
         });
         if(!renameRes.ok){ const err=await renameRes.json(); return alert('Error: '+err.detail); }
         editingPromptName = nameTrim;
-        state.currentPrompt = nameTrim;
+        state.globalPromptName = nameTrim;
         localStorage.setItem('lastPromptName', nameTrim);
     }
     const updateRes = await apiFetch(`/prompts/${encodeURIComponent(nameTrim)}`, {
@@ -622,7 +622,7 @@ name = data.chat_name || name;
     renderHistory();
     chatContainer.innerHTML = '';
     systemPrompt.textContent = '';
-    state.currentPromptText = '';
+    state.globalPrompt = '';
     systemToggle.style.display = 'none';
 }
 
@@ -638,7 +638,7 @@ localStorage.setItem('lastChatName', state.currentChatName);
 renderHistory();
 chatContainer.innerHTML = '';
     systemPrompt.textContent = '';
-    state.currentPromptText = '';
+    state.globalPrompt = '';
     systemToggle.style.display = 'none';
 showChatTab();
 }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
@@ -710,7 +710,7 @@ if(contextDiv.style.display==='none'){
 }
 
 async function selectPrompt(name){
-    state.currentPrompt = name;
+    state.globalPromptName = name;
     localStorage.setItem('lastPromptName', name);
     renderPromptList();
     try{
@@ -728,7 +728,7 @@ try{
     const res = await apiFetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
     if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
     await refreshGlobalPromptList();
-    if(state.currentPrompt===name){
+    if(state.globalPromptName===name){
         const next = state.prompts.length ? state.prompts[0] : '';
         await selectPrompt(next);
     }else{
@@ -937,7 +937,7 @@ while(true){
             try{
                 const meta = JSON.parse(metaStr);
                 systemPrompt.textContent = meta.prompt || '';
-                state.currentPromptText = meta.prompt || '';
+                state.globalPrompt = meta.prompt || '';
                 systemToggle.style.display = meta.prompt ? 'block' : 'none';
             }catch{}
             gotMeta = true;

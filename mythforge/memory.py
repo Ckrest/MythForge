@@ -267,14 +267,14 @@ class MemoryManager:
         return os.path.join(self.logs_dir, f"{event_type}.json")
 
     def update_paths(
-        self, chat_name: str | None = None, prompt_name: str | None = None
+        self, chat_name: str | None = None, global_prompt_name: str | None = None
     ) -> None:
         """Update cached chat and prompt identifiers."""
 
         if chat_name is not None:
             self.chat_name = chat_name
-        if prompt_name is not None:
-            self.global_prompt_name = prompt_name
+        if global_prompt_name is not None:
+            self.global_prompt_name = global_prompt_name
 
     # ------------------------------------------------------------------
     # Goal helpers
@@ -326,10 +326,10 @@ class MemoryManager:
 
         return self.get_global_prompt()
 
-    def get_global_prompt(self, prompt_name: str | None = None) -> str:
-        """Return prompt text for ``prompt_name`` or current default."""
+    def get_global_prompt(self, global_prompt_name: str | None = None) -> str:
+        """Return prompt text for ``global_prompt_name`` or current default."""
 
-        name = prompt_name or self.global_prompt_name
+        name = global_prompt_name or self.global_prompt_name
         if not name:
             return ""
         path = self._prompt_path(name)
@@ -341,7 +341,7 @@ class MemoryManager:
 
         os.makedirs(self.prompts_dir, exist_ok=True)
         self._write_json(self._prompt_path(name), {"name": name, "content": content})
-        self.update_paths(prompt_name=name)
+        self.update_paths(global_prompt_name=name)
 
     def delete_global_prompt(self, name: str) -> None:
         """Remove the prompt file identified by ``name``."""
@@ -398,7 +398,7 @@ def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
 
     manager.model_settings = manager.load_settings() or model.MODEL_SETTINGS.copy()
     manager.goals_active = False
-    manager.update_paths(chat_name="", prompt_name="")
+    manager.update_paths(chat_name="", global_prompt_name="")
     prompts = manager.load_global_prompts()
     if prompts:
-        manager.update_paths(prompt_name=prompts[0]["name"])
+        manager.update_paths(global_prompt_name=prompts[0]["name"])
