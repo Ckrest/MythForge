@@ -107,6 +107,9 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
     params = MODEL_LAUNCH_ARGS.copy()
     params.update(overrides)
 
+    if "temp" in params:
+        params["temperature"] = params.pop("temp")
+
     background = params.pop("background", False)
     stream = params.pop("stream", True)
     params.pop("n_gpu_layers", None)
