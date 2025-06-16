@@ -457,11 +457,36 @@ def append_assistant_message(
 ):
     """Add an assistant response without calling the model."""
 
-    memory_manager.update_paths(chat_name=chat_name, prompt_name=prompt_name)
+    memory_manager.update_paths(chat_name=chat_name, prompt_name=req.prompt_name)
     history = memory_manager.load_history(chat_name)
-    history.append({"role": "assistant", "content": data.get("message", "")})
+    history.append({"role": "user", "content": req.message})
     memory_manager.save_history(chat_name, history)
-    return {"detail": "Message stored"}
+    call = CallData(
+        chat_name=chat_name,
+        message=req.message,
+        global_prompt=req.prompt_name or "",
+    )
+    return handle_chat(
+        call,
+        memory_manager,
+        stream=True,
+        current_chat_name=chat_name,
+        current_prompt=req.prompt_name,
+    )
+
+
+@chat_router.post("/message")
+def append_user_message(data: Dict[str, str]):
+    """Store a user message without generating a reply."""
+
+    chat_name = memory_manager.chat_name
+    if not chat_name:
+        raise HTTPException(status_code=400, detail="No active chat")
+    history = memory_manager.load_history(chat_name)
+    history.append({"role": "user", "content": data.get("message", "")})
+    memory_manager.save_history(chat_name, history)
+    return {"detail": "Message stored", "chat_name": chat_name}
+
 
 
 # --- Static UI Mount ------------------------------------------------------
