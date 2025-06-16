@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 
 
 def prepare_and_chat(call: "CallData"):
-    """Return parsed chat output for ``call``."""
+    """Apply the standard template, invoke the model and return a reply."""
 
     LOGGER.log(
         "chat_flow",

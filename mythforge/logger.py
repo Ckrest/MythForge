@@ -11,14 +11,17 @@ class LoggerManager:
     """Persist log events using :class:`MemoryManager`."""
 
     def __init__(self, memory_manager=MEMORY_MANAGER) -> None:
+        """Configure paths and storage for logging."""
+
         self.memory_manager = memory_manager
 
     def _path(self, event_type: str) -> str:
-        """Return the log file path for ``event_type``."""
+        """Resolve path to the ``event_type`` log file."""
 
         return self.memory_manager.get_log_path(event_type)
 
     def log(self, event_type: str, payload: Any) -> None:
+        """Append a new log entry to ``event_type``."""
         path = self._path(event_type)
         data = _load_json(path)
         if not isinstance(data, list):
@@ -27,6 +30,8 @@ class LoggerManager:
         _save_json(path, data)
 
     def log_error(self, err: Exception) -> None:
+        """Record exception information in the error log."""
+
         self.log("errors", {"error": str(err)})
 
 

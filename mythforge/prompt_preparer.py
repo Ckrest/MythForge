@@ -13,10 +13,12 @@ class PromptPreparer:
     """Combine system and user text into a single prompt string."""
 
     def __init__(self) -> None:
+        """Load template data for prompt assembly."""
+
         self.template: str = ""
 
     def load_template(self, name: str) -> str:
-        """Load a template by ``name``."""
+        """Read the template named ``name`` from storage."""
 
         from .memory import MEMORY_MANAGER
 
@@ -24,7 +26,7 @@ class PromptPreparer:
         return self.template
 
     def prepare(self, system_text: str, user_text: str) -> str:
-        """Return a model ready prompt for ``system_text`` and ``user_text``."""
+        """Inject texts into ``self.template`` and return the final prompt."""
 
         LOGGER.log(
             "chat_flow",

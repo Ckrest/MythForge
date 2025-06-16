@@ -37,6 +37,8 @@ class CallData:
 
 
 def _default_global_prompt() -> str:
+    """Return fallback system text when no global prompt is selected."""
+
     prompts = MEMORY_MANAGER.load_global_prompts()
     if prompts:
         return prompts[0]["content"]
@@ -52,6 +54,8 @@ _queued_types: set[str] = set()
 
 
 def _task_worker() -> None:
+    """Process queued background tasks serially."""
+
     while True:
         call_type, func, args = _task_queue.get()
         try:
@@ -65,6 +69,8 @@ threading.Thread(target=_task_worker, daemon=True).start()
 
 
 def enqueue_task(call_type: str, func: Callable[..., None], *args) -> None:
+    """Add ``func`` to the work queue if ``call_type`` isn't queued."""
+
     if call_type in _queued_types:
         return
     _queued_types.add(call_type)
@@ -77,7 +83,7 @@ def enqueue_task(call_type: str, func: Callable[..., None], *args) -> None:
 
 
 def clean_text(text: str, *, trim: bool = False) -> str:
-    """Return ``text`` with special tokens removed."""
+    """Strip unwanted tokens and optionally trim whitespace."""
 
     cleaned = text.replace("<|eot_id|>", "")
     return cleaned.strip() if trim else cleaned
@@ -89,7 +95,7 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 
 
 def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
-    """Attempt to parse valid goal objects from model output."""
+    """Extract individual goal entries from ``text``."""
 
     try:
 
@@ -134,6 +140,8 @@ def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
 def _dedupe_new_goals(
     new: List[Dict[str, str]], existing: List[Dict[str, str]]
 ) -> List[Dict[str, str]]:
+    """Remove goals from ``new`` that already appear in ``existing``."""
+
     existing_desc = {g.get("description", "") for g in existing}
     return [g for g in new if g.get("description", "") not in existing_desc]
 
@@ -143,6 +151,7 @@ def _maybe_generate_goals(
     global_prompt: str,
     memory: MemoryManager = MEMORY_MANAGER,
 ) -> None:
+    """Generate new goals if refresh interval has been met."""
     LOGGER.log(
         "chat_flow",
         {
@@ -250,7 +259,7 @@ def _finalize_chat(
     memory: MemoryManager = MEMORY_MANAGER,
     prompt: str | None = None,
 ) -> None:
-    """Store assistant reply and queue background work."""
+    """Finalize the turn and schedule goal evaluation."""
 
     LOGGER.log(
         "chat_flow",
@@ -287,7 +296,7 @@ def handle_chat(
     current_chat_name: str | None = None,
     current_prompt: str | None = None,
 ):
-    """Process ``call`` and return a model reply."""
+    """Orchestrate a full chat cycle and persist the result."""
 
     LOGGER.log(
         "chat_flow",
@@ -358,6 +367,8 @@ def handle_chat(
         self,
         memory: MemoryManager = MEMORY_MANAGER,
     ) -> None:
+        """Initialize runner state for a chat session."""
+
         self.memory = memory
         self.current_chat_name: str | None = None
         self.current_prompt: str | None = None
@@ -365,6 +376,8 @@ def handle_chat(
     def process_user_message(
         self, chat_name: str, message: str, stream: bool = False
     ):
+        """Handle ``message`` and update tracked session info."""
+
         LOGGER.log(
             "chat_flow",
             {

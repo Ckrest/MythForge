@@ -10,6 +10,8 @@ from typing import Any, Dict, List
 
 
 def _load_json(path: str) -> list[Any] | dict[str, Any] | list:
+    """Read JSON content from ``path`` returning defaults on error."""
+
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -26,6 +28,8 @@ def _load_json(path: str) -> list[Any] | dict[str, Any] | list:
 
 
 def _save_json(path: str, data: Any) -> None:
+    """Write ``data`` as JSON to ``path``."""
+
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -46,6 +50,8 @@ class MemoryManager:
     """Centralized state for prompts, goals and model settings."""
 
     def __init__(self, root_dir: str | None = None) -> None:
+        """Set up directory structure and load initial settings."""
+
         self.root_dir = root_dir or os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..")
         )
@@ -63,18 +69,26 @@ class MemoryManager:
     # Path helpers
     # ------------------------------------------------------------------
     def _chat_file(self, chat_name: str, filename: str) -> str:
+        """Build a path inside ``chat_name`` for ``filename``."""
+
         return os.path.join(self.chats_dir, chat_name, filename)
 
     def _ensure_chat_dir(self, chat_name: str) -> str:
+        """Create and return the directory for ``chat_name``."""
+
         path = os.path.join(self.chats_dir, chat_name)
         os.makedirs(path, exist_ok=True)
         return path
 
     def _prompt_path(self, name: str) -> str:
+        """Return filesystem path for the given prompt ``name``."""
+
         safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
         return os.path.join(self.prompts_dir, f"{safe}.json")
 
     def _goals_path(self, chat_name: str) -> str:
+        """Path to the goals file for ``chat_name``."""
+
         return self._chat_file(chat_name, "goals.json")
 
     def get_chat_path(self, chat_name: str, filename: str) -> str:
@@ -87,25 +101,35 @@ class MemoryManager:
     # Basic JSON file helpers
     # ------------------------------------------------------------------
     def _read_json(self, path: str) -> Any:
+        """Wrapper around :func:`_load_json`."""
+
         return _load_json(path)
 
     def _write_json(self, path: str, data: Any) -> None:
+        """Wrapper around :func:`_save_json`."""
+
         _save_json(path, data)
 
     # ------------------------------------------------------------------
     # History helpers
     # ------------------------------------------------------------------
     def load_history(self, chat_name: str) -> List[Dict[str, Any]]:
+        """Retrieve message history for ``chat_name``."""
+
         self.update_paths(chat_name=chat_name)
         return list(self._read_json(self._chat_file(chat_name, "full.json")))
 
     def save_history(self, chat_name: str, history: List[Dict[str, Any]]) -> None:
+        """Persist ``history`` for ``chat_name``."""
+
         self._ensure_chat_dir(chat_name)
         self.update_paths(chat_name=chat_name)
         self._write_json(self._chat_file(chat_name, "full.json"), history)
 
 
     def list_chats(self) -> List[str]:
+        """Return a list of existing chat identifiers."""
+
         os.makedirs(self.chats_dir, exist_ok=True)
         return [
             d
@@ -114,6 +138,8 @@ class MemoryManager:
         ]
 
     def delete_chat(self, chat_name: str) -> None:
+        """Remove all files for ``chat_name``."""
+
         chat_dir = os.path.join(self.chats_dir, chat_name)
         if os.path.isdir(chat_dir):
             for fname in os.listdir(chat_dir):
@@ -121,6 +147,8 @@ class MemoryManager:
             os.rmdir(chat_dir)
 
     def rename_chat(self, old_id: str, new_id: str) -> None:
+        """Rename a chat folder from ``old_id`` to ``new_id``."""
+
         old_dir = os.path.join(self.chats_dir, old_id)
         new_dir = os.path.join(self.chats_dir, new_id)
         if os.path.isdir(old_dir) and not os.path.exists(new_dir):
@@ -130,6 +158,8 @@ class MemoryManager:
     # Goal state helpers
     # ------------------------------------------------------------------
     def load_goal_state(self, chat_name: str) -> Dict[str, Any]:
+        """Read persisted goal state for ``chat_name``."""
+
         path = self._chat_file(chat_name, "goal_state.json")
         if os.path.exists(path):
             data = self._read_json(path)
@@ -142,9 +172,13 @@ class MemoryManager:
         }
 
     def save_goal_state(self, chat_name: str, state: Dict[str, Any]) -> None:
+        """Write ``state`` to the goal state file."""
+
         self._write_json(self._chat_file(chat_name, "goal_state.json"), state)
 
     def disable_goals(self, chat_name: str) -> None:
+        """Disable goal tracking for ``chat_name``."""
+
         path = self._goals_path(chat_name)
         disabled = self._chat_file(chat_name, "goals_disabled.json")
         if os.path.exists(path):
@@ -152,6 +186,8 @@ class MemoryManager:
         self.load_goals(chat_name)
 
     def enable_goals(self, chat_name: str) -> None:
+        """Re-enable goal tracking for ``chat_name``."""
+
         path = self._goals_path(chat_name)
         disabled = self._chat_file(chat_name, "goals_disabled.json")
         if os.path.exists(disabled):
@@ -162,6 +198,8 @@ class MemoryManager:
     # Settings helpers
     # ------------------------------------------------------------------
     def load_settings(self) -> Dict[str, Any]:
+        """Retrieve persisted application settings."""
+
         data = self._read_json(self.settings_path)
         return data if isinstance(data, dict) else {}
 
@@ -174,7 +212,7 @@ class MemoryManager:
     def update_settings(
         self, delta: Dict[str, Any], save: bool = True
     ) -> Dict[str, Any]:
-        """Merge ``delta`` into :attr:`model_settings` and optionally save."""
+        """Merge ``delta`` into settings and optionally persist."""
 
         from . import model
 
@@ -195,14 +233,14 @@ class MemoryManager:
     # Logging
     # ------------------------------------------------------------------
     def get_log_path(self, event_type: str) -> str:
-        """Return path for the ``event_type`` log file."""
+        """Resolve the path to the ``event_type`` log file."""
 
         return os.path.join(self.logs_dir, f"{event_type}.json")
 
     def update_paths(
         self, chat_name: str | None = None, prompt_name: str | None = None
     ) -> None:
-        """Update the stored chat and prompt names."""
+        """Update cached chat and prompt identifiers."""
 
         if chat_name is not None:
             self.chat_name = chat_name
@@ -213,9 +251,13 @@ class MemoryManager:
     # Goal helpers
     # ------------------------------------------------------------------
     def toggle_goals(self, enabled: bool) -> None:
+        """Enable or disable goal processing."""
+
         self.goals_active = enabled
 
     def load_goals(self, chat_name: str | None = None) -> GoalsData:
+        """Load goal information for ``chat_name``."""
+
         name = chat_name or self.chat_name
         self.update_paths(chat_name=name)
         path = self._goals_path(name)
@@ -236,6 +278,8 @@ class MemoryManager:
         )
 
     def save_goals(self, chat_name: str, data: Dict[str, Any]) -> None:
+        """Persist goals data for ``chat_name``."""
+
         self._ensure_chat_dir(chat_name)
         self.update_paths(chat_name=chat_name)
         obj = {
@@ -249,9 +293,13 @@ class MemoryManager:
 
     @property
     def global_prompt(self) -> str:
+        """Convenience accessor for the active global prompt text."""
+
         return self.get_global_prompt()
 
     def get_global_prompt(self, prompt_name: str | None = None) -> str:
+        """Return prompt text for ``prompt_name`` or current default."""
+
         name = prompt_name or self.global_prompt_name
         if not name:
             return ""
@@ -260,22 +308,30 @@ class MemoryManager:
         return str(data.get("content", "")) if isinstance(data, dict) else ""
 
     def set_global_prompt(self, name: str, content: str) -> None:
+        """Write a new prompt file and mark it active."""
+
         os.makedirs(self.prompts_dir, exist_ok=True)
         self._write_json(self._prompt_path(name), {"name": name, "content": content})
         self.update_paths(prompt_name=name)
 
     def delete_global_prompt(self, name: str) -> None:
+        """Remove the prompt file identified by ``name``."""
+
         path = self._prompt_path(name)
         if os.path.exists(path):
             os.remove(path)
 
     def rename_global_prompt(self, old: str, new: str) -> None:
+        """Rename a prompt file from ``old`` to ``new``."""
+
         old_path = self._prompt_path(old)
         new_path = self._prompt_path(new)
         if os.path.exists(old_path) and not os.path.exists(new_path):
             os.rename(old_path, new_path)
 
     def load_global_prompts(self) -> List[dict[str, str]]:
+        """Return all stored global prompts."""
+
         os.makedirs(self.prompts_dir, exist_ok=True)
         prompts: List[dict[str, str]] = []
         for fname in sorted(os.listdir(self.prompts_dir)):
@@ -287,10 +343,14 @@ class MemoryManager:
         return prompts
 
     def list_prompt_names(self) -> List[str]:
+        """Return only the names of available prompts."""
+
         return [p["name"] for p in self.load_global_prompts()]
 
     @property
     def goals_data(self) -> GoalsData:
+        """Expose the goals data for the current chat."""
+
         return self.load_goals(self.chat_name)
 
 
@@ -299,12 +359,12 @@ MEMORY = MEMORY_MANAGER
 
 
 def set_global_prompt(prompt: str) -> None:
-    """Set ``prompt`` as the active global prompt."""
+    """Convenience alias for :meth:`MemoryManager.set_global_prompt`."""
     MEMORY_MANAGER.set_global_prompt("current_prompt", prompt)
 
 
 def initialize(manager: MemoryManager = MEMORY_MANAGER) -> None:
-    """Populate ``manager`` with default values."""
+    """Ensure directories exist and load default prompts."""
     from . import model
 
     manager.model_settings = manager.load_settings() or model.MODEL_SETTINGS.copy()
