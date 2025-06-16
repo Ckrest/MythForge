@@ -61,7 +61,7 @@ let abortController    = null;
 let handleScroll       = null;
 let promptCheckTimer   = null;
 const newChatButton    = document.getElementById('new-chat-btn');
-const historyContainer = document.getElementById('history-container');
+const chatHistoryContainer = document.getElementById('chat_history-container');
        const themeSelect      = document.getElementById('theme-select');
 const textSizeSelect  = document.getElementById('text-size-select');
 const newPromptBtn     = document.getElementById('new-prompt-btn');
@@ -377,7 +377,7 @@ function hideSidebar(){
 }
 
 function renderHistory(){
-    historyContainer.innerHTML = '';
+    chatHistoryContainer.innerHTML = '';
     state.chats.forEach(id => {
 const div = document.createElement('div');
 div.className = 'chat-history-item';
@@ -404,12 +404,12 @@ deleteBtn.onclick = (e)=>{ e.stopPropagation(); deleteChat(id); };
 div.appendChild(deleteBtn);
 
 div.onclick = () => loadChat(id);
-historyContainer.appendChild(div);
+chatHistoryContainer.appendChild(div);
     });
 }
 
 function updateActiveChat(){
-    const items = historyContainer.querySelectorAll('.chat-history-item');
+    const items = chatHistoryContainer.querySelectorAll('.chat-history-item');
     items.forEach(div=>{
 const name = div.querySelector('.chat-name').textContent;
 if(name === state.currentChatName){
@@ -444,7 +444,7 @@ async function loadChat(id){
     state.globalPrompt='';
     systemToggle.style.display='none';
     try{
-const res = await apiFetch(`/chats/${encodeURIComponent(id)}/history`);
+const res = await apiFetch(`/chats/${encodeURIComponent(id)}/chat_history`);
 if(!res.ok) return;
 const data = await res.json();
 let msgs = data;
@@ -454,10 +454,10 @@ if(!Array.isArray(data)){
         localStorage.setItem('lastChatName', data.chat_name);
         updateActiveChat();
     }
-    msgs = data.history || [];
+    msgs = data.chat_history || [];
 }
 msgs.forEach(m => appendMessageToUI(m.role==='bot'?'assistant':m.role, m.content));
-    }catch(e){ console.error('Failed to load history:',e); }
+    }catch(e){ console.error('Failed to load chat_history:',e); }
 }
 
 function renderPromptList(){
@@ -755,7 +755,7 @@ function closeMessageMenu(){ if(activeMenu){ activeMenu.remove(); activeMenu=nul
 async function editMessage(index, current){
     promptTextarea('Edit message:', current, async (text)=>{
 try{
-    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatName)}/history/${index}`, {
+    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatName)}/chat_history/${index}`, {
         method:'PUT',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({content:text})
@@ -769,7 +769,7 @@ try{
 async function deleteMessage(index){
     confirmDialog('Delete this message?', async ()=>{
 try{
-    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatName)}/history/${index}`, {method:'DELETE'});
+    const res = await apiFetch(`/chats/${encodeURIComponent(state.currentChatName)}/chat_history/${index}`, {method:'DELETE'});
     if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
     await loadChat(state.currentChatName);
 }catch(e){ alert('Failed to delete: '+e.message); }

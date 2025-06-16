@@ -118,20 +118,22 @@ class MemoryManager:
         _save_json(path, data)
 
     # ------------------------------------------------------------------
-    # History helpers
+    # Chat history helpers
     # ------------------------------------------------------------------
-    def load_history(self, chat_name: str) -> List[Dict[str, Any]]:
-        """Retrieve message history for ``chat_name``."""
+    def load_chat_history(self, chat_name: str) -> List[Dict[str, Any]]:
+        """Retrieve message chat_history for ``chat_name``."""
 
         self.update_paths(chat_name=chat_name)
         return list(self._read_json(self._chat_file(chat_name, "full.json")))
 
-    def save_history(self, chat_name: str, history: List[Dict[str, Any]]) -> None:
-        """Persist ``history`` for ``chat_name``."""
+    def save_chat_history(
+        self, chat_name: str, chat_history: List[Dict[str, Any]]
+    ) -> None:
+        """Persist ``chat_history`` for ``chat_name``."""
 
         self._ensure_chat_dir(chat_name)
         self.update_paths(chat_name=chat_name)
-        self._write_json(self._chat_file(chat_name, "full.json"), history)
+        self._write_json(self._chat_file(chat_name, "full.json"), chat_history)
 
     def list_chats(self) -> List[str]:
         """Return a list of existing chat identifiers."""
@@ -340,7 +342,9 @@ class MemoryManager:
         """Write a new prompt file and mark it active."""
 
         os.makedirs(self.global_prompts_dir, exist_ok=True)
-        self._write_json(self._global_prompt_path(name), {"name": name, "content": content})
+        self._write_json(
+            self._global_prompt_path(name), {"name": name, "content": content}
+        )
         self.update_paths(global_prompt_name=name)
 
     def delete_global_prompt(self, name: str) -> None:
