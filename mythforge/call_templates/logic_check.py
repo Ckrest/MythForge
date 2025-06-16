@@ -13,6 +13,7 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "n_ctx": 4096,
     "stream": False,
     "max_tokens": 256,
+    "verbose": True,
 }
 
 
@@ -24,5 +25,6 @@ def logic_check(
     """Send ``message`` through a logic-checking prompt."""
 
     prepared = PromptPreparer().prepare(global_prompt, message)
-    raw = LLMInvoker().invoke(prepared, options)
+    opts = {**MODEL_LAUNCH_OVERRIDE, **options}
+    raw = LLMInvoker().invoke(prepared, opts)
     return ResponseParser().load(raw).parse()

@@ -98,11 +98,17 @@ Do not include any explanation, commentary, or other text. If no goals are curre
 
     from .call_templates import generate_goals
 
-    text = generate_goals.generate_goals(
-        system_text,
-        user_text,
-        {**generate_goals.MODEL_LAUNCH_OVERRIDE},
-    )
+    try:
+        text = generate_goals.generate_goals(
+            system_text,
+            user_text,
+            {**generate_goals.MODEL_LAUNCH_OVERRIDE},
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        LOGGER.log_error(exc)
+        state["error"] = str(exc)
+        memory.save_goal_state(chat_name, state)
+        return
 
     parsed = ResponseParser().load(text).parse()
     if isinstance(parsed, Iterator):
@@ -110,6 +116,7 @@ Do not include any explanation, commentary, or other text. If no goals are curre
     cleaned = clean_text(str(parsed), trim=True)
     new_goals = _parse_goals_from_response(cleaned)
 
+    state.pop("error", None)
     combined = state.get("goals", []) + new_goals
     state["goals"] = combined[:goal_limit]
     memory.save_goal_state(chat_name, state)
