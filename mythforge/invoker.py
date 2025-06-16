@@ -3,6 +3,7 @@ from __future__ import annotations
 """LLM invocation utilities."""
 
 from typing import Any, Dict
+import os
 
 from .logger import LOGGER
 
@@ -40,7 +41,11 @@ class LLMInvoker:
                 "options": opts,
             },
         )
-        return call_llm("", prompt, **opts)
+        model_name = (
+            self.config.get("model_name")
+            or os.environ.get("MODEL_NAME", "gpt-4")
+        )
+        return call_llm(model_name, prompt, **opts)
 
 
 LLM_INVOKER = LLMInvoker()

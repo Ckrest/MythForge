@@ -24,6 +24,11 @@ def _load_json(path: str) -> list[Any] | dict[str, Any] | list:
                 LOGGER = None
             if LOGGER is not None:
                 LOGGER.log_error(e)
+            try:
+                os.rename(path, path + ".corrupt")
+            except Exception as exc:  # pragma: no cover - best effort
+                if LOGGER is not None:
+                    LOGGER.log_error(exc)
     return []
 
 
@@ -31,8 +36,10 @@ def _save_json(path: str, data: Any) -> None:
     """Write ``data`` as JSON to ``path``."""
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
 
 
 @dataclass
