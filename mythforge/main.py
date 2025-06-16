@@ -30,9 +30,7 @@ init_memory(memory_manager)
 async def startup_event() -> None:
     """Initialize directories and default prompts on startup."""
     try:
-        call = CallData(
-            chat_name="startup", message="", options={"stream": False}
-        )
+        model._get_llama()
     except Exception as exc:  # pragma: no cover - best effort
         LOGGER.log_error(exc)
 
