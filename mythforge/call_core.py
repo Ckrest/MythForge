@@ -203,19 +203,19 @@ def handle_chat(
         },
     )
 
-
     from .call_templates import standard_chat, logic_check
 
     call.options = call.options or {"stream": stream}
 
-    if call.call_type == "logic_check":
-        processed = logic_check.logic_check(
-            call.global_prompt,
-            call.message,
-            call.options,
-        )
-    else:
-        processed = standard_chat.standard_chat(call)
+    call_map = {
+        "logic_check": lambda c: logic_check.logic_check(
+            c.global_prompt, c.message, c.options
+        ),
+        "standard_chat": lambda c: standard_chat.standard_chat(c),
+    }
+
+    handler = call_map.get(call.call_type, call_map["standard_chat"])
+    processed = handler(call)
 
     if stream:
 
@@ -235,9 +235,7 @@ def handle_chat(
 
         return StreamingResponse(_generate(), media_type="text/plain")
 
-    assistant_reply = (
-        processed if isinstance(processed, str) else str(processed)
-    )
+    assistant_reply = "".join(list(processed)).strip()
     _finalize_chat(
         assistant_reply,
         call,

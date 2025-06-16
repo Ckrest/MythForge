@@ -18,21 +18,11 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 
 # CallType helpers -----------------------------------------------------------
 
-def logic_check(global_prompt: str, message: str, options: Dict[str, Any]):
+def logic_check(
+    global_prompt: str, message: str, options: Dict[str, Any]
+) -> Iterator[str]:
     """Send ``message`` through a logic-checking prompt."""
 
     prepared = PromptPreparer().prepare(global_prompt, message)
     raw = LLMInvoker().invoke(prepared, options)
-    parsed = ResponseParser().load(raw).parse()
-    if isinstance(parsed, Iterator):
-        try:
-            first = next(parsed)
-        except StopIteration as exc:  # pragma: no cover - best effort
-            return str(exc.value)
-
-        def _chain() -> Iterator[str]:
-            yield first
-            yield from parsed
-
-        return _chain()
-    return parsed
+    return ResponseParser().load(raw).parse()
