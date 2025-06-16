@@ -99,8 +99,8 @@ MODEL_LAUNCH_ARGS: Dict[str, object] = {
 }
 
 
-def call_llm(system_prompt: str, user_prompt: str, **overrides):
-    """Route a prompt through ``llama_cpp`` and return the response."""
+def call_llm(prompt: str, **overrides):
+    """Route ``prompt`` through ``llama_cpp`` and return the response."""
 
     params = MODEL_LAUNCH_ARGS.copy()
     params.update(overrides)
@@ -110,7 +110,6 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
     params.pop("n_gpu_layers", None)
 
     llm = _get_llama(background)
-    prompt = f"{system_prompt}\n{user_prompt}".strip()
 
     if stream:
 
