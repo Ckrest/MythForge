@@ -15,8 +15,6 @@ from .memory import MemoryManager, MEMORY_MANAGER
 from .logger import LOGGER
 
 
-
-
 # ---------------------------------------------------------------------------
 # Text helpers
 # ---------------------------------------------------------------------------
@@ -60,8 +58,8 @@ def evaluate_goals(
     if len(state.get("goals", [])) >= goal_limit:
         return
 
-    history = memory.load_history(chat_name)
-    user_text = "\n".join(m.get("content", "") for m in history)
+    chat_history = memory.load_chat_history(chat_name)
+    user_text = "\n".join(m.get("content", "") for m in chat_history)
 
     system_parts = [p for p in (global_prompt, character, setting) if p]
 
@@ -147,10 +145,10 @@ def _finalize_chat(
         },
     )
 
-    history = memory.load_history(chat_name)
-    history.append({"role": "assistant", "content": reply})
-    memory.save_history(chat_name, history)
-    evaluate_goals(chat_name, global_prompt, memory)
+    chat_history = memory.load_chat_history(chat_name)
+    chat_history.append({"role": "assistant", "content": reply})
+    memory.save_chat_history(chat_name, chat_history)
+    _maybe_generate_goals(chat_name, global_prompt, memory)
 
 
 def handle_chat(
@@ -188,9 +186,7 @@ def handle_chat(
     options = options or {"stream": stream}
 
     call_map = {
-        "logic_check": lambda: logic_check.logic_check(
-            global_prompt, message, options
-        ),
+        "logic_check": lambda: logic_check.logic_check(global_prompt, message, options),
         "standard_chat": lambda: standard_chat.standard_chat(
             chat_name, message, global_prompt, options
         ),

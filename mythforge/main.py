@@ -73,9 +73,13 @@ class SendChatRequest(ChatRequest):
 
 
 @global_prompt_router.get("/")
-def list_prompts(names_only: int = 0, chat_name: str = "", global_prompt_name: str = ""):
+def list_prompts(
+    names_only: int = 0, chat_name: str = "", global_prompt_name: str = ""
+):
     """Return all stored prompt entries or just their names."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     if names_only:
         return {"prompts": memory_manager.list_global_prompt_names()}
     return {"prompts": memory_manager.load_global_prompts()}
@@ -84,7 +88,9 @@ def list_prompts(names_only: int = 0, chat_name: str = "", global_prompt_name: s
 @global_prompt_router.get("/{name}")
 def get_prompt(name: str, chat_name: str = "", global_prompt_name: str = ""):
     """Fetch the full content for ``name``."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     content = memory_manager.get_global_prompt(name)
     if not content:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -92,9 +98,13 @@ def get_prompt(name: str, chat_name: str = "", global_prompt_name: str = ""):
 
 
 @global_prompt_router.post("/")
-def create_prompt(item: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""):
+def create_prompt(
+    item: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""
+):
     """Create a new prompt file from ``item``."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     memory_manager.set_global_prompt(item["name"], item.get("content", ""))
     return {"detail": "Created"}
 
@@ -104,7 +114,9 @@ def update_prompt(
     name: str, item: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""
 ):
     """Overwrite an existing prompt with new content."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     if item.get("name") != name:
         raise HTTPException(status_code=400, detail="Name mismatch")
     memory_manager.set_global_prompt(name, item.get("content", ""))
@@ -116,7 +128,9 @@ def rename_prompt(
     name: str, data: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""
 ):
     """Rename a stored prompt without changing its content."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     new_name = data.get("new_name", "").strip()
     if not new_name:
         raise HTTPException(status_code=400, detail="New name required")
@@ -136,15 +150,21 @@ def rename_prompt(
 @global_prompt_router.delete("/{name}")
 def remove_prompt(name: str, chat_name: str = "", global_prompt_name: str = ""):
     """Delete the prompt identified by ``name``."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     memory_manager.delete_global_prompt(name)
     memory_manager.update_paths(global_prompt_name="")
     return {"detail": f"Deleted prompt '{name}'"}
 
 
 @global_prompt_router.post("/select")
-def select_prompt(data: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""):
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+def select_prompt(
+    data: Dict[str, str], chat_name: str = "", global_prompt_name: str = ""
+):
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     """Set ``data['name']`` as the active system prompt."""
 
     name = data.get("name", "").strip()
@@ -165,7 +185,9 @@ def select_prompt(data: Dict[str, str], chat_name: str = "", global_prompt_name:
 @settings_router.get("/")
 def load_settings_endpoint(chat_name: str = "", global_prompt_name: str = ""):
     """Return the current server settings."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     return memory_manager.load_settings()
 
 
@@ -173,7 +195,9 @@ def load_settings_endpoint(chat_name: str = "", global_prompt_name: str = ""):
 def update_settings_endpoint(
     data: Dict[str, object], chat_name: str = "", global_prompt_name: str = ""
 ):
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     updated = memory_manager.update_settings(data)
     return {"detail": "Updated", "settings": updated}
 
@@ -183,7 +207,9 @@ def update_settings_endpoint(
 
 @app.get("/response_prompt_status")
 def response_prompt_status(chat_name: str = "", global_prompt_name: str = ""):
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     return {"pending": 0}
 
 
@@ -192,7 +218,9 @@ def response_prompt_status(chat_name: str = "", global_prompt_name: str = ""):
 
 @chat_router.get("/")
 def list_chats(chat_name: str = "", global_prompt_name: str = ""):
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
     return {"chats": memory_manager.list_chats()}
 
 
@@ -205,54 +233,58 @@ def create_chat(
     """Create an empty chat directory for ``chat_name``."""
     if chat_name in memory_manager.list_chats():
         raise HTTPException(status_code=400, detail="Chat already exists")
-    memory_manager.save_history(chat_name, [])
+    memory_manager.save_chat_history(chat_name, [])
     memory.toggle_goals(False)
     memory.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
     return {"detail": f"Created chat '{chat_name}'", "chat_name": chat_name}
 
 
-@chat_router.get("/{chat_name}/history")
-def load_history_endpoint(
+@chat_router.get("/{chat_name}/chat_history")
+def load_chat_history_endpoint(
     chat_name: str,
     memory: MemoryManager = Depends(get_memory_manager),
     global_prompt_name: str = "",
 ):
     memory.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
-    history_data = memory.load_history(chat_name)
+    chat_history_data = memory.load_chat_history(chat_name)
     memory.load_goals(chat_name)
-    return {"chat_name": chat_name, "history": history_data}
+    return {"chat_name": chat_name, "chat_history": chat_history_data}
 
 
-@chat_router.put("/{chat_name}/history/{index}")
+@chat_router.put("/{chat_name}/chat_history/{index}")
 def save_message_endpoint(
     chat_name: str,
     index: int,
     data: Dict[str, str],
     global_prompt_name: str = "",
 ):
-    """Persist edits to a specific message in history."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
-    full = memory_manager.load_history(chat_name)
+    """Persist edits to a specific message in chat_history."""
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
+    full = memory_manager.load_chat_history(chat_name)
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full[index]["content"] = data.get("content", "")
-    memory_manager.save_history(chat_name, full)
+    memory_manager.save_chat_history(chat_name, full)
     return {"detail": "Updated"}
 
 
-@chat_router.delete("/{chat_name}/history/{index}")
+@chat_router.delete("/{chat_name}/chat_history/{index}")
 def delete_message_endpoint(
     chat_name: str,
     index: int,
     global_prompt_name: str = "",
 ):
-    """Remove the message at ``index`` from stored history."""
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=global_prompt_name)
-    full = memory_manager.load_history(chat_name)
+    """Remove the message at ``index`` from stored chat_history."""
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=global_prompt_name
+    )
+    full = memory_manager.load_chat_history(chat_name)
     if index < 0 or index >= len(full):
         raise HTTPException(status_code=400, detail="Invalid index")
     full.pop(index)
-    memory_manager.save_history(chat_name, full)
+    memory_manager.save_chat_history(chat_name, full)
     return {"detail": "Deleted"}
 
 
@@ -261,7 +293,7 @@ def delete_chat(
     chat_name: str,
     global_prompt_name: str = "",
 ):
-    """Erase all history for ``chat_name``."""
+    """Erase all chat_history for ``chat_name``."""
     memory_manager.delete_chat(chat_name)
     memory_manager.update_paths(chat_name="", global_prompt_name=global_prompt_name)
     return {"detail": f"Deleted chat '{chat_name}'"}
@@ -400,10 +432,12 @@ def save_context_file(
 def run_cli_command(chat_name: str, req: ChatRequest):
     """Execute a shell command and stream its output."""
 
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=req.global_prompt_name)
-    history = memory_manager.load_history(chat_name)
-    history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(chat_name, history)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=req.global_prompt_name
+    )
+    chat_history = memory_manager.load_chat_history(chat_name)
+    chat_history.append({"role": "user", "content": req.message})
+    memory_manager.save_chat_history(chat_name, chat_history)
     prepared = PromptPreparer().prepare("", req.message)
     stream = LLMInvoker().invoke(prepared, {"stream": True})
 
@@ -413,9 +447,9 @@ def run_cli_command(chat_name: str, req: ChatRequest):
             text = chunk.get("text", "")
             parts.append(text)
             yield text
-        history = memory_manager.load_history(chat_name)
-        history.append({"role": "assistant", "content": "".join(parts)})
-        memory_manager.save_history(chat_name, history)
+        chat_history = memory_manager.load_chat_history(chat_name)
+        chat_history.append({"role": "assistant", "content": "".join(parts)})
+        memory_manager.save_chat_history(chat_name, chat_history)
 
     return StreamingResponse(_generate(), media_type="text/plain")
 
@@ -424,10 +458,12 @@ def run_cli_command(chat_name: str, req: ChatRequest):
 def chat_message(chat_name: str, req: ChatRequest):
     """Process a user message and stream the assistant reply."""
 
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=req.global_prompt_name or "")
-    history = memory_manager.load_history(chat_name)
-    history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(chat_name, history)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=req.global_prompt_name or ""
+    )
+    chat_history = memory_manager.load_chat_history(chat_name)
+    chat_history.append({"role": "user", "content": req.message})
+    memory_manager.save_chat_history(chat_name, chat_history)
     global_prompt = memory_manager.get_global_prompt(req.global_prompt_name or "")
     return handle_chat(
         chat_name,
@@ -447,11 +483,12 @@ def send_chat(req: SendChatRequest):
     memory_manager.chat_name = req.chat_name or ""
     memory_manager.global_prompt_name = req.global_prompt_name or ""
     memory_manager.update_paths(
-        chat_name=memory_manager.chat_name, global_prompt_name=memory_manager.global_prompt_name
+        chat_name=memory_manager.chat_name,
+        global_prompt_name=memory_manager.global_prompt_name,
     )
-    history = memory_manager.load_history(memory_manager.chat_name)
-    history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(memory_manager.chat_name, history)
+    chat_history = memory_manager.load_chat_history(memory_manager.chat_name)
+    chat_history.append({"role": "user", "content": req.message})
+    memory_manager.save_chat_history(memory_manager.chat_name, chat_history)
     global_prompt = req.global_prompt or ""
     return handle_chat(
         memory_manager.chat_name,
@@ -471,10 +508,12 @@ def append_assistant_message(
 ):
     """Add an assistant response without calling the model."""
 
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=req.global_prompt_name or "")
-    history = memory_manager.load_history(chat_name)
-    history.append({"role": "assistant", "content": req.message})
-    memory_manager.save_history(chat_name, history)
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=req.global_prompt_name or ""
+    )
+    chat_history = memory_manager.load_chat_history(chat_name)
+    chat_history.append({"role": "assistant", "content": req.message})
+    memory_manager.save_chat_history(chat_name, chat_history)
     return {"detail": "Appended"}
 
 
@@ -486,11 +525,15 @@ def append_user_message(req: ChatRequest):
     if not chat_name:
         raise HTTPException(status_code=400, detail="No active chat")
     memory_manager.chat_name = chat_name
-    memory_manager.global_prompt_name = req.global_prompt_name or memory_manager.global_prompt_name
-    memory_manager.update_paths(chat_name=chat_name, global_prompt_name=memory_manager.global_prompt_name)
-    history = memory_manager.load_history(chat_name)
-    history.append({"role": "user", "content": req.message})
-    memory_manager.save_history(chat_name, history)
+    memory_manager.global_prompt_name = (
+        req.global_prompt_name or memory_manager.global_prompt_name
+    )
+    memory_manager.update_paths(
+        chat_name=chat_name, global_prompt_name=memory_manager.global_prompt_name
+    )
+    chat_history = memory_manager.load_chat_history(chat_name)
+    chat_history.append({"role": "user", "content": req.message})
+    memory_manager.save_chat_history(chat_name, chat_history)
     return {"detail": "Message stored", "chat_name": chat_name}
 
 
