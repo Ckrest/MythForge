@@ -148,7 +148,7 @@ def _finalize_chat(
     chat_history = memory.load_chat_history(chat_name)
     chat_history.append({"role": "assistant", "content": reply})
     memory.save_chat_history(chat_name, chat_history)
-    _maybe_generate_goals(chat_name, global_prompt, memory)
+    evaluate_goals(chat_name, global_prompt, memory)
 
 
 def handle_chat(
