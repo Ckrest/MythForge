@@ -349,9 +349,6 @@ def handle_chat(
     return {"detail": assistant_reply}
 
 
-class ChatRunner:
-    """High level interface for processing chat messages."""
-
     def __init__(
         self,
         memory: MemoryManager = MEMORY_MANAGER,
@@ -359,31 +356,3 @@ class ChatRunner:
         self.memory = memory
         self.current_chat_id: str | None = None
         self.current_prompt: str | None = None
-
-    def process_user_message(
-        self, chat_id: str, message: str, stream: bool = False
-    ):
-        LOGGER.log(
-            "chat_flow",
-            {
-                "function": "ChatRunner.process_user_message",
-                "chat_id": chat_id,
-                "message": message,
-                "stream": stream,
-                "current_chat_id": self.current_chat_id,
-                "current_prompt": self.current_prompt,
-            },
-        )
-        call = CallData(
-            chat_id=chat_id, message=message, options={"stream": stream}
-        )
-        result = handle_chat(
-            call,
-            self.memory,
-            stream=stream,
-            current_chat_id=self.current_chat_id,
-            current_prompt=self.current_prompt,
-        )
-        self.current_chat_id = call.chat_id
-        self.current_prompt = call.global_prompt or self.current_prompt
-        return result

@@ -53,6 +53,7 @@ class ChatRequest(BaseModel):
 
     chat_id: str
     message: str
+    prompt_name: str | None = None
 
 
 # --- Load/Save operations --------------------------------------------------

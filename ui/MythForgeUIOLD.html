@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Myth Forge</title>
+    <style>
+        /* --- Theme Variables copied from LocalLLMChatv2 --- */
+        :root {
+            --primary: #10a37f;
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --chat-bg: #f7f7f8;
+            --user-msg-bg: #10a37f;
+            --user-msg-color: white;
+            --ai-msg-bg: white;
+            --ai-msg-color: #333333;
+            --border-color: #e5e5e5;
+            --sidebar-bg: #202123;
+            --sidebar-text: white;
+            --sidebar-btn-bg: #343541;
+            --sidebar-btn-hover: #40414f;
+            --code-bg: #f0f0f0;
+            --code-color: #333333;
+            --input-bg: #ffffff;
+            --hover-color: rgba(16, 163, 127, 0.1);
+            --shadow-color: rgba(16, 163, 127, 0.2);
+            --message-font-size: 16px;
+        }
+        [data-theme="dark"] {
+            --primary: #10a37f;
+            --bg-color: #1e1e2e;
+            --text-color: #e0e0e0;
+            --chat-bg: #2c2c3a;
+            --user-msg-bg: #10a37f;
+            --user-msg-color: white;
+            --ai-msg-bg: #343541;
+            --ai-msg-color: #e0e0e0;
+            --border-color: #3e3e4a;
+            --sidebar-bg: #18181a;
+            --sidebar-text: #e0e0e0;
+            --sidebar-btn-bg: #2c2c3a;
+            --sidebar-btn-hover: #3e3e4a;
+            --code-bg: #2d2d3a;
+            --code-color: #e0e0e0;
+            --input-bg: #343541;
+            --hover-color: rgba(16, 163, 127, 0.2);
+            --shadow-color: rgba(16, 163, 127, 0.3);
+        }
+        [data-theme="night-blue"] {
+            --primary: #61afef;
+            --bg-color: #1a1b26;
+            --text-color: #a9b1d6;
+            --chat-bg: #24283b;
+            --user-msg-bg: #61afef;
+            --user-msg-color: #1a1b26;
+            --ai-msg-bg: #2a2e42;
+            --ai-msg-color: #a9b1d6;
+            --border-color: #343a52;
+            --sidebar-bg: #16161e;
+            --sidebar-text: #a9b1d6;
+            --sidebar-btn-bg: #24283b;
+            --sidebar-btn-hover: #2a2e42;
+            --code-bg: #282c40;
+            --code-color: #a9b1d6;
+            --input-bg: #2a2e42;
+            --hover-color: rgba(97, 175, 239, 0.2);
+            --shadow-color: rgba(97, 175, 239, 0.3);
+        }
+        [data-theme="sepia"] {
+            --primary: #8c6c4e;
+            --bg-color: #f0e7da;
+            --text-color: #5c4b3c;
+            --chat-bg: #f8f0e3;
+            --user-msg-bg: #8c6c4e;
+            --user-msg-color: #f8f0e3;
+            --ai-msg-bg: #e8dccb;
+            --ai-msg-color: #5c4b3c;
+            --border-color: #d2c2ad;
+            --sidebar-bg: #e0d0b8;
+            --sidebar-text: #5c4b3c;
+            --sidebar-btn-bg: #d0bea6;
+            --sidebar-btn-hover: #c0af98;
+            --code-bg: #e0d0b8;
+            --code-color: #5c4b3c;
+            --input-bg: #e8dccb;
+            --hover-color: rgba(140, 108, 78, 0.1);
+            --shadow-color: rgba(140, 108, 78, 0.2);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .app-container { display: flex; width: 100%; height: 100%; }
+        .sidebar {
+            width: 260px;
+            flex: 0 0 260px;
+            box-sizing: border-box;
+            background-color: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar button { cursor: pointer; background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; padding: 8px; font-size: 14px; }
+        .sidebar button:hover { background-color: var(--sidebar-btn-hover); }
+        .sidebar button.active { background-color: var(--sidebar-btn-hover); }
+        .sidebar button.new-chat { padding: 12px; text-align: left; margin-bottom: 20px; display: flex; align-items: center; }
+        .history-container { flex-grow: 1; overflow-y: auto; }
+        .chat-history-item {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px; margin-bottom: 5px; border-radius: 4px; cursor: pointer; font-size: 14px; position: relative; display:flex; align-items:center;
+        }
+        .chat-name { flex-grow:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .chat-history-item:hover { background-color: var(--sidebar-btn-hover); }
+        .chat-action-btn {
+            background: none; border: none; color: var(--sidebar-text); font-size: 12px; cursor: pointer; margin-left:4px; display:none;
+        }
+        .chat-history-item.active .chat-action-btn { display:block; }
+        .chat-history-item.active { background-color: var(--sidebar-btn-hover); }
+        .theme-switcher { margin-bottom: 12px; display: flex; flex-direction: column; }
+        .theme-switcher select {
+            background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; margin-top: 5px; cursor: pointer; font-size: 14px;
+        }
+        .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;}
+        .modal-content{
+            background:var(--bg-color);
+            color:var(--text-color);
+            padding:20px;
+            border-radius:8px;
+            min-width:250px;
+            width:90vw;
+            max-width:1000px;
+            max-height:90vh;
+            overflow-y:auto;
+        }
+        .modal-content label{display:block;margin-top:10px;}
+        .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px;}
+        .modal-actions .left-actions{margin-right:auto;}
+        .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; }
+        .top-controls { padding: 10px; border-bottom: 1px solid var(--border-color); background: var(--bg-color); display: flex; gap: 0.5em; align-items: center; }
+        .chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; background-color: var(--chat-bg);  -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+        .message { padding: 20px; margin: 0; display: flex; border-bottom: 1px solid var(--border-color); position: relative; }
+        .user-message { background-color: var(--bg-color); }
+        .ai-message { background-color: var(--chat-bg); }
+        .avatar { width: 30px; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0; }
+        .user-avatar { background-color: var(--user-msg-bg); color: var(--user-msg-color); }
+        .ai-avatar { background-color: var(--primary); color: white; }
+        .message-content { flex-grow: 1; max-width: none; line-height: 1.6; font-size: var(--message-font-size); }
+        .message-control-btn { position: absolute; bottom: 4px; right: 4px; background: none; border: none; cursor: pointer; color: var(--text-color); display: none; }
+        .message:hover .message-control-btn { display: block; }
+        .message-menu { position: absolute; bottom: 28px; right: 4px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; flex-direction: column; z-index: 100; }
+        .message-menu button { background: none; border: none; padding: 6px 12px; cursor: pointer; font-size: 14px; text-align: left; color: var(--text-color); }
+        .message-menu button:hover { background-color: var(--hover-color); }
+        pre { background-color: var(--code-bg); color: var(--code-color); padding: 10px; border-radius: 4px; overflow-x: auto; }
+        textarea { width: 100%; padding: 12px 110px 12px 12px; border: 1px solid var(--border-color); border-radius: 6px; resize: none; min-height: 24px; max-height: 200px; overflow-y: auto; font-family: inherit; font-size: var(--message-font-size); line-height: 1.4; background-color: var(--input-bg); color: var(--text-color); }
+        textarea.blocked { border: 2px solid var(--primary); }
+        textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--shadow-color); }
+        .modal-content textarea { max-height: calc(90vh - 160px); padding: 12px; box-sizing: border-box; }
+        #goals-context textarea,
+        #goals-context input { font-size: 14px !important; }
+        .input-area { border-top: 1px solid var(--border-color); padding: 20px; background-color: var(--bg-color); position: relative; }
+        .input-container { display: flex; width: 100%; max-width: none; margin: 0; position: relative; }
+        .send-button { position: absolute; right: 8px; bottom: 8px; background: none; border: none; cursor: pointer; color: var(--primary); padding: 5px; border-radius: 4px; }
+        #system-container { display:none; padding:10px; background: var(--chat-bg); }
+
+        .tab-bar {
+            width: 40px;
+            flex: 0 0 40px;
+            box-sizing: border-box;
+            background-color: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 8px;
+        }
+        .tab-bar button { background-color: var(--sidebar-btn-bg); border: 1px solid rgba(255,255,255,0.2); color: var(--sidebar-text); cursor: pointer; font-size: 20px; width: 100%; padding: 10px 0; margin-bottom: 6px; border-radius: 4px; }
+        .tab-bar button.active { background-color: var(--sidebar-btn-hover); }
+        .sidebar.hidden { display: none; }
+        #chat-section, #more-section, #prompt-section { flex-grow: 1; display: flex; flex-direction: column; }
+        #more-section { overflow-y: auto; }
+        #prompt-section { overflow-y: auto; }
+        .sidebar-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        .sidebar-section select { background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px; cursor: pointer; font-size: 14px; }
+        .sidebar-section label { display:flex; flex-direction:column; font-size:14px; }
+        .sidebar-section input { background-color: var(--sidebar-btn-bg); color: var(--sidebar-text); border: 1px solid rgba(255,255,255,0.2); border-radius:4px; padding:6px 8px; margin-top:4px; font-size:14px; }
+        .sidebar-section input[type=number]::-webkit-inner-spin-button,
+        .sidebar-section input[type=number]::-webkit-outer-spin-button {
+            appearance: none;
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .sidebar-section input[type=number] {
+            appearance: textfield;
+            -moz-appearance: textfield;
+        }
+        .sidebar-section h3 { margin: 0 0 5px 0; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="tab-bar">
+            <button id="hide-tab" title="Hide">&#8592;</button>
+            <button id="chat-tab" title="Chats">&#128172;</button>
+            <button id="prompt-tab" title="Global Prompt">&#128221;</button>
+            <button id="more-tab" title="More">&#9881;</button>
+        </div>
+        <div class="sidebar" id="sidebar">
+            <div id="chat-section">
+                <button class="new-chat" id="new-chat-btn">New Chat</button>
+                <div class="history-container" id="history-container"></div>
+            </div>
+            <div id="prompt-section" style="display:none;">
+                <button class="new-chat" id="new-prompt-btn">New Prompt</button>
+                <button class="new-chat" id="no-prompt-btn">No Prompt</button>
+                <div class="history-container" id="prompt-list"></div>
+            </div>
+            <div id="more-section" style="display:none;">
+                <button id="open-settings-btn" class="new-chat">Local Settings</button>
+                <div class="sidebar-section" id="generation-settings">
+                    <h3>Model</h3>
+                    <label>Max Tokens <input id="max-tokens-input" type="number" min="1"></label>
+                    <label>Temp <input id="temp-input" type="number" step="0.01"></label>
+                    <label>Top K <input id="top-k-input" type="number" min="0"></label>
+                    <label>Top P <input id="top-p-input" type="number" step="0.01" min="0" max="1"></label>
+                    <label>Min P <input id="min-p-input" type="number" step="0.01" min="0" max="1"></label>
+                    <label>Repeat Penalty <input id="repeat-penalty-input" type="number" step="0.01" min="0"></label>
+                    <label>Primary Model <input id="primary-model-input" type="text"></label>
+                    <label>Background Model <input id="background-model-input" type="text"></label>
+                    <h3>Goals</h3>
+                    <label>Goal Refresh Rate <input id="goal-refresh-input" type="number" min="1" value="1"></label>
+                    <label>Goal Limit <input id="goal-limit-input" type="number" min="1" value="3"></label>
+                    <label>Goal Impulse <input id="goal-impulse-input" type="number" min="1" value="2"></label>
+                    <label>New Goal Bias <input id="new-goal-bias-input" type="number" min="1" value="2"></label>
+                    <button id="server-settings-save-btn">Save</button>
+                </div>
+                <button id="system-toggle" class="new-chat" style="display:none;margin-top:10px;">⚙️ Last Prompt</button>
+            </div>
+        </div>
+        <div class="main">
+            <div class="top-controls"></div>
+            <div id="system-container"><pre id="system-prompt" style="white-space:pre-wrap; margin:0;"></pre></div>
+            <div class="chat-container" id="chat-container"></div>
+            <div class="input-area">
+                <div class="input-container">
+                    <textarea id="user-input" placeholder="Type a message..." rows="1"></textarea>
+                    <button id="send-only-button" class="send-button" style="right:40px" title="Send without response" disabled>
+                        &#10003;
+                    </button>
+                    <button id="send-button" class="send-button">
+                        <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="20" width="20" xmlns="http://www.w3.org/2000/svg">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                <button id="stop-button" class="send-button" style="display:none" title="Stop generation">
+                        &#9632;
+                    </button>
+                </div>
+                <div id="prompt-indicator" style="display:none; position:absolute; left:10px; bottom:8px; color:var(--primary); font-size:14px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2>Local Settings</h2>
+            <label>User Display Name <input id="user-name-input" type="text"></label>
+            <label>Bot Display Name <input id="bot-name-input" type="text"></label>
+            <div class="theme-switcher">
+                <label for="theme-select">Theme</label>
+                <select id="theme-select">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="night-blue">Night Blue</option>
+                    <option value="sepia">Sepia</option>
+                </select>
+            </div>
+            <div class="theme-switcher">
+                <label for="text-size-select">Text Size</label>
+                <select id="text-size-select">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                    <option value="x-large">Extra Large</option>
+                    <option value="xx-large">2x Large</option>
+                    <option value="xxx-large">3x Large</option>
+                    <option value="xxxx-large">4x Large</option>
+                <option value="xxxxx-large">5x Large</option>
+                </select>
+            </div>
+            <label>Auto Scroll Lines <input id="scroll-lines-input" type="number" min="0" value="0"></label>
+            <div class="modal-actions">
+                <button id="settings-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="prompt-edit-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="prompt-edit-title">Edit Prompt</h2>
+            <label>Name <input id="prompt-name-input" type="text"></label>
+            <label>Prompt</label>
+            <textarea id="prompt-edit-input" rows="20" style="width:100%;"></textarea>
+            <div class="modal-actions">
+                <button id="prompt-edit-cancel-btn">Cancel</button>
+                <button id="prompt-edit-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dialog-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="dialog-title"></h2>
+            <div id="dialog-body"></div>
+            <div class="modal-actions">
+                <div id="dialog-left" class="left-actions"></div>
+                <button id="dialog-cancel-btn">Cancel</button>
+                <button id="dialog-ok-btn">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== API Helper =====
+        const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
+        const CONFIG = { apiUrl: window.location.origin + basePath };
+
+        function apiFetch(path, options){
+            const base = CONFIG.apiUrl.replace(/\/$/, '');
+            const rel = path.startsWith('/') ? path : '/' + path;
+            return fetch(base + rel, options);
+        }
+        
+        // ===== Application State =====
+        const state = {
+            chats: [],
+            currentChatName: '',
+            prompts: [],
+            currentPrompt: '',
+            settings: {
+                userName: 'You',
+                botName: 'Bot',
+                theme: 'light',
+                textSize: 'medium',
+                autoScrollLines: 0
+            },
+            serverSettings: {
+                max_tokens: 250,
+                temp: 0.8,
+                top_k: 40,
+                top_p: 0.95,
+                min_p: 0.05,
+                repeat_penalty: 1.1,
+                primary_model: 'unsloth_no_template.gguf',
+                background_model: 'zzphi-2.Q5_K_M.gguf',
+                goal_refresh_rate: 1,
+                goal_limit: 3,
+                goal_impulse: 2,
+                new_goal_bias: 2
+            },
+            isGenerating: false,
+            isProcessing: false
+        };
+
+        const chatContainer    = document.getElementById('chat-container');
+        const userInput        = document.getElementById('user-input');
+        const sendButton       = document.getElementById('send-button');
+        const sendOnlyButton   = document.getElementById('send-only-button');
+        const stopButton       = document.getElementById('stop-button');
+        let abortController    = null;
+        let handleScroll       = null;
+        let promptCheckTimer   = null;
+        const newChatButton    = document.getElementById('new-chat-btn');
+        const historyContainer = document.getElementById('history-container');
+       const themeSelect      = document.getElementById('theme-select');
+        const textSizeSelect  = document.getElementById('text-size-select');
+        const newPromptBtn     = document.getElementById('new-prompt-btn');
+        const noPromptBtn      = document.getElementById('no-prompt-btn');
+        const promptList       = document.getElementById('prompt-list');
+        const systemToggle     = document.getElementById('system-toggle');
+        const systemContainer  = document.getElementById('system-container');
+        const systemPrompt     = document.getElementById('system-prompt');
+        const openSettingsBtn  = document.getElementById('open-settings-btn');
+        const settingsModal    = document.getElementById('settings-modal');
+        const settingsSaveBtn  = document.getElementById('settings-save-btn');
+        const userNameInput    = document.getElementById('user-name-input');
+        const botNameInput     = document.getElementById('bot-name-input');
+        const scrollLinesInput = document.getElementById('scroll-lines-input');
+        const maxTokensInput   = document.getElementById('max-tokens-input');
+        const tempInput = document.getElementById('temp-input');
+        const topKInput        = document.getElementById('top-k-input');
+        const topPInput        = document.getElementById('top-p-input');
+        const minPInput        = document.getElementById('min-p-input');
+        const repeatPenaltyInput = document.getElementById('repeat-penalty-input');
+        const primaryModelInput  = document.getElementById('primary-model-input');
+        const backgroundModelInput = document.getElementById('background-model-input');
+        const goalRefreshInput  = document.getElementById('goal-refresh-input');
+        const goalLimitInput    = document.getElementById('goal-limit-input');
+        const goalImpulseInput  = document.getElementById('goal-impulse-input');
+        const newGoalBiasInput  = document.getElementById('new-goal-bias-input');
+        const serverSettingsSaveBtn = document.getElementById('server-settings-save-btn');
+        const promptModal      = document.getElementById('prompt-edit-modal');
+        const promptModalTitle = document.getElementById('prompt-edit-title');
+        const promptNameInput  = document.getElementById('prompt-name-input');
+        const promptInput      = document.getElementById('prompt-edit-input');
+        const promptSaveBtn    = document.getElementById('prompt-edit-save-btn');
+        const promptCancelBtn  = document.getElementById('prompt-edit-cancel-btn');
+        const dialogModal      = document.getElementById('dialog-modal');
+        const dialogTitle      = document.getElementById('dialog-title');
+        const dialogBody       = document.getElementById('dialog-body');
+        const dialogOkBtn      = document.getElementById('dialog-ok-btn');
+        const dialogCancelBtn  = document.getElementById('dialog-cancel-btn');
+        const dialogLeft       = document.getElementById('dialog-left');
+        const hideTab          = document.getElementById('hide-tab');
+        const chatTab          = document.getElementById('chat-tab');
+        const promptTab        = document.getElementById('prompt-tab');
+        const moreTab          = document.getElementById('more-tab');
+        const sidebar          = document.getElementById('sidebar');
+        const chatSection      = document.getElementById('chat-section');
+        const promptSection    = document.getElementById('prompt-section');
+        const moreSection      = document.getElementById('more-section');
+        const promptIndicator  = document.getElementById('prompt-indicator');
+
+        // ===== Settings Management =====
+       function applyTheme(name){
+           document.body.setAttribute('data-theme', name);
+           state.settings.theme = name;
+       }
+
+        function applyTextSize(size){
+            const map = {
+                small:'14px',
+                medium:'16px',
+                large:'18px',
+                'x-large':'20px',
+                'xx-large':'22px',
+                'xxx-large':'24px',
+                'xxxx-large':'26px',
+                'xxxxx-large':'28px'
+            };
+            document.body.style.setProperty('--message-font-size', map[size] || '16px');
+            state.settings.textSize = size;
+        }
+
+        function loadSettings(){
+            const saved = localStorage.getItem('clientSettings');
+            if(saved){
+                try{
+                    const obj = JSON.parse(saved);
+                    if(obj.userName) state.settings.userName = obj.userName;
+                    if(obj.botName)  state.settings.botName  = obj.botName;
+                    if(obj.theme)    state.settings.theme    = obj.theme;
+                    if(obj.textSize) state.settings.textSize = obj.textSize;
+                    if(typeof obj.autoScrollLines === 'number') state.settings.autoScrollLines = obj.autoScrollLines;
+                }catch{}
+            }
+        }
+
+        function saveSettings(){
+            const obj = {
+                userName: state.settings.userName,
+                botName: state.settings.botName,
+                theme: state.settings.theme,
+                textSize: state.settings.textSize,
+                autoScrollLines: state.settings.autoScrollLines
+            };
+            localStorage.setItem('clientSettings', JSON.stringify(obj));
+        }
+
+        function loadTheme(){
+            applyTheme(state.settings.theme);
+            themeSelect.value = state.settings.theme;
+        }
+
+        function loadTextSize(){
+            applyTextSize(state.settings.textSize);
+            textSizeSelect.value = state.settings.textSize;
+        }
+
+        async function loadServerSettings(){
+            try{
+                const res = await apiFetch('/settings/');
+                if(!res.ok) return;
+                const data = await res.json();
+                state.serverSettings = data;
+                maxTokensInput.value     = data.max_tokens ?? '';
+                tempInput.value          = data.temp ?? '';
+                topKInput.value          = data.top_k ?? '';
+                topPInput.value          = data.top_p ?? '';
+                minPInput.value          = data.min_p ?? '';
+                repeatPenaltyInput.value = data.repeat_penalty ?? '';
+                primaryModelInput.value  = data.primary_model ?? '';
+                backgroundModelInput.value = data.background_model ?? '';
+                goalRefreshInput.value   = data.goal_refresh_rate ?? '';
+                goalLimitInput.value     = data.goal_limit ?? '';
+                goalImpulseInput.value   = data.goal_impulse ?? '';
+                newGoalBiasInput.value   = data.new_goal_bias ?? '';
+            }catch(e){ console.error('Failed to load server settings:', e); }
+        }
+
+        async function saveServerSettings(){
+            const payload = {
+                max_tokens: parseInt(maxTokensInput.value) || 1,
+                temp: parseFloat(tempInput.value) || 0,
+                top_k: parseInt(topKInput.value) || 0,
+                top_p: parseFloat(topPInput.value) || 0,
+                min_p: parseFloat(minPInput.value) || 0,
+                repeat_penalty: parseFloat(repeatPenaltyInput.value) || 0,
+                primary_model: primaryModelInput.value.trim(),
+                background_model: backgroundModelInput.value.trim(),
+                goal_refresh_rate: parseFloat(goalRefreshInput.value) || 0,
+                goal_limit: parseInt(goalLimitInput.value) || 0,
+                goal_impulse: parseFloat(goalImpulseInput.value) || 0,
+                new_goal_bias: parseFloat(newGoalBiasInput.value) || 0
+            };
+            try{
+                const res = await apiFetch('/settings/', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+                if(!res.ok){
+                    const err = await res.json();
+                    alert('Error: ' + (err.detail || res.status));
+                    return;
+                }
+                state.serverSettings = {...state.serverSettings, ...payload};
+                alert('Settings saved');
+            }catch(e){ console.error('Failed to save server settings:', e); }
+        }
+
+        // ===== Modal Helpers =====
+        function resizeModal(modal, width){
+            const content = modal.querySelector('.modal-content');
+            if(!content) return;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            if(width){
+                content.style.maxWidth = width + 'px';
+            }else{
+                content.style.maxWidth = Math.min(1000, Math.round(vw * 0.9)) + 'px';
+            }
+            content.style.maxHeight = Math.round(vh * 0.9) + 'px';
+        }
+
+       function openSettings(){
+            userNameInput.value = state.settings.userName;
+            botNameInput.value  = state.settings.botName;
+            themeSelect.value   = state.settings.theme;
+            textSizeSelect.value = state.settings.textSize;
+            scrollLinesInput.value = state.settings.autoScrollLines;
+            resizeModal(settingsModal, 400);
+            settingsModal.style.display='flex';
+        }
+
+        function closeSettings(){ settingsModal.style.display='none'; }
+
+       let dialogInputListener = null;
+
+       function openDialog(opts){
+            dialogTitle.textContent = opts.title || '';
+            dialogBody.innerHTML = opts.body || '';
+            dialogLeft.innerHTML  = opts.extraLeft || '';
+            dialogOkBtn.textContent = opts.okText || 'OK';
+            dialogOkBtn.onclick = () => {
+                if (opts.onOk) opts.onOk();
+                closeDialog();
+            };
+            dialogCancelBtn.onclick = closeDialog;
+            resizeModal(dialogModal, opts.width);
+            dialogModal.style.display = 'flex';
+            const field = dialogBody.querySelector('input, textarea');
+            if(field){
+                field.focus();
+                if(field.select) field.select();
+                dialogInputListener = (e)=>{
+                    if(e.key==='Enter' && !e.shiftKey){
+                        e.preventDefault();
+                        dialogOkBtn.click();
+                    }
+                };
+                field.addEventListener('keydown', dialogInputListener);
+            }
+        }
+
+        function closeDialog(){
+            if(dialogInputListener){
+                const field = dialogBody.querySelector('input, textarea');
+                if(field) field.removeEventListener('keydown', dialogInputListener);
+                dialogInputListener = null;
+            }
+            dialogModal.style.display='none';
+            dialogBody.innerHTML='';
+            dialogLeft.innerHTML='';
+            dialogOkBtn.onclick=null;
+        }
+
+        function promptText(title, value, cb){
+            openDialog({
+                title,
+                body:`<input id="dialog-input" type="text" style="width:100%;" value="${value||''}">`,
+                okText:'Save',
+                onOk:()=>{ const v=document.getElementById('dialog-input').value.trim(); if(!v){alert('Name cannot be empty.');return;} cb(v); }
+            });
+        }
+
+        function promptTextarea(title, value, cb){
+            openDialog({
+                title,
+                body:`<textarea id="dialog-area" rows="20" style="width:100%;">${value||''}</textarea>`,
+                okText:'Save',
+                onOk:()=>{ const v=document.getElementById('dialog-area').value; cb(v); }
+            });
+        }
+
+        function confirmDialog(message, cb){
+            openDialog({
+                title: message,
+                okText: 'Confirm',
+                onOk: cb,
+                width: 400
+            });
+        }
+
+        // ===== UI Controls =====
+        function updateAvatarDisplays(){
+            document.querySelectorAll('.user-avatar').forEach(el=>{
+                el.textContent = (state.settings.userName[0] || 'U');
+            });
+            document.querySelectorAll('.ai-avatar').forEach(el=>{
+                el.textContent = (state.settings.botName[0] || 'A');
+            });
+        }
+
+       function saveSettingsFromUI(){
+            state.settings.userName = userNameInput.value.trim() || 'You';
+            state.settings.botName  = botNameInput.value.trim()  || 'Bot';
+            applyTheme(themeSelect.value);
+            applyTextSize(textSizeSelect.value);
+            state.settings.autoScrollLines = parseInt(scrollLinesInput.value) || 0;
+            saveSettings();
+            updateAvatarDisplays();
+            closeSettings();
+        }
+
+        function toggleSystem(){
+            const current = getComputedStyle(systemContainer).display;
+            systemContainer.style.display = current === 'none' ? 'block' : 'none';
+        }
+
+        // ===== Navigation Functions =====
+        function showChatTab(){
+            sidebar.classList.remove('hidden');
+            chatSection.style.display = 'flex';
+            promptSection.style.display = 'none';
+            moreSection.style.display = 'none';
+            chatTab.classList.add('active');
+            promptTab.classList.remove('active');
+            moreTab.classList.remove('active');
+            fetchChatList().then(()=>{
+                if(state.currentChatName) loadChat(state.currentChatName);
+            });
+        }
+
+        function showMoreTab(){
+            sidebar.classList.remove('hidden');
+            chatSection.style.display = 'none';
+            promptSection.style.display = 'none';
+            moreSection.style.display = 'flex';
+            chatTab.classList.remove('active');
+            promptTab.classList.remove('active');
+            moreTab.classList.add('active');
+            loadServerSettings();
+        }
+
+        function showPromptTab(){
+            sidebar.classList.remove('hidden');
+            chatSection.style.display = 'none';
+            promptSection.style.display = 'flex';
+            moreSection.style.display = 'none';
+            chatTab.classList.remove('active');
+            promptTab.classList.add('active');
+            moreTab.classList.remove('active');
+            refreshGlobalPromptList().then(()=>{
+                const last = localStorage.getItem('lastGlobalPrompt');
+                if(last) selectPrompt(last);
+            });
+        }
+
+        function hideSidebar(){
+            sidebar.classList.add('hidden');
+            chatTab.classList.remove('active');
+            promptTab.classList.remove('active');
+            moreTab.classList.remove('active');
+        }
+
+        // ===== Chat Operations =====
+        function renderHistory(){
+            historyContainer.innerHTML = '';
+            state.chats.forEach(id => {
+                const div = document.createElement('div');
+                div.className = 'chat-history-item';
+
+                if(id === state.currentChatName) div.classList.add('active');
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'chat-name';
+                nameSpan.textContent = id;
+                div.appendChild(nameSpan);
+
+                const renameBtn = document.createElement('button');
+                renameBtn.className = 'chat-action-btn';
+                renameBtn.textContent = '✎';
+                renameBtn.title = 'Rename chat';
+                renameBtn.onclick = (e)=>{ e.stopPropagation(); renameChat(id); };
+                div.appendChild(renameBtn);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'chat-action-btn';
+                deleteBtn.textContent = '✕';
+                deleteBtn.title = 'Delete chat';
+                deleteBtn.onclick = (e)=>{ e.stopPropagation(); deleteChat(id); };
+                div.appendChild(deleteBtn);
+
+                div.onclick = () => loadChat(id);
+                historyContainer.appendChild(div);
+            });
+        }
+
+        function updateActiveChat(){
+            const items = historyContainer.querySelectorAll('.chat-history-item');
+            items.forEach(div=>{
+                const name = div.querySelector('.chat-name').textContent;
+                if(name === state.currentChatName){
+                    div.classList.add('active');
+                }else{
+                    div.classList.remove('active');
+                }
+            });
+        }
+
+        async function fetchChatList(){
+            try{
+                const res = await apiFetch('/chat/');
+                const json = await res.json();
+                state.chats = json.chats.sort((a,b)=>a.localeCompare(b));
+                const last = localStorage.getItem('lastChatName');
+                if(last && state.chats.includes(last)){
+                    state.currentChatName = last;
+                }else if(state.chats.length && !state.currentChatName){
+                    state.currentChatName = state.chats[0];
+                }
+                renderHistory();
+            }catch(e){ console.error('Failed to fetch chats:', e); }
+        }
+
+        async function loadChat(name){
+            state.currentChatName = name;
+            localStorage.setItem('lastChatName', name);
+            updateActiveChat();
+            chatContainer.innerHTML='';
+            systemPrompt.textContent='';
+            systemToggle.style.display='none';
+            try{
+                const res = await apiFetch(`/chat/${encodeURIComponent(name)}/history`);
+                if(!res.ok) return;
+                const data = await res.json();
+                let msgs = data;
+                if(!Array.isArray(data)){
+                    if(data.chat_name){
+                        state.currentChatName = data.chat_name;
+                        localStorage.setItem('lastChatName', data.chat_name);
+                        updateActiveChat();
+                    }
+                    msgs = data.history || [];
+                }
+                msgs.forEach(m => appendMessageToUI(m.role==='bot'?'assistant':m.role, m.content));
+            }catch(e){ console.error('Failed to load history:',e); }
+        }
+
+        // ===== Prompt Operations =====
+        function renderPromptList(){
+            promptList.innerHTML='';
+            noPromptBtn.classList.toggle('active', state.currentPrompt==='');
+            state.prompts.forEach(name=>{
+                const div=document.createElement('div');
+                div.className='chat-history-item';
+                const span=document.createElement('span');
+                span.className='chat-name';
+                span.textContent=name;
+                div.appendChild(span);
+                if(name===state.currentPrompt){
+                    div.classList.add('active');
+                    const ren=document.createElement('button');
+                    ren.className='chat-action-btn';
+                    ren.textContent='✎';
+                    ren.title='Rename prompt';
+                    ren.onclick=(e)=>{e.stopPropagation(); renamePrompt(name);};
+                    const del=document.createElement('button');
+                    del.className='chat-action-btn';
+                    del.textContent='✕';
+                    del.title='Delete prompt';
+                    del.onclick=(e)=>{e.stopPropagation(); deletePrompt(name);};
+                    div.appendChild(ren); div.appendChild(del);
+                }
+                div.onclick=()=>selectPrompt(name);
+                promptList.appendChild(div);
+            });
+        }
+
+        async function refreshGlobalPromptList(){
+            try{
+                const res = await apiFetch('/prompts/?names_only=1');
+                const json = await res.json();
+                state.prompts = json.prompts.sort((a,b)=>a.localeCompare(b));
+                const last = localStorage.getItem('lastGlobalPrompt');
+                if(last && state.prompts.includes(last)){
+                    await selectPrompt(last);
+                }else{
+                    renderPromptList();
+                }
+            }catch(e){ console.error('Failed to load prompts:',e); }
+        }
+
+        function addNewPrompt(){
+            const existing = state.prompts.map(p => p.toLowerCase());
+            let idx = 1;
+            let name = `New Prompt ${idx}`;
+            while(existing.includes(name.toLowerCase())){
+                idx++;
+                name = `New Prompt ${idx}`;
+            }
+            state.prompts.push(name);
+            state.prompts.sort((a,b)=>a.localeCompare(b));
+            state.currentPrompt = name;
+            renderPromptList();
+            openPromptEditor(name, true);
+        }
+
+        let editingPromptName = '';
+        let editingPromptIsNew = false;
+
+        async function openPromptEditor(name=state.currentPrompt, isNew=false){
+            if(!name) return alert('Select a prompt first.');
+            editingPromptName = name;
+            editingPromptIsNew = isNew;
+            promptModalTitle.textContent = `Edit Prompt \"${name}\"`;
+            promptNameInput.value = name;
+            if(isNew){
+                promptInput.value = '';
+                resizeModal(promptModal);
+                promptModal.style.display = 'flex';
+                return;
+            }
+            try{
+                const res = await apiFetch(`/prompts/${encodeURIComponent(name)}`);
+                if(!res.ok){ alert('Prompt not found.'); return; }
+                const promptObj = await res.json();
+                promptInput.value = promptObj.content;
+                resizeModal(promptModal);
+                promptModal.style.display = 'flex';
+            }catch(e){ console.error('Failed to load prompt:', e); }
+        }
+
+        function closePromptEditor(){
+            if(editingPromptIsNew){
+                state.prompts = state.prompts.filter(p=>p!==editingPromptName);
+                if(state.currentPrompt===editingPromptName){
+                    state.currentPrompt = '';
+                    localStorage.setItem('lastGlobalPrompt','');
+                }
+                renderPromptList();
+            }
+            promptModal.style.display = 'none';
+            editingPromptName = '';
+            editingPromptIsNew = false;
+        }
+
+        async function savePromptEdit(){
+            const nameTrim = promptNameInput.value.trim();
+            const contTrim = promptInput.value.trim();
+            if(!nameTrim) return alert('Name cannot be empty.');
+            if(contTrim==='') return alert('Prompt content cannot be empty.');
+            try{
+                if(editingPromptIsNew){
+                    const createRes = await apiFetch('/prompts/', {
+                        method:'POST',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({name: nameTrim, content: contTrim})
+                    });
+                    if(!createRes.ok){ const err=await createRes.json(); return alert('Error: '+err.detail); }
+                    editingPromptIsNew = false;
+                    editingPromptName = nameTrim;
+                }else{
+                    if(nameTrim !== editingPromptName){
+                        const renameRes = await apiFetch(`/prompts/${encodeURIComponent(editingPromptName)}/rename`, {
+                            method:'PUT',
+                            headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({new_name: nameTrim})
+                        });
+                        if(!renameRes.ok){ const err=await renameRes.json(); return alert('Error: '+err.detail); }
+                        editingPromptName = nameTrim;
+                        state.currentPrompt = nameTrim;
+                    }
+                    const updateRes = await apiFetch(`/prompts/${encodeURIComponent(nameTrim)}`, {
+                        method:'PUT',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({name: nameTrim, content: contTrim})
+                    });
+                    if(!updateRes.ok){ const err=await updateRes.json(); return alert('Error: '+err.detail); }
+                }
+                await refreshGlobalPromptList();
+                closePromptEditor();
+            }catch(e){ console.error('Failed to update prompt:', e); alert('Failed to update prompt: '+e.message); }
+        }
+
+        async function startNewChat(){
+            const existing = state.chats.map(c => c.toLowerCase());
+            let idx = 1;
+            let name = `New Chat ${idx}`;
+            while(existing.includes(name.toLowerCase())){
+                idx++;
+                name = `New Chat ${idx}`;
+            }
+            try{
+                const res = await apiFetch(`/chat/${encodeURIComponent(name)}`, {method:'POST'});
+                if(!res.ok){
+                    const err = await res.json().catch(()=>({detail:'Server error'}));
+                    alert('Error: '+(err.detail||res.status));
+                    return;
+                }
+                const data = await res.json().catch(()=>({}));
+                name = data.chat_name || name;
+            }catch(e){ console.error('Failed to create chat:', e); return; }
+            await fetchChatList();
+            state.currentChatName = name;
+            localStorage.setItem('lastChatName', name);
+            renderHistory();
+            chatContainer.innerHTML = '';
+            systemPrompt.textContent = '';
+            systemToggle.style.display = 'none';
+        }
+
+        async function deleteChat(chatName = state.currentChatName){
+            if(!chatName) return alert('Nothing to delete.');
+            confirmDialog('Are you sure you want to delete this chat?', async ()=>{
+                try{
+                const res = await apiFetch(`/chat/${encodeURIComponent(chatName)}`, {method:'DELETE'});
+                if(!res.ok){ if(res.status===404) throw new Error('Chat not found on server.'); else throw new Error('Unknown server error.'); }
+                await fetchChatList();
+                state.currentChatName = state.chats.length ? state.chats[0] : '';
+                localStorage.setItem('lastChatName', state.currentChatName);
+                renderHistory();
+                chatContainer.innerHTML = '';
+                systemPrompt.textContent = '';
+                systemToggle.style.display = 'none';
+                showChatTab();
+                }catch(err){ console.error('Failed to delete chat:', err); alert('Error deleting chat: '+err.message); }
+            });
+        }
+
+        async function renameChat(oldName){
+            let goalsData = {exists:false, character:'', setting:''};
+            try{
+                const res = await apiFetch(`/chat/${encodeURIComponent(oldName)}/goals`);
+                if(res.ok) goalsData = await res.json();
+            }catch(e){ console.error('Failed to load goals:', e); }
+            openDialog({
+                title: 'Edit Chat',
+                body:`<input id="dialog-input" type="text" style="width:100%;" value="${oldName}">`+
+                     `<div id="goals-context" style="display:${goalsData.exists?'block':'none'};margin-top:10px;">`+
+                     `<textarea id="character-input" rows="15" placeholder="Character">${goalsData.character||''}</textarea>`+
+                     `<textarea id="setting-input" rows="15" placeholder="Setting" style="margin-top:10px;">${goalsData.setting||''}</textarea>`+
+                     `</div>`,
+                okText:'Save',
+                extraLeft:`<button id="goals-toggle-btn">${goalsData.exists?'Disable Goals':'Enable Goals'}</button>`,
+                onOk: async ()=>{
+                    const trimmed = document.getElementById('dialog-input').value.trim();
+                    if(!trimmed){ alert('Name cannot be empty.'); return; }
+                    if(trimmed !== oldName){
+                        if(state.chats.includes(trimmed)) return alert('That name\u2019s already taken.');
+                        try{
+                            const res = await apiFetch(`/chat/${encodeURIComponent(oldName)}`, {
+                                method:'PUT',
+                                headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({new_name: trimmed})
+                            });
+                            if(!res.ok){
+                                const err = await res.json().catch(()=>({detail:'Server error'}));
+                                throw new Error(err.detail||'Server error');
+                            }
+                        }catch(e){ console.error('Rename failed:', e); alert('Failed to rename chat: '+e.message); return; }
+                        await fetchChatList();
+                        state.currentChatName = trimmed;
+                        localStorage.setItem('lastChatName', trimmed);
+                        renderHistory();
+                    }
+                    if(document.getElementById('goals-context').style.display!=='none'){
+                        const character = document.getElementById('character-input').value;
+                        const setting = document.getElementById('setting-input').value;
+                        try{
+                            await apiFetch(`/chat/${encodeURIComponent(trimmed)}/goals`, {
+                                method:'PUT',
+                                headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({character, setting})
+                            });
+                        }catch(e){ console.error('Failed to save goals:', e); }
+                    }
+                }
+            });
+            const toggleBtn = document.getElementById('goals-toggle-btn');
+            const contextDiv = document.getElementById('goals-context');
+            toggleBtn.addEventListener('click', async ()=>{
+                if(contextDiv.style.display==='none'){
+                    try{ await apiFetch(`/chat/${encodeURIComponent(oldName)}/goals/enable`, {method:'POST'}); }catch(e){ console.error('Enable goals failed:', e); }
+                    contextDiv.style.display='block';
+                    toggleBtn.textContent='Disable Goals';
+                }else{
+                    try{ await apiFetch(`/chat/${encodeURIComponent(oldName)}/goals/disable`, {method:'POST'}); }catch(e){ console.error('Disable goals failed:', e); }
+                    contextDiv.style.display='none';
+                    toggleBtn.textContent='Enable Goals';
+                }
+            });
+        }
+
+        async function selectPrompt(name){
+            state.currentPrompt = name;
+            localStorage.setItem('lastGlobalPrompt', name);
+            renderPromptList();
+            try{
+                await apiFetch('/prompts/select', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({name})
+                });
+            }catch(e){ console.error('Failed to update prompt:', e); }
+        }
+
+        async function deletePrompt(name){
+            confirmDialog('Are you sure you want to delete this prompt?', async ()=>{
+                try{
+                    const res = await apiFetch(`/prompts/${encodeURIComponent(name)}`, {method:'DELETE'});
+                    if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                    await refreshGlobalPromptList();
+                    if(state.currentPrompt===name){
+                        const next = state.prompts.length ? state.prompts[0] : '';
+                        await selectPrompt(next);
+                    }else{
+                        renderPromptList();
+                    }
+                }catch(e){ alert('Failed to delete prompt: '+e.message); }
+            });
+        }
+
+        async function renamePrompt(oldName){
+            await openPromptEditor(oldName);
+        }
+
+        // ===== Message Helpers =====
+        function autoResize(){ userInput.style.height='auto'; userInput.style.height=Math.min(userInput.scrollHeight,200)+'px'; }
+
+        function scrollToBottom(){
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        let activeMenu = null;
+
+        function closeMessageMenu(){ if(activeMenu){ activeMenu.remove(); activeMenu=null; } }
+
+        async function editMessage(index, current){
+            promptTextarea('Edit message:', current, async (text)=>{
+                try{
+                    const res = await apiFetch(`/chat/${encodeURIComponent(state.currentChatName)}/history/${index}`, {
+                        method:'PUT',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({content:text})
+                    });
+                    if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                    await loadChat(state.currentChatName);
+                }catch(e){ alert('Failed to edit: '+e.message); }
+            });
+        }
+
+        async function deleteMessage(index){
+            confirmDialog('Delete this message?', async ()=>{
+                try{
+                    const res = await apiFetch(`/chat/${encodeURIComponent(state.currentChatName)}/history/${index}`, {method:'DELETE'});
+                    if(!res.ok){ const j=await res.json(); throw new Error(j.detail||'Server error'); }
+                    await loadChat(state.currentChatName);
+                }catch(e){ alert('Failed to delete: '+e.message); }
+            });
+        }
+
+        function showMessageMenu(div){
+            closeMessageMenu();
+            const idx = Number(div.dataset.index);
+            const current = div.querySelector('.message-content').innerText;
+            const menu = document.createElement('div');
+            menu.className='message-menu';
+            const editBtn=document.createElement('button');
+            editBtn.textContent='Edit';
+            editBtn.onclick=(e)=>{ e.stopPropagation(); closeMessageMenu(); editMessage(idx,current); };
+            const delBtn=document.createElement('button');
+            delBtn.textContent='Delete';
+            delBtn.onclick=(e)=>{ e.stopPropagation(); deleteMessage(idx); closeMessageMenu(); };
+            menu.appendChild(editBtn); menu.appendChild(delBtn);
+            div.appendChild(menu);
+            activeMenu = menu;
+            setTimeout(()=>document.addEventListener('click', closeMessageMenu, {once:true}),0);
+        }
+
+        function appendMessageToUI(role, content){
+            const div=document.createElement('div');
+            div.className=`message ${role==='user'?'user-message':'ai-message'}`;
+            div.dataset.index = chatContainer.children.length;
+            const avatar=document.createElement('div');
+            avatar.className=`avatar ${role==='user'?'user-avatar':'ai-avatar'}`;
+            avatar.textContent = role==='user' ? (state.settings.userName[0]||'U') : (state.settings.botName[0]||'A');
+            const contentDiv=document.createElement('div');
+            contentDiv.className='message-content';
+            contentDiv.innerHTML=content.replace(/\n/g,'<br>');
+            const ctrl=document.createElement('button');
+            ctrl.className='message-control-btn';
+            ctrl.innerHTML='&#8942;';
+            ctrl.title='Options';
+            ctrl.onclick=(e)=>{ e.stopPropagation(); showMessageMenu(div); };
+            div.appendChild(avatar); div.appendChild(contentDiv); div.appendChild(ctrl);
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+
+
+        function updateBusyUI(){
+            const busy = state.isGenerating || state.isProcessing;
+            sendButton.disabled = busy;
+            sendOnlyButton.disabled = userInput.value.trim()==='' || busy;
+            userInput.classList.toggle('blocked', busy);
+            userInput.placeholder = busy ? 'Thinking...' : 'Type a message...';
+            if(state.isGenerating){
+                stopButton.style.display='inline';
+                sendButton.style.display='none';
+                sendOnlyButton.style.display='none';
+            }else{
+                stopButton.style.display='none';
+                sendButton.style.display='inline';
+                sendOnlyButton.style.display='inline';
+            }
+            promptIndicator.style.display = 'none';
+        }
+
+        async function pollPromptStatus(){
+            try{
+                const res = await apiFetch('/response_prompt_status');
+                if(res.ok){
+                    const data = await res.json();
+                    if(data.pending===0){
+                        state.isProcessing = false;
+                        updateBusyUI();
+                        promptCheckTimer = null;
+                        return;
+                    }
+                }
+            }catch(e){ console.error('Status check failed:', e); }
+            promptCheckTimer = setTimeout(pollPromptStatus, 1000);
+        }
+
+        function startPromptMonitor(){
+            if(promptCheckTimer) return;
+            state.isProcessing = true;
+            updateBusyUI();
+            pollPromptStatus();
+        }
+
+        // ===== Message Actions =====
+        async function sendMessage(allowEmpty=false){
+            const text = userInput.value.trim();
+            if(state.isGenerating) return;
+            if(!state.currentChatName){
+                await startNewChat();
+            }
+            try{
+                await apiFetch('/chat/', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({chat_name: state.currentChatName, prompt_name: state.currentPrompt})
+                });
+            }catch(e){ console.error('Update chat failed:', e); }
+            if(text==='' && !allowEmpty) return;
+            if(text.startsWith('/')){
+                userInput.value='';
+                autoResize();
+                sendButton.disabled=true;
+                sendOnlyButton.disabled=true;
+                appendMessageToUI('user', text);
+                state.isProcessing=true;
+                updateBusyUI();
+                try{
+                const res = await apiFetch('/chat/cli', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({message: text})
+                });
+                    const data = await res.json();
+                    appendMessageToUI('assistant', data.detail || '');
+                }catch(err){
+                    console.error('CLI command failed:', err);
+                    appendMessageToUI('assistant','[CLI error]');
+                }finally{
+                    state.isProcessing=false;
+                    updateBusyUI();
+                    userInput.focus();
+                }
+                return;
+            }
+            userInput.value=''; autoResize();
+            sendButton.disabled=true; sendOnlyButton.disabled=true;
+            if(text!=='') appendMessageToUI('user', text);
+            state.isGenerating=true;
+            updateBusyUI();
+            abortController = new AbortController();
+            try{
+                const response = await apiFetch('/chat/message', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({message: text}),
+                    signal: abortController.signal
+                });
+                if(!response.ok) throw new Error(`Server returned ${response.status}`);
+                appendMessageToUI('assistant','');
+                const aiElement = chatContainer.lastChild.querySelector('.message-content');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                let gotMeta = false;
+                let accumulated = '';
+                let lineCount = 0;
+                let limitReached = false;
+                let manualStop = false;
+                const scrollLimit = parseInt(state.settings.autoScrollLines) || 0;
+                handleScroll = () => {
+                    const atBottom = chatContainer.scrollHeight - chatContainer.scrollTop <= chatContainer.clientHeight + 10;
+                    if(!atBottom){
+                        manualStop = true;
+                    }else if(!limitReached){
+                        manualStop = false;
+                    }
+                };
+                chatContainer.addEventListener('scroll', handleScroll);
+                while(true){
+                    const {value, done} = await reader.read();
+                    if(value){
+                        buffer += decoder.decode(value, {stream: !done});
+                    }
+                    if(!gotMeta){
+                        const idx = buffer.indexOf('\n');
+                        if(idx !== -1){
+                            const metaStr = buffer.slice(0, idx);
+                            buffer = buffer.slice(idx + 1);
+                            try{
+                                const meta = JSON.parse(metaStr);
+                                systemPrompt.textContent = meta.prompt || '';
+                                systemToggle.style.display = meta.prompt ? 'block' : 'none';
+                            }catch{}
+                            gotMeta = true;
+                        }else if(done){
+                            break;
+                        }else{
+                            continue;
+                        }
+                    }
+                    if(gotMeta && buffer){
+                        if(accumulated==='' && buffer.startsWith('\n')){
+                            buffer = buffer.replace(/^\n+/, '');
+                        }
+                        lineCount += (buffer.match(/\n/g) || []).length;
+                        accumulated += buffer;
+                        lineCount = accumulated.split(/\n/).length;
+                        aiElement.innerHTML = accumulated.replace(/\n/g,'<br>');
+                        if(!limitReached && scrollLimit>0 && lineCount>=scrollLimit){
+                            limitReached = true;
+                        }
+                        if(!manualStop && !limitReached){
+                            scrollToBottom();
+                        }
+                        buffer = '';
+                    }
+                    if(done) break;
+                }
+            }catch(err){
+                if(err.name!=='AbortError'){
+                    console.error('Streaming fetch failed:', err);
+                    appendMessageToUI('assistant','[Error generating response]');
+                }
+            }finally{
+                if(handleScroll){
+                    chatContainer.removeEventListener('scroll', handleScroll);
+                    handleScroll = null;
+                }
+                state.isGenerating=false;
+                updateBusyUI();
+                userInput.focus();
+                startPromptMonitor();
+            }
+        }
+
+        async function sendMessageNoGen(){
+            const text = userInput.value.trim();
+            if(text==='' || state.isGenerating) return;
+            if(!state.currentChatName){
+                await startNewChat();
+            }
+            try{
+                await apiFetch('/chat/', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({chat_name: state.currentChatName, prompt_name: state.currentPrompt})
+                });
+            }catch(e){ console.error('Update chat failed:', e); }
+            userInput.value=''; autoResize();
+            sendButton.disabled=true; sendOnlyButton.disabled=true;
+            appendMessageToUI('user', text);
+            try{
+                await apiFetch('/chat/message', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({message: text})
+                });
+            }catch(err){
+                console.error('Send only failed:', err);
+            }finally{
+                updateBusyUI();
+                userInput.focus();
+            }
+        }
+
+        function stopGenerating(){
+            if(abortController){ abortController.abort(); }
+            state.isGenerating=false;
+            updateBusyUI();
+        }
+
+        // ===== Event Binding and Initialization =====
+        function setupEvents(){
+            themeSelect.addEventListener('change', e=>applyTheme(e.target.value));
+            textSizeSelect.addEventListener('change', e=>applyTextSize(e.target.value));
+            // prompt selection handled in render
+            openSettingsBtn.addEventListener('click', openSettings);
+            settingsSaveBtn.addEventListener('click', saveSettingsFromUI);
+            serverSettingsSaveBtn.addEventListener('click', saveServerSettings);
+            settingsModal.addEventListener('click', e=>{ if(e.target===settingsModal) closeSettings(); });
+            sendButton.addEventListener('click', () => {
+                if(userInput.value.trim()===''){
+                    confirmDialog('Generate with no prompt?', () => sendMessage(true));
+                } else {
+                    sendMessage();
+                }
+            });
+            sendOnlyButton.addEventListener('click', sendMessageNoGen);
+            stopButton.addEventListener('click', stopGenerating);
+            userInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
+            userInput.addEventListener('input', ()=>{ autoResize(); updateBusyUI(); });
+            userInput.addEventListener('blur', ()=>{ setTimeout(scrollToBottom, 100); });
+            newChatButton.addEventListener('click', startNewChat);
+            newPromptBtn.addEventListener('click', addNewPrompt);
+            noPromptBtn.addEventListener('click', ()=>selectPrompt(''));
+            promptSaveBtn.addEventListener('click', savePromptEdit);
+            promptCancelBtn.addEventListener('click', closePromptEditor);
+            promptModal.addEventListener('click', e=>{ if(e.target===promptModal) closePromptEditor(); });
+            dialogModal.addEventListener('click', e=>{ if(e.target===dialogModal) closeDialog(); });
+            systemToggle.addEventListener('click', toggleSystem);
+            hideTab.addEventListener('click', hideSidebar);
+            chatTab.addEventListener('click', showChatTab);
+            promptTab.addEventListener('click', showPromptTab);
+            moreTab.addEventListener('click', showMoreTab);
+        }
+
+        (async function init(){
+            loadSettings();
+            loadTheme();
+            loadTextSize();
+            setupEvents();
+            showChatTab();
+            await refreshGlobalPromptList();
+            await fetchChatList();
+            if(state.currentChatName) await loadChat(state.currentChatName);
+            await loadServerSettings();
+            autoResize();
+            updateBusyUI();
+        })();
+    </script>
+</body>
+</html>
