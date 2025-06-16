@@ -34,7 +34,7 @@ autoScrollLines: 0
     },
     serverSettings: {
 max_tokens: 250,
-temp: 0.8,
+temperature: 0.8,
 top_k: 40,
 top_p: 0.95,
 min_p: 0.05,
@@ -75,7 +75,7 @@ const userNameInput    = document.getElementById('user-name-input');
 const botNameInput     = document.getElementById('bot-name-input');
 const scrollLinesInput = document.getElementById('scroll-lines-input');
 const maxTokensInput   = document.getElementById('max-tokens-input');
-const tempInput = document.getElementById('temp-input');
+const temperatureInput = document.getElementById('temperature-input');
 const topKInput        = document.getElementById('top-k-input');
 const topPInput        = document.getElementById('top-p-input');
 const minPInput        = document.getElementById('min-p-input');
@@ -171,7 +171,7 @@ if(!res.ok) return;
 const data = await res.json();
 state.serverSettings = data;
 maxTokensInput.value     = data.max_tokens ?? '';
-tempInput.value          = data.temp ?? '';
+temperatureInput.value   = data.temperature ?? '';
 topKInput.value          = data.top_k ?? '';
 topPInput.value          = data.top_p ?? '';
 minPInput.value          = data.min_p ?? '';
@@ -188,7 +188,7 @@ newGoalBiasInput.value   = data.new_goal_bias ?? '';
 async function saveServerSettings(){
     const payload = {
 max_tokens: parseInt(maxTokensInput.value) || 1,
-temp: parseFloat(tempInput.value) || 0,
+temperature: parseFloat(temperatureInput.value) || 0,
 top_k: parseInt(topKInput.value) || 0,
 top_p: parseFloat(topPInput.value) || 0,
 min_p: parseFloat(minPInput.value) || 0,
