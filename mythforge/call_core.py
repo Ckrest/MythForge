@@ -160,7 +160,6 @@ def handle_chat(
     memory: MemoryManager = MEMORY_MANAGER,
     stream: bool = False,
     *,
-    current_chat_name: str | None = None,
     current_global_prompt: str | None = None,
 ):
     """Orchestrate a full chat cycle and persist the result."""
@@ -169,13 +168,12 @@ def handle_chat(
         "chat_flow",
         {
             "function": "handle_chat",
-            "chat_name": current_chat_name or chat_name,
+            "chat_name": chat_name,
             "message": message,
             "global_prompt": global_prompt,
             "call_type": call_type,
             "options": options,
             "stream": stream,
-            "current_chat_name": current_chat_name,
             "current_global_prompt": current_global_prompt,
             "memory_root": memory.root_dir,
         },
