@@ -46,10 +46,25 @@ class PromptPreparer:
         system_text_clean = (
             system_text.replace("\n", " ").replace('"', '\\"').strip()
         )
-        user_text_clean = user_text.replace("\n", " ").replace('"', '\\"').strip()
-        prompt = (
-            f"<|im_start|>{system_text_clean}<|im_end|>"
-            f"<|im_start|>user {user_text_clean}<|im_end|>"
-            f"<|im_start|>assistant"
+
+        user_text_clean = (
+            user_text.replace("\n", " ").replace('"', '\\"').strip()
         )
-        return prompt
+
+        # Construct the prompt according to Llama 3 chat format
+        prompt_full = [f"<|begin_of_text|>"]
+
+        if system_text_clean:
+            prompt_full.append(
+                f"<|start_header_id|>system<|end_header_id|>\n"
+                f"{system_text_clean}<|eot_id|>"
+            )
+
+        prompt_full.append(
+            f"<|start_header_id|>user<|end_header_id|>\n"
+            f"{user_text_clean}<|eot_id|>"
+        )
+
+        prompt_full.append(f"<|start_header_id|>assistant<|end_header_id|>\n")
+
+        return "".join(prompt_full)
