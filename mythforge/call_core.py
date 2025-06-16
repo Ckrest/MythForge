@@ -3,6 +3,7 @@ from __future__ import annotations
 import textwrap
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Iterator, List
+import json
 
 from .model import GENERATION_CONFIG
 
@@ -24,8 +25,6 @@ class CallData:
     global_prompt: str = ""
     call_type: str = "standard_chat"
     options: Dict[str, Any] = None
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +223,9 @@ def handle_chat(
     if stream:
 
         def _generate():
+            meta = {"prompt": current_prompt or call.global_prompt}
+            yield json.dumps(meta, ensure_ascii=False) + "\n"
+
             parts: list[str] = []
             for text in processed:
                 parts.append(text)
@@ -250,5 +252,3 @@ def handle_chat(
     )
 
     return {"detail": assistant_reply}
-
-
