@@ -14,8 +14,7 @@ from .memory import (
     MEMORY_MANAGER,
     initialize as init_memory,
 )
-from .call_core import ChatRunner, CallData
-from .call_templates import standard_chat
+from .call_core import CallData
 from .prompt_preparer import PromptPreparer
 from .invoker import LLMInvoker
 from .logger import LOGGER
@@ -59,7 +58,6 @@ class ChatRequest(BaseModel):
     """Request model for chat-related endpoints."""
 
     chat_name: str
-    prompt_name: str = ""
     message: str
     prompt_name: str | None = None
 

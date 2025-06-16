@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import json
-import os
-import re
-import threading
-import queue
 import textwrap
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Iterator, List, TYPE_CHECKING, Callable
+from typing import Any, Dict, Iterable, Iterator, List
+
+from .model import GENERATION_CONFIG
 
 from fastapi.responses import StreamingResponse
 
 from .invoker import LLMInvoker
 from .prompt_preparer import PromptPreparer
-from .response_parser import ResponseParser
+from .response_parser import ResponseParser, _parse_goals_from_response
 from .memory import MemoryManager, MEMORY_MANAGER
 from .logger import LOGGER
 
@@ -136,8 +133,13 @@ Do not include any explanation, commentary, or other text. If no goals are curre
         {**goal_generation.MODEL_LAUNCH_OVERRIDE},
     )
 
+    parsed = ResponseParser().load(text).parse()
+    if isinstance(parsed, Iterator):
+        parsed = "".join(parsed)
+    cleaned = clean_text(str(parsed), trim=True)
+    new_goals = _parse_goals_from_response(cleaned)
 
-    combined = state.get("goals", []) + goals
+    combined = state.get("goals", []) + new_goals
     state["goals"] = combined[:goal_limit]
     state["messages_since_goal_eval"] = 0
     memory.save_goal_state(chat_name, state)
@@ -172,13 +174,7 @@ def _finalize_chat(
     history = memory.load_history(call.chat_name)
     history.append({"role": "assistant", "content": reply})
     memory.save_history(call.chat_name, history)
-    enqueue_task(
-        "goal_generation",
-        _maybe_generate_goals,
-        call.chat_name,
-        call.global_prompt,
-        memory,
-    )
+    _maybe_generate_goals(call.chat_name, call.global_prompt, memory)
 
 
 def handle_chat(
@@ -223,7 +219,7 @@ def handle_chat(
             call.options,
         )
     else:
-        processed = standard_chat.prepare_and_chat(call)
+        processed = standard_chat.standard_chat(call)
 
     if stream:
 
