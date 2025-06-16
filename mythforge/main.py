@@ -480,24 +480,30 @@ def chat_message(chat_name: str, req: ChatRequest):
 def send_chat(req: SendChatRequest):
     """Handle a chat message using JSON body for identifiers."""
 
-    memory_manager.chat_name = req.chat_name or ""
-    memory_manager.global_prompt_name = req.global_prompt_name or ""
     memory_manager.update_paths(
-        chat_name=memory_manager.chat_name,
-        global_prompt_name=memory_manager.global_prompt_name,
+        chat_name=req.chat_name,
+        global_prompt_name=req.global_prompt_name,
     )
-    chat_history = memory_manager.load_chat_history(memory_manager.chat_name)
+
+    chat_name = memory_manager.chat_name
+    global_prompt_name = memory_manager.global_prompt_name
+
+    chat_history = memory_manager.load_chat_history(chat_name)
     chat_history.append({"role": "user", "content": req.message})
-    memory_manager.save_chat_history(memory_manager.chat_name, chat_history)
-    global_prompt = req.global_prompt or ""
+    memory_manager.save_chat_history(chat_name, chat_history)
+
+    memory_manager.load_goals(chat_name)
+
+    global_prompt = memory_manager.get_global_prompt(global_prompt_name)
+
     return handle_chat(
-        memory_manager.chat_name,
+        chat_name,
         req.message,
         global_prompt,
         memory=memory_manager,
         stream=True,
-        current_chat_name=memory_manager.chat_name,
-        current_global_prompt=req.global_prompt_name,
+        current_chat_name=chat_name,
+        current_global_prompt=global_prompt_name,
     )
 
 
