@@ -74,15 +74,30 @@ def _select_model_path(background: bool = False) -> str:
 
 
 _LLAMA: Llama | None = None
+_BACKGROUND_LLAMA: Llama | None = None
 
 
 def _get_llama(background: bool = False, verbose: bool = False) -> Llama:
     """Instantiate and cache the Llama backend."""
 
-    global _LLAMA
+    global _LLAMA, _BACKGROUND_LLAMA
+    if background:
+        if _BACKGROUND_LLAMA is None:
+            _BACKGROUND_LLAMA = Llama(
+                model_path=_select_model_path(True),
+                n_ctx=DEFAULT_CTX_SIZE,
+                n_gpu_layers=DEFAULT_N_GPU_LAYERS,
+                n_batch=DEFAULT_N_BATCH,
+                n_threads=DEFAULT_N_THREADS,
+                verbose=verbose,
+            )
+        elif hasattr(_BACKGROUND_LLAMA, "verbose"):
+            _BACKGROUND_LLAMA.verbose = verbose
+        return _BACKGROUND_LLAMA
+
     if _LLAMA is None:
         _LLAMA = Llama(
-            model_path=_select_model_path(background),
+            model_path=_select_model_path(False),
             n_ctx=DEFAULT_CTX_SIZE,
             n_gpu_layers=DEFAULT_N_GPU_LAYERS,
             n_batch=DEFAULT_N_BATCH,
@@ -154,6 +169,7 @@ __all__ = [
     "DEFAULT_N_GPU_LAYERS",
     "call_llm",
     "shutdown_llama",
+    "shutdown_background_llama",
 ]
 
 
@@ -162,4 +178,11 @@ def shutdown_llama() -> None:
 
     global _LLAMA
     _LLAMA = None
+
+
+def shutdown_background_llama() -> None:
+    """Release the cached background Llama instance."""
+
+    global _BACKGROUND_LLAMA
+    _BACKGROUND_LLAMA = None
 
