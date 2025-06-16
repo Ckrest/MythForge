@@ -34,16 +34,16 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _maybe_generate_goals(
+def evaluate_goals(
     chat_name: str,
     global_prompt: str,
     memory: MemoryManager = MEMORY_MANAGER,
 ) -> None:
-    """Generate new goals if refresh interval has been met."""
+    """Generate new goals when below the configured limit."""
     LOGGER.log(
         "chat_flow",
         {
-            "function": "_maybe_generate_goals",
+            "function": "evaluate_goals",
             "chat_name": chat_name,
             "global_prompt": global_prompt,
             "memory_root": memory.root_dir,
@@ -56,25 +56,9 @@ def _maybe_generate_goals(
     setting = goals.setting
 
     state = memory.load_goal_state(chat_name)
-    state["messages_since_goal_eval"] = (
-        state.get("messages_since_goal_eval", 0) + 1
-    )
-
-    refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
-    LOGGER.log(
-        "goal_state_check",
-        {
-            "chat_name": chat_name,
-            "current": state["messages_since_goal_eval"],
-            "refresh_rate": refresh,
-            "generate": state["messages_since_goal_eval"] >= refresh,
-        },
-    )
-    if state["messages_since_goal_eval"] < refresh:
-        memory.save_goal_state(chat_name, state)
-        return
-
     goal_limit = GENERATION_CONFIG.get("goal_limit", 3)
+    if len(state.get("goals", [])) >= goal_limit:
+        return
 
     history = memory.load_history(chat_name)
     user_text = "\n".join(m.get("content", "") for m in history)
@@ -130,7 +114,6 @@ Do not include any explanation, commentary, or other text. If no goals are curre
 
     combined = state.get("goals", []) + new_goals
     state["goals"] = combined[:goal_limit]
-    state["messages_since_goal_eval"] = 0
     memory.save_goal_state(chat_name, state)
 
 
@@ -167,7 +150,7 @@ def _finalize_chat(
     history = memory.load_history(chat_name)
     history.append({"role": "assistant", "content": reply})
     memory.save_history(chat_name, history)
-    _maybe_generate_goals(chat_name, global_prompt, memory)
+    evaluate_goals(chat_name, global_prompt, memory)
 
 
 def handle_chat(
