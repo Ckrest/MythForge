@@ -88,13 +88,11 @@ Do not include any explanation, commentary, or other text. If no goals are curre
     system_parts.append(textwrap.dedent(goal_prompt).strip())
     system_text = "\n".join(system_parts)
 
+    preparer = PromptPreparer()
+    prompt_log = preparer.format_for_logging(system_text, user_text)
     LOGGER.log(
         "prepared_prompts",
-        {
-            "call_type": "goal_generation",
-            "system_text": system_text,
-            "user_text": user_text,
-        },
+        {"call_type": "goal_generation", "prompt": prompt_log},
     )
 
     from .call_templates import generate_goals

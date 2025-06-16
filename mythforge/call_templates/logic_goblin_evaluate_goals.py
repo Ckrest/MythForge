@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterator
 from ..prompt_preparer import PromptPreparer
 from ..response_parser import ResponseParser
 from ..invoker import LLMInvoker
+from ..logger import LOGGER
 
 MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
     "background": True,
@@ -55,7 +56,14 @@ def logic_goblin_evaluate_goals(
     )
     system_text = logic_goblin_evaluate_goals_prepared_system_text(active_goals)
 
-    prepared = PromptPreparer().prepare(system_text, user_text)
+    preparer = PromptPreparer()
+    prompt_log = preparer.format_for_logging(system_text, user_text)
+    LOGGER.log(
+        "prepared_prompts",
+        {"call_type": "logic_goblin", "prompt": prompt_log},
+    )
+
+    prepared = preparer.prepare(system_text, user_text)
     opts = {**MODEL_LAUNCH_OVERRIDE, **options}
     raw = LLMInvoker().invoke(prepared, opts)
     return ResponseParser().load(raw).parse()

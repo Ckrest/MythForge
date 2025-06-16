@@ -61,3 +61,20 @@ class PromptPreparer:
         prompt_full.append({"role": "assistant", "content": ""})
 
         return prompt_full
+
+    def format_for_logging(self, system_text: str, user_text: str) -> str:
+        """Return ``system_text`` and ``user_text`` as a single log string."""
+
+        parts = [
+            "[system text]",
+            "",
+            system_text or "",
+            "",
+            "[user text]",
+            "",
+            user_text or "",
+            "",
+            "[assistant]",
+        ]
+
+        return "\n".join(parts)

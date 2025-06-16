@@ -84,7 +84,15 @@ def standard_chat(
 
     system_text = standard_chat_prepared_system_text(chat_name, global_prompt)
     user_text = standard_chat_prepared_user_text(chat_name, message)
-    prepared = PromptPreparer().prepare(system_text, user_text)
+
+    preparer = PromptPreparer()
+    prompt_log = preparer.format_for_logging(system_text, user_text)
+    LOGGER.log(
+        "prepared_prompts",
+        {"call_type": "standard_chat", "prompt": prompt_log},
+    )
+
+    prepared = preparer.prepare(system_text, user_text)
     opts = {**MODEL_LAUNCH_OVERRIDE, **options}
     raw = LLMInvoker().invoke(prepared, opts)
     return ResponseParser().load(raw).parse()
