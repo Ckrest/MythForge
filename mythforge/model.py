@@ -109,6 +109,7 @@ def call_llm(system_prompt: str, user_prompt: str, **overrides):
 
     background = params.pop("background", False)
     stream = params.pop("stream", True)
+    params.pop("n_gpu_layers", None)
 
     llm = _get_llama(background)
     prompt = f"{system_prompt}\n{user_prompt}".strip()
