@@ -125,12 +125,12 @@ Do not include any explanation, commentary, or other text. If no goals are curre
         },
     )
 
-    from .call_templates import goal_generation
+    from .call_templates import generate_goals
 
-    text = goal_generation.generate_goals(
+    text = generate_goals.generate_goals(
         system_text,
         user_text,
-        {**goal_generation.MODEL_LAUNCH_OVERRIDE},
+        {**generate_goals.MODEL_LAUNCH_OVERRIDE},
     )
 
     parsed = ResponseParser().load(text).parse()
