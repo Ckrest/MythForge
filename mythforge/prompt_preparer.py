@@ -52,4 +52,4 @@ class PromptPreparer:
             f"<|im_start|>user {user_clean}<|im_end|>"
             f"<|im_start|>assistant"
         )
-        return f'--prompt "{prompt}"'
+        return prompt
