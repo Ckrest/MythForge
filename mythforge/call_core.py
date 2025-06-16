@@ -15,8 +15,6 @@ from .memory import MemoryManager, MEMORY_MANAGER
 from .logger import LOGGER
 
 
-
-
 # ---------------------------------------------------------------------------
 # Text helpers
 # ---------------------------------------------------------------------------
@@ -56,9 +54,7 @@ def _maybe_generate_goals(
     setting = goals.setting
 
     state = memory.load_goal_state(chat_name)
-    state["messages_since_goal_eval"] = (
-        state.get("messages_since_goal_eval", 0) + 1
-    )
+    state["messages_since_goal_eval"] = state.get("messages_since_goal_eval", 0) + 1
 
     refresh = GENERATION_CONFIG.get("goal_refresh_rate", 1)
     LOGGER.log(
@@ -76,8 +72,8 @@ def _maybe_generate_goals(
 
     goal_limit = GENERATION_CONFIG.get("goal_limit", 3)
 
-    history = memory.load_history(chat_name)
-    user_text = "\n".join(m.get("content", "") for m in history)
+    chat_history = memory.load_chat_history(chat_name)
+    user_text = "\n".join(m.get("content", "") for m in chat_history)
 
     system_parts = [p for p in (global_prompt, character, setting) if p]
 
@@ -164,9 +160,9 @@ def _finalize_chat(
         },
     )
 
-    history = memory.load_history(chat_name)
-    history.append({"role": "assistant", "content": reply})
-    memory.save_history(chat_name, history)
+    chat_history = memory.load_chat_history(chat_name)
+    chat_history.append({"role": "assistant", "content": reply})
+    memory.save_chat_history(chat_name, chat_history)
     _maybe_generate_goals(chat_name, global_prompt, memory)
 
 
@@ -180,7 +176,7 @@ def handle_chat(
     stream: bool = False,
     *,
     current_chat_name: str | None = None,
-    current_prompt: str | None = None,
+    current_global_prompt: str | None = None,
 ):
     """Orchestrate a full chat cycle and persist the result."""
 
@@ -195,7 +191,7 @@ def handle_chat(
             "options": options,
             "stream": stream,
             "current_chat_name": current_chat_name,
-            "current_prompt": current_prompt,
+            "current_global_prompt": current_global_prompt,
             "memory_root": memory.root_dir,
         },
     )
@@ -205,9 +201,7 @@ def handle_chat(
     options = options or {"stream": stream}
 
     call_map = {
-        "logic_check": lambda: logic_check.logic_check(
-            global_prompt, message, options
-        ),
+        "logic_check": lambda: logic_check.logic_check(global_prompt, message, options),
         "standard_chat": lambda: standard_chat.standard_chat(
             chat_name, message, global_prompt, options
         ),
@@ -219,7 +213,7 @@ def handle_chat(
     if stream:
 
         def _generate():
-            meta = {"prompt": current_prompt or global_prompt}
+            meta = {"prompt": current_global_prompt or global_prompt}
             yield json.dumps(meta, ensure_ascii=False) + "\n"
 
             parts: list[str] = []
@@ -236,7 +230,7 @@ def handle_chat(
                 call_type,
                 options,
                 memory,
-                prompt=current_prompt,
+                prompt=current_global_prompt,
             )
 
         return StreamingResponse(_generate(), media_type="text/plain")
@@ -250,7 +244,7 @@ def handle_chat(
         call_type,
         options,
         memory,
-        prompt=current_prompt,
+        prompt=current_global_prompt,
     )
 
     return {"detail": assistant_reply}

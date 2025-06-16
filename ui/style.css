@@ -105,7 +105,7 @@ body {
 .sidebar button:hover { background-color: var(--sidebar-btn-hover); }
 .sidebar button.active { background-color: var(--sidebar-btn-hover); }
 .sidebar button.new-chat { padding: 12px; text-align: left; margin-bottom: 20px; display: flex; align-items: center; }
-.history-container { flex-grow: 1; overflow-y: auto; }
+.chat_history-container { flex-grow: 1; overflow-y: auto; }
 .chat-history-item {
     width: 100%;
     box-sizing: border-box;
