@@ -6,6 +6,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+import re
 
 
 def _load_json(path: str) -> list[Any] | dict[str, Any] | list:
@@ -39,6 +40,12 @@ def _save_json(path: str, data: Any) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     os.replace(tmp, path)
+
+
+def _natural_sort_key(text: str) -> list[Any]:
+    """Return a key for natural sorting of ``text`` with numbers."""
+
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", text)]
 
 
 @dataclass
@@ -139,11 +146,12 @@ class MemoryManager:
         """Return a list of existing chat identifiers."""
 
         os.makedirs(self.chats_dir, exist_ok=True)
-        return [
+        chats = [
             d
             for d in os.listdir(self.chats_dir)
             if os.path.isdir(os.path.join(self.chats_dir, d))
         ]
+        return sorted(chats, key=_natural_sort_key)
 
     def delete_chat(self, chat_name: str) -> None:
         """Remove all files for ``chat_name``."""
@@ -381,7 +389,7 @@ class MemoryManager:
 
         os.makedirs(self.global_prompts_dir, exist_ok=True)
         prompts: List[dict[str, str]] = []
-        for fname in sorted(os.listdir(self.global_prompts_dir)):
+        for fname in sorted(os.listdir(self.global_prompts_dir), key=_natural_sort_key):
             if not fname.lower().endswith(".json"):
                 continue
             data = self._read_json(os.path.join(self.global_prompts_dir, fname))
