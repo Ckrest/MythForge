@@ -35,11 +35,11 @@
   },
   "Model Generation Parameters": {
     "max_tokens": {
-      "value": 400,
+      "value": 600,
       "description": "Maximum number of tokens to generate"
     },
     "temperature": {
-      "value": 1.8,
+      "value": 1.2,
       "description": "Sampling temperature"
     },
     "top_k": {
@@ -97,11 +97,11 @@
   },
   "Model Selection": {
     "primary_model": {
-      "value": "unsloth.Q4_K_M.gguf",
+      "value": 
       "description": "Main model to use"
     },
     "background_model": {
-      "value": "zzphi-2.Q5_K_M.gguf",
+      "value": 
       "description": "Background or secondary model"
     }
   }
