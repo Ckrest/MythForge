@@ -685,7 +685,8 @@ onOk: async ()=>{
         localStorage.setItem('lastChatName', trimmed);
         renderHistory();
     }
-    if(document.getElementById('goals-context').style.display!=='none'){
+    const enableAfter = document.getElementById('goals-context').style.display !== 'none';
+    if(enableAfter){
         const character = document.getElementById('character-input').value;
         const setting = document.getElementById('setting-input').value;
         try{
@@ -694,19 +695,22 @@ onOk: async ()=>{
                 headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({character, setting})
             });
+            await apiFetch(`/chats/${encodeURIComponent(trimmed)}/goals/enable`, {method:'POST'});
         }catch(e){ console.error('Failed to save goals:', e); }
+    }else{
+        try{
+            await apiFetch(`/chats/${encodeURIComponent(trimmed)}/goals/disable`, {method:'POST'});
+        }catch(e){ console.error('Failed to disable goals:', e); }
     }
 }
     });
     const toggleBtn = document.getElementById('goals-toggle-btn');
     const contextDiv = document.getElementById('goals-context');
-    toggleBtn.addEventListener('click', async ()=>{
+    toggleBtn.addEventListener('click', ()=>{
 if(contextDiv.style.display==='none'){
-    try{ await apiFetch(`/chats/${encodeURIComponent(oldId)}/goals/enable`, {method:'POST'}); }catch(e){ console.error('Enable goals failed:', e); }
     contextDiv.style.display='block';
     toggleBtn.textContent='Disable Goals';
 }else{
-    try{ await apiFetch(`/chats/${encodeURIComponent(oldId)}/goals/disable`, {method:'POST'}); }catch(e){ console.error('Disable goals failed:', e); }
     contextDiv.style.display='none';
     toggleBtn.textContent='Enable Goals';
 }
