@@ -21,6 +21,10 @@ return fetch(url, options);
     options.body = JSON.stringify(payload);
     return fetch(base+rel, options);
 }
+
+function naturalSort(a,b){
+    return a.localeCompare(b, undefined, {numeric: true, sensitivity:'base'});
+}
 const state = {
     chats: [],
     currentChatName: '',
@@ -424,7 +428,7 @@ async function fetchChatList(){
     try{
 const res = await apiFetch('/chats/');
 const json = await res.json();
-state.chats = json.chats.sort((a,b)=>a.localeCompare(b));
+state.chats = json.chats.sort(naturalSort);
 const last = localStorage.getItem('lastChatName');
 if(last && state.chats.includes(last)){
     state.currentChatName = last;
@@ -493,7 +497,7 @@ async function refreshGlobalPromptList(){
     try{
 const res = await apiFetch('/prompts/?names_only=1');
 const json = await res.json();
-state.prompts = json.prompts.sort((a,b)=>a.localeCompare(b));
+state.prompts = json.prompts.sort(naturalSort);
 const last = localStorage.getItem('lastPromptName');
 if(last && state.prompts.includes(last)){
     await selectPrompt(last);
@@ -512,7 +516,7 @@ idx++;
 name = `New Prompt ${idx}`;
     }
     state.prompts.push(name);
-    state.prompts.sort((a,b)=>a.localeCompare(b));
+    state.prompts.sort(naturalSort);
     state.globalPromptName = name;
     renderPromptList();
     openPromptEditor(name, true);
