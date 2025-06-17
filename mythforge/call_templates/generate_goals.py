@@ -154,13 +154,16 @@ Do not include any explanation, commentary, or other text. If no goals are curre
     new_goals = _parse_goals_from_response(cleaned)
 
     state.pop("error", None)
+    old_len = len(state.get("goals", []))
     combined = state.get("goals", []) + new_goals
 
-    if new_goals and state.get("goals"):
+    if new_goals and (old_len or len(new_goals) > 1):
         duplicates = logic_goblin_duplicate_goals_call(combined)
         if duplicates:
-            to_remove = {max(a, b) for a, b in duplicates}
-            combined = [g for i, g in enumerate(combined) if i not in to_remove]
+            new_range = range(old_len, len(combined))
+            to_remove = {idx for pair in duplicates for idx in pair if idx in new_range}
+            if to_remove:
+                combined = [g for i, g in enumerate(combined) if i not in to_remove]
 
     state["goals"] = combined[:goal_limit]
     memory.save_goal_state(chat_name, state)
