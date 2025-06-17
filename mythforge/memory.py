@@ -236,6 +236,8 @@ class MemoryManager:
             }
             self._write_json(path, obj)
             os.remove(disabled)
+        elif not os.path.exists(path):
+            self._write_json(path, {"character": "", "setting": ""})
         self.load_goals(chat_name)
 
     # ------------------------------------------------------------------
