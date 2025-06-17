@@ -150,9 +150,19 @@ Do not include any explanation, commentary, or other text. If no goals are curre
         logic_goblin_duplicate_goals_call(state.get("goals", []) + new_goals)
 
     state.pop("error", None)
-    combined = state.get("goals", []) + new_goals
+    previous = list(state.get("goals", []))
+    combined = previous + new_goals
     state["goals"] = combined[:goal_limit]
     memory.save_goal_state(chat_name, state)
+
+    for goal in new_goals:
+        desc = goal.get("description", str(goal))
+        memory.add_debug_message(f"new goal: {desc}")
+
+    removed = combined[goal_limit:]
+    for goal in removed:
+        desc = goal.get("description", str(goal))
+        memory.add_debug_message(f"goal removed: {desc}")
 
 
 def evaluate_goals(

@@ -794,13 +794,22 @@ function showMessageMenu(div){
     setTimeout(()=>document.addEventListener('click', closeMessageMenu, {once:true}),0);
 }
 
-function appendMessageToUI(role, content){
+function appendMessageToUI(role, content, extraClass=''){ 
     const div=document.createElement('div');
-    div.className=`message ${role==='user'?'user-message':'ai-message'}`;
+    let base = 'message ';
+    if(role==='user') base += 'user-message';
+    else if(role==='assistant') base += 'ai-message';
+    else base += 'system-message';
+    if(extraClass) base += ' ' + extraClass;
+    div.className = base;
     div.dataset.index = chatContainer.children.length;
     const avatar=document.createElement('div');
-    avatar.className=`avatar ${role==='user'?'user-avatar':'ai-avatar'}`;
-    avatar.textContent = role==='user' ? (state.settings.userName[0]||'U') : (state.settings.botName[0]||'A');
+    if(role==='user') avatar.className='avatar user-avatar';
+    else if(role==='assistant') avatar.className='avatar ai-avatar';
+    else avatar.className='avatar system-avatar';
+    if(role==='user') avatar.textContent = (state.settings.userName[0]||'U');
+    else if(role==='assistant') avatar.textContent = (state.settings.botName[0]||'A');
+    else avatar.textContent = 'S';
     const contentDiv=document.createElement('div');
     contentDiv.className='message-content';
     contentDiv.innerHTML=content.replace(/\n/g,'<br>');
@@ -839,6 +848,9 @@ async function pollPromptStatus(){
 const res = await apiFetch('/response_prompt_status');
 if(res.ok){
     const data = await res.json();
+    if(Array.isArray(data.debug)){
+        data.debug.forEach(msg=>appendMessageToUI('system', msg, 'debug'));
+    }
     if(data.pending===0){
         state.isProcessing = false;
         updateBusyUI();

@@ -71,6 +71,7 @@ class MemoryManager:
         self.chat_name: str = ""
         self.global_prompt_name: str = ""
         self.goals_active: bool = False
+        self._debug_messages: List[str] = []
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -153,6 +154,21 @@ class MemoryManager:
             for fname in os.listdir(chat_dir):
                 os.remove(os.path.join(chat_dir, fname))
             os.rmdir(chat_dir)
+
+    # ------------------------------------------------------------------
+    # Debug helpers
+    # ------------------------------------------------------------------
+    def add_debug_message(self, message: str) -> None:
+        """Store ``message`` for the next status poll."""
+
+        self._debug_messages.append(message)
+
+    def pop_debug_messages(self) -> List[str]:
+        """Return and clear any pending debug messages."""
+
+        messages = self._debug_messages[:]
+        self._debug_messages.clear()
+        return messages
 
     def rename_chat(self, old_id: str, new_id: str) -> None:
         """Rename a chat folder from ``old_id`` to ``new_id``."""
