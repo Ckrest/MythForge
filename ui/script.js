@@ -697,9 +697,9 @@ onOk: async ()=>{
                 body: JSON.stringify({character, setting})
             });
         }
-        if(enableAfter && hasData){
+        if(enableAfter){
             await apiFetch(`/chats/${encodeURIComponent(trimmed)}/goals/enable`, {method:'POST'});
-        }else if(!enableAfter){
+        }else{
             await apiFetch(`/chats/${encodeURIComponent(trimmed)}/goals/disable`, {method:'POST'});
         }
     }catch(e){ console.error('Failed to save goals:', e); }
