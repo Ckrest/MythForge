@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterator
 
+import json
 from ..prompt_preparer import PromptPreparer
-from ..response_parser import ResponseParser
+from ..response_parser import (
+    ResponseParser,
+    _parse_duplicates_from_response,
+)
 from ..invoker import LLMInvoker
 from ..logger import LOGGER
 
@@ -20,13 +24,16 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 
 # CallType helpers -----------------------------------------------------------
 
+
 def logic_goblin_duplicate_goals_prepared_user_text(goals: str) -> str:
     """Compose the user prompt for duplicate goal detection."""
 
-    return "\n".join([
-        "Goals:",
-        goals,
-    ])
+    return "\n".join(
+        [
+            "Goals:",
+            goals,
+        ]
+    )
 
 
 def logic_goblin_duplicate_goals_prepared_system_text() -> str:
@@ -75,4 +82,15 @@ def logic_goblin_duplicate_goals(
     prepared = preparer.prepare(system_text, user_text)
     opts = {**MODEL_LAUNCH_OVERRIDE, **options}
     raw = LLMInvoker().invoke(prepared, opts)
-    return ResponseParser().load(raw).parse()
+
+    parser = ResponseParser().load(raw)
+    parsed_iter = parser.parse()
+    text = "".join(list(parsed_iter))
+    parsed = _parse_duplicates_from_response(text)
+    LOGGER.log(
+        "chat_flow",
+        {"function": "logic_goblin_duplicate_goals", "output": parsed},
+    )
+
+    clean_json = json.dumps({"duplicates": parsed}, ensure_ascii=False)
+    return iter([clean_json])

@@ -48,7 +48,20 @@ def logic_goblin_duplicate_goals_call(goals: List[Any]) -> None:
 
     goals_json = json.dumps(goals, ensure_ascii=False, indent=2)
     try:
-        logic_goblin_duplicate_goals("", "", {**MODEL_LAUNCH_OVERRIDE}, goals=goals_json)
+        result_iter = logic_goblin_duplicate_goals(
+            "",
+            "",
+            {**MODEL_LAUNCH_OVERRIDE},
+            goals=goals_json,
+        )
+        result_text = "".join(list(result_iter))
+        LOGGER.log(
+            "chat_flow",
+            {
+                "function": "logic_goblin_duplicate_goals_call",
+                "output": result_text,
+            },
+        )
     except Exception as exc:  # pragma: no cover - best effort
         LOGGER.log_error(exc)
 

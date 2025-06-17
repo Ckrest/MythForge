@@ -2,10 +2,11 @@ from __future__ import annotations
 
 """Prompt helpers for goal evaluation utilities."""
 
+import json
 from typing import Any, Dict, Iterator
 
 from ..prompt_preparer import PromptPreparer
-from ..response_parser import ResponseParser
+from ..response_parser import ResponseParser, _parse_goal_status_from_response
 from ..invoker import LLMInvoker
 from ..logger import LOGGER
 
@@ -19,6 +20,7 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 
 
 # CallType helpers -----------------------------------------------------------
+
 
 def logic_goblin_evaluate_goals_prepared_user_text(
     character: str,
@@ -94,4 +96,15 @@ def logic_goblin_evaluate_goals(
     prepared = preparer.prepare(system_text, user_text)
     opts = {**MODEL_LAUNCH_OVERRIDE, **options}
     raw = LLMInvoker().invoke(prepared, opts)
-    return ResponseParser().load(raw).parse()
+
+    parser = ResponseParser().load(raw)
+    parsed_iter = parser.parse()
+    text = "".join(list(parsed_iter))
+    parsed = _parse_goal_status_from_response(text)
+    LOGGER.log(
+        "chat_flow",
+        {"function": "logic_goblin_evaluate_goals", "output": parsed},
+    )
+
+    clean_json = json.dumps({"goals": parsed}, ensure_ascii=False)
+    return iter([clean_json])
