@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Any, Dict, Iterator
+import json
+from typing import Any, Dict, Iterator, List
 
 from ..response_parser import ResponseParser, _parse_goals_from_response
 from ..prompt_preparer import PromptPreparer
@@ -10,6 +11,7 @@ from ..model import GENERATION_CONFIG
 from ..memory import MemoryManager, MEMORY_MANAGER
 from ..logger import LOGGER
 from ..background import schedule_task
+from .logic_goblin_duplicate_goals import logic_goblin_duplicate_goals
 
 # -----------------------------------
 # Model launch parameters / arguments ORERRIDE
@@ -39,6 +41,16 @@ def clean_text(text: str, *, trim: bool = False) -> str:
 
     cleaned = text.replace("<|eot_id|>", "")
     return cleaned.strip() if trim else cleaned
+
+
+def logic_goblin_duplicate_goals_call(goals: List[Any]) -> None:
+    """Invoke the duplicate-goal goblin on ``goals``."""
+
+    goals_json = json.dumps(goals, ensure_ascii=False, indent=2)
+    try:
+        logic_goblin_duplicate_goals("", "", {**MODEL_LAUNCH_OVERRIDE}, goals=goals_json)
+    except Exception as exc:  # pragma: no cover - best effort
+        LOGGER.log_error(exc)
 
 
 def _evaluate_goals(
@@ -120,6 +132,9 @@ Do not include any explanation, commentary, or other text. If no goals are curre
         parsed = "".join(parsed)
     cleaned = clean_text(str(parsed), trim=True)
     new_goals = _parse_goals_from_response(cleaned)
+
+    if new_goals and state.get("goals"):
+        logic_goblin_duplicate_goals_call(state.get("goals", []) + new_goals)
 
     state.pop("error", None)
     combined = state.get("goals", []) + new_goals
