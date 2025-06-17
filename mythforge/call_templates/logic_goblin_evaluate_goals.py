@@ -21,22 +21,48 @@ MODEL_LAUNCH_OVERRIDE: Dict[str, Any] = {
 # CallType helpers -----------------------------------------------------------
 
 def logic_goblin_evaluate_goals_prepared_user_text(
-    global_prompt: str,
     character: str,
     setting: str,
-    history: str,
-    message: str,
+    active_goals: str,
 ) -> str:
-    """Build user prompt text for goal evaluation."""
+    """Compose the user prompt for goal evaluation."""
 
-    parts = [global_prompt, character, setting, history, message]
-    return "\n".join(p for p in parts if p)
+    return "\n".join(
+        [
+            "[CHARACTER CONTEXT]",
+            character,
+            "",
+            "[SETTING]",
+            setting,
+            "",
+            "Goals:",
+            active_goals,
+            "",
+            'Respond by returning the same JSON object with each goal\'s "status" field updated.',
+            "",
+            "Do not add any explanation or text—return JSON only.",
+        ]
+    )
 
 
-def logic_goblin_evaluate_goals_prepared_system_text(active_goals: str) -> str:
-    """Return system prompt text consisting of active goals."""
+def logic_goblin_evaluate_goals_prepared_system_text() -> str:
+    """Return the instruction text for logic goal evaluation."""
 
-    return active_goals
+    return f"""
+You are a logic goblin who evaluates character goals with brutal honesty.
+
+Given the character's current situation and goals, your job is to:
+- Determine for each goal whether it is:
+  - "completed"
+  - "in progress"
+  - OR "abandoned" (only if it is clearly irrelevant, impossible, or contradicted by recent events).
+
+Only abandon a goal if it is no longer feasible or logical to continue pursuing it. This should be rare—don't be lazy.
+
+Respond by returning the same JSON object with each goal's "status" field updated.
+
+Do not add any explanation or text—return JSON only.
+"""
 
 
 def logic_goblin_evaluate_goals(
@@ -52,9 +78,11 @@ def logic_goblin_evaluate_goals(
     """Send ``message`` through the goal evaluation prompt."""
 
     user_text = logic_goblin_evaluate_goals_prepared_user_text(
-        global_prompt, character, setting, history, message
+        character,
+        setting,
+        active_goals,
     )
-    system_text = logic_goblin_evaluate_goals_prepared_system_text(active_goals)
+    system_text = logic_goblin_evaluate_goals_prepared_system_text()
 
     preparer = PromptPreparer()
     prompt_log = preparer.format_for_logging(system_text, user_text)
