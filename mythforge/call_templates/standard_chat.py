@@ -33,8 +33,6 @@ def standard_chat_prepared_system_text(
     if memory.goals_active:
         if goals.character:
             parts.append(goals.character)
-        if goals.setting:
-            parts.append(goals.setting)
         state = memory.load_goal_state(chat_name)
         active = state.get("goals", [])
         if active:
@@ -56,13 +54,29 @@ def standard_chat_prepared_user_text(
     message: str,
     memory: MemoryManager = MEMORY_MANAGER,
 ) -> str:
-    """Combine chat history and the new message."""
+    """Combine chat history and the new message.
+
+    If goals are active and a setting is available, the setting is placed
+    at the very top of the returned user text before the history.
+    """
 
     history = memory.load_chat_history(chat_name)
     history_text = "\n".join(m.get("content", "") for m in history)
+
+    setting_text = ""
+    if memory.goals_active:
+        goals = memory.load_goals(chat_name)
+        if goals.setting:
+            setting_text = goals.setting
+
+    parts: List[str] = []
+    if setting_text:
+        parts.append(setting_text)
     if history_text:
-        return f"{history_text}\n{message}"
-    return message
+        parts.append(history_text)
+    parts.append(message)
+
+    return "\n".join(p for p in parts if p)
 
 
 
