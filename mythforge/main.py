@@ -212,7 +212,8 @@ def response_prompt_status(chat_name: str = "", global_prompt_name: str = ""):
     )
     from .background import has_pending_tasks
 
-    return {"pending": int(has_pending_tasks())}
+    debug = memory_manager.pop_debug_messages()
+    return {"pending": int(has_pending_tasks()), "debug": debug}
 
 
 # --- Standard Chat Endpoints ---------------------------------------------

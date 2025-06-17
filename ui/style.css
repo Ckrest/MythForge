@@ -146,6 +146,9 @@ body {
 .avatar { width: 30px; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0; }
 .user-avatar { background-color: var(--user-msg-bg); color: var(--user-msg-color); }
 .ai-avatar { background-color: var(--primary); color: white; }
+.system-avatar { background-color: var(--border-color); color: var(--text-color); }
+.system-message { background-color: var(--chat-bg); }
+.debug-message { opacity: 0.7; font-style: italic; }
 .message-content { flex-grow: 1; max-width: none; line-height: 1.6; font-size: var(--message-font-size); }
 .message-control-btn { position: absolute; bottom: 4px; right: 4px; background: none; border: none; cursor: pointer; color: var(--text-color); display: none; }
 .message:hover .message-control-btn { display: block; }
