@@ -4,7 +4,11 @@ import textwrap
 import json
 from typing import Any, Dict, Iterator, List
 
-from ..response_parser import ResponseParser, _parse_goals_from_response
+from ..response_parser import (
+    ResponseParser,
+    _parse_goals_from_response,
+    _parse_duplicates_from_response,
+)
 from ..prompt_preparer import PromptPreparer
 from ..invoker import LLMInvoker
 from ..model import GENERATION_CONFIG
@@ -43,8 +47,8 @@ def clean_text(text: str, *, trim: bool = False) -> str:
     return cleaned.strip() if trim else cleaned
 
 
-def logic_goblin_duplicate_goals_call(goals: List[Any]) -> None:
-    """Invoke the duplicate-goal goblin on ``goals``."""
+def logic_goblin_duplicate_goals_call(goals: List[Any]) -> List[List[int]]:
+    """Invoke the duplicate-goal goblin on ``goals`` and return duplicates."""
 
     goals_json = json.dumps(goals, ensure_ascii=False, indent=2)
     try:
@@ -62,8 +66,11 @@ def logic_goblin_duplicate_goals_call(goals: List[Any]) -> None:
                 "output": result_text,
             },
         )
+        duplicates = _parse_duplicates_from_response(result_text)
+        return duplicates
     except Exception as exc:  # pragma: no cover - best effort
         LOGGER.log_error(exc)
+        return []
 
 
 def _evaluate_goals(
@@ -146,11 +153,15 @@ Do not include any explanation, commentary, or other text. If no goals are curre
     cleaned = clean_text(str(parsed), trim=True)
     new_goals = _parse_goals_from_response(cleaned)
 
-    if new_goals and state.get("goals"):
-        logic_goblin_duplicate_goals_call(state.get("goals", []) + new_goals)
-
     state.pop("error", None)
     combined = state.get("goals", []) + new_goals
+
+    if new_goals and state.get("goals"):
+        duplicates = logic_goblin_duplicate_goals_call(combined)
+        if duplicates:
+            to_remove = {max(a, b) for a, b in duplicates}
+            combined = [g for i, g in enumerate(combined) if i not in to_remove]
+
     state["goals"] = combined[:goal_limit]
     memory.save_goal_state(chat_name, state)
 
