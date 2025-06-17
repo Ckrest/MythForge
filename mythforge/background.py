@@ -19,7 +19,7 @@ def _worker() -> None:
 
     while True:
         try:
-            func, args, kwargs = _TASK_QUEUE.get(timeout=5)
+            func, args, kwargs = _TASK_QUEUE.get(timeout=600)
         except Empty:
             break
         try:
