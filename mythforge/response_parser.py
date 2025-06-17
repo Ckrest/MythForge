@@ -83,6 +83,7 @@ class ResponseParser:
 
         return _single()
 
+
 def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
     """Extract individual goal entries from ``text``."""
 
@@ -123,3 +124,59 @@ def _parse_goals_from_response(text: str) -> List[Dict[str, Any]]:
             }
         )
     return filtered
+
+
+def _parse_goal_status_from_response(text: str) -> List[Dict[str, Any]]:
+    """Extract goal status updates from ``text``."""
+
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            return []
+        try:
+            parsed = json.loads(match.group())
+        except Exception:
+            return []
+
+    goals = parsed.get("goals", []) if isinstance(parsed, dict) else []
+    if not isinstance(goals, list):
+        return []
+
+    results: List[Dict[str, Any]] = []
+    for g in goals:
+        desc = str(g.get("description", "")).strip()
+        status = str(g.get("status", "")).strip()
+        if desc and status:
+            results.append({"description": desc, "status": status})
+
+    return results
+
+
+def _parse_duplicates_from_response(text: str) -> List[List[int]]:
+    """Extract duplicate goal index pairs from ``text``."""
+
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            return []
+        try:
+            parsed = json.loads(match.group())
+        except Exception:
+            return []
+
+    dup_list = parsed.get("duplicates", []) if isinstance(parsed, dict) else []
+    results: List[List[int]] = []
+    if isinstance(dup_list, list):
+        for pair in dup_list:
+            if (
+                isinstance(pair, (list, tuple))
+                and len(pair) == 2
+                and all(isinstance(i, int) for i in pair)
+            ):
+                results.append([int(pair[0]), int(pair[1])])
+
+    return results
