@@ -686,22 +686,23 @@ onOk: async ()=>{
         renderHistory();
     }
     const enableAfter = document.getElementById('goals-context').style.display !== 'none';
-    if(enableAfter){
-        const character = document.getElementById('character-input').value;
-        const setting = document.getElementById('setting-input').value;
-        try{
+    const character = document.getElementById('character-input').value.trim();
+    const setting = document.getElementById('setting-input').value.trim();
+    const hasData = character!=='' || setting!=='';
+    try{
+        if(hasData){
             await apiFetch(`/chats/${encodeURIComponent(trimmed)}/goals`, {
                 method:'PUT',
                 headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({character, setting})
             });
+        }
+        if(enableAfter && hasData){
             await apiFetch(`/chats/${encodeURIComponent(trimmed)}/goals/enable`, {method:'POST'});
-        }catch(e){ console.error('Failed to save goals:', e); }
-    }else{
-        try{
+        }else if(!enableAfter){
             await apiFetch(`/chats/${encodeURIComponent(trimmed)}/goals/disable`, {method:'POST'});
-        }catch(e){ console.error('Failed to disable goals:', e); }
-    }
+        }
+    }catch(e){ console.error('Failed to save goals:', e); }
 }
     });
     const toggleBtn = document.getElementById('goals-toggle-btn');
